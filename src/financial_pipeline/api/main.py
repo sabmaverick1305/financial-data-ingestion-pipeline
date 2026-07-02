@@ -44,6 +44,7 @@ from financial_pipeline.api.schemas import (
 )
 from financial_pipeline.augmentation.pipeline import AugmentationPipeline
 from financial_pipeline.config import settings
+from financial_pipeline.evaluation.observability import RequestTrace, emitter
 from financial_pipeline.retrieval.pipeline import RetrievalPipeline
 from financial_pipeline.retrieval.rag import RAGPipeline
 from financial_pipeline.retrieval.retriever import Retriever
@@ -250,7 +251,12 @@ def ask(req: AskRequest) -> AskResponse:
         log.exception("api.ask_error", error=str(exc))
         raise HTTPException(500, str(exc))
 
+    # Emit per-request observability trace to CloudWatch
     g = resp.guardrail
+    trace = RequestTrace.from_augmented_response(resp, request_id=str(id(resp)), question=req.question)
+    emitter.record(trace)
+    log.info("api.ask_trace", **trace.to_log_dict())
+
     return AskResponse(
         question=req.question,
         answer=resp.answer,
