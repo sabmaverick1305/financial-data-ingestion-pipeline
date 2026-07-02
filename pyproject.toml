@@ -53,11 +53,12 @@ pipeline = "financial_pipeline.cli:main"
 where = ["src"]
 
 [tool.ruff]
-line-length = 100
+line-length = 130
 src = ["src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+ignore = ["E501"]   # line length enforced by formatter (line-length=130); SQL strings legitimately exceed it
 
 [tool.mypy]
 python_version = "3.11"

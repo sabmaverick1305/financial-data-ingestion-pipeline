@@ -25,9 +25,7 @@ class DataValidator:
         for col in columns:
             null_pct = df[col].isna().mean()
             if null_pct > max_null_pct:
-                raise ValidationError(
-                    f"Column '{col}' has {null_pct:.1%} nulls (limit: {max_null_pct:.1%})"
-                )
+                raise ValidationError(f"Column '{col}' has {null_pct:.1%} nulls (limit: {max_null_pct:.1%})")
 
     def validate(self, df: pd.DataFrame, schema: dict[str, Any]) -> pd.DataFrame:
         """Run all validations defined in schema dict."""

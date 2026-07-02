@@ -5,6 +5,7 @@ Pipeline:
                                                                  -> chunk-worker (low memory)
                                -> ocr-worker   (high memory) -/
 """
+
 from __future__ import annotations
 
 import io

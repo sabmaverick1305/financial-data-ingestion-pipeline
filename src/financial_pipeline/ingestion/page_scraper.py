@@ -12,9 +12,7 @@ log = structlog.get_logger()
 
 _DEFAULT_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0 Safari/537.36"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
     ),
     "Accept": "text/html,application/xhtml+xml,*/*",
 }
@@ -150,8 +148,18 @@ _MONTHLY_RE = re.compile(r"^am([a-z]{3})(\d{4})repo\.", re.IGNORECASE)
 _QUARTERLY_RE = re.compile(r"^aqu-vol(\d+)-issue([IVXLCDM]+)\.", re.IGNORECASE)
 
 _MONTH_MAP = {
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
-    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 _ROMAN_TO_QUARTER = {"I": "Q1", "II": "Q2", "III": "Q3", "IV": "Q4"}
 

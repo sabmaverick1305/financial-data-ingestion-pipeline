@@ -15,6 +15,7 @@ The server reads all config from .env (POSTGRES_URL, OPENAI_API_KEY, etc.)
 Swagger UI: http://localhost:8080/docs
 ReDoc:      http://localhost:8080/redoc
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,20 +25,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import uvicorn
+
 from financial_pipeline.config import settings
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--host",    default=settings.api_host)
-    parser.add_argument("--port",    type=int, default=settings.api_port)
-    parser.add_argument("--workers", type=int, default=1,
-                        help="Number of uvicorn worker processes")
-    parser.add_argument("--reload",  action="store_true",
-                        help="Auto-reload on source changes (dev only)")
-    parser.add_argument("--log-level", default="info",
-                        choices=["debug", "info", "warning", "error"])
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--host", default=settings.api_host)
+    parser.add_argument("--port", type=int, default=settings.api_port)
+    parser.add_argument("--workers", type=int, default=1, help="Number of uvicorn worker processes")
+    parser.add_argument("--reload", action="store_true", help="Auto-reload on source changes (dev only)")
+    parser.add_argument("--log-level", default="info", choices=["debug", "info", "warning", "error"])
     args = parser.parse_args()
 
     print(f"""
@@ -54,11 +52,11 @@ def main() -> None:
 
     uvicorn.run(
         "financial_pipeline.api.main:app",
-        host      = args.host,
-        port      = args.port,
-        workers   = args.workers,
-        reload    = args.reload,
-        log_level = args.log_level,
+        host=args.host,
+        port=args.port,
+        workers=args.workers,
+        reload=args.reload,
+        log_level=args.log_level,
     )
 
 

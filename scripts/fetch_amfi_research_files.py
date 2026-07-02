@@ -9,18 +9,23 @@ S3 layout:
     s3://<S3_BUCKET>/amfi/research/<YYYY-MM-DD>/quarterly/<filename>
     s3://<S3_BUCKET>/amfi/research/<YYYY-MM-DD>/unknown/<filename>
 """
+
 from __future__ import annotations
 
 import hashlib
 import sys
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import structlog
 
 sys.path.insert(0, "src")
 
 from financial_pipeline.config import settings
-from financial_pipeline.ingestion.page_scraper import PageScraper, classify_filename, parse_filename_metadata
+from financial_pipeline.ingestion.page_scraper import (
+    PageScraper,
+    classify_filename,
+    parse_filename_metadata,
+)
 from financial_pipeline.logging import configure_logging
 from financial_pipeline.storage.document_repo import DocumentRepository
 from financial_pipeline.storage.s3 import S3Storage
@@ -93,14 +98,14 @@ def main() -> None:
                 print(f"  –  [{classification:10s}]  {filename:50s} already in S3, skipped")
                 continue
 
-            started_at = datetime.now(tz=timezone.utc)
+            started_at = datetime.now(tz=UTC)
             raw = scraper.download(url)
             key = store.put_raw(
                 key_suffix=filename,
                 data=raw,
                 content_type=PageScraper.content_type(filename),
             )
-            completed_at = datetime.now(tz=timezone.utc)
+            completed_at = datetime.now(tz=UTC)
 
             uploaded.append({"filename": filename, "s3_key": key, "bytes": len(raw), "class": classification})
             print(f"  ✓  [{classification:10s}]  {filename:50s} {len(raw):>10,} bytes  →  s3://{settings.s3_bucket}/{key}")
@@ -141,8 +146,10 @@ def main() -> None:
 
     # ── 3. Summary ───────────────────────────────────────────────────────────
     counts = {c: sum(1 for u in uploaded if u["class"] == c) for c in storages}
-    print(f"\n{'─'*70}")
-    print(f"Uploaded : {len(uploaded)}  (monthly={counts['monthly']}, quarterly={counts['quarterly']}, unknown={counts['unknown']})")
+    print(f"\n{'─' * 70}")
+    print(
+        f"Uploaded : {len(uploaded)}  (monthly={counts['monthly']}, quarterly={counts['quarterly']}, unknown={counts['unknown']})"
+    )
     print(f"Skipped  : {len(skipped)}  (already in S3)")
     print(f"Failed   : {len(failed)}")
     print(f"S3 prefix: s3://{settings.s3_bucket}/{base_prefix}/")

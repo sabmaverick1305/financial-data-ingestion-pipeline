@@ -23,6 +23,7 @@
 Pre-guardrails decide whether the LLM should run at all.
 Post-guardrails validate the output and attach quality signals.
 """
+
 from __future__ import annotations
 
 import re
@@ -39,14 +40,14 @@ ABSTENTION_PHRASE = "not available in the provided amfi documents"
 
 # Minimum sources per intent type before proceeding to generation
 MIN_SOURCES_BY_INTENT: dict[str, int] = {
-    "factual":    1,
+    "factual": 1,
     "regulatory": 1,
-    "trend":      2,
+    "trend": 2,
     "comparison": 2,
     "definition": 1,
-    "tabular":    1,
-    "lookup":     1,
-    "default":    1,
+    "tabular": 1,
+    "lookup": 1,
+    "default": 1,
 }
 
 
@@ -78,14 +79,14 @@ _ASSERTION_PATTERNS = [
 
 @dataclass
 class PreGuardrailResult:
-    should_proceed:       bool         # False = block, do not call LLM
-    block_reason:         str | None   # human-readable reason if blocked
+    should_proceed: bool  # False = block, do not call LLM
+    block_reason: str | None  # human-readable reason if blocked
     is_investment_advice: bool
-    is_assertion_query:   bool
-    min_sources_met:      bool
-    source_count:         int
-    context_quality:      float        # 0–1: avg citation confidence
-    warnings:             list[str]    = field(default_factory=list)
+    is_assertion_query: bool
+    min_sources_met: bool
+    source_count: int
+    context_quality: float  # 0–1: avg citation confidence
+    warnings: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         if not self.should_proceed:
@@ -107,8 +108,8 @@ class PreGenerationGuardrails:
 
     def check(
         self,
-        question:    str,
-        citations:   list,      # list[Citation]
+        question: str,
+        citations: list,  # list[Citation]
         intent_type: str = "default",
     ) -> PreGuardrailResult:
 
@@ -120,18 +121,18 @@ class PreGenerationGuardrails:
         if is_advice:
             log.warning("pre_guardrail.investment_advice_detected", q=question[:80])
             return PreGuardrailResult(
-                should_proceed        = False,
-                block_reason          = (
+                should_proceed=False,
+                block_reason=(
                     "This question asks for personalised investment advice. "
                     "This system provides factual information about mutual funds "
                     "only and cannot recommend specific investments."
                 ),
-                is_investment_advice  = True,
-                is_assertion_query    = False,
-                min_sources_met       = False,
-                source_count          = len(citations),
-                context_quality       = 0.0,
-                warnings              = ["investment_advice_query"],
+                is_investment_advice=True,
+                is_assertion_query=False,
+                min_sources_met=False,
+                source_count=len(citations),
+                context_quality=0.0,
+                warnings=["investment_advice_query"],
             )
 
         # ── Check 2: Assertion-style query ────────────────────────────
@@ -146,7 +147,7 @@ class PreGenerationGuardrails:
         # ── Check 3: Source requirement ───────────────────────────────
         min_required = MIN_SOURCES_BY_INTENT.get(intent_type, 1)
         source_count = len(citations)
-        min_met      = source_count >= min_required
+        min_met = source_count >= min_required
 
         if not min_met:
             warnings.append(
@@ -161,8 +162,7 @@ class PreGenerationGuardrails:
         else:
             avg_conf = 0.0
 
-        low_conf = [c for c in citations
-                    if c.confidence < self.LOW_CONFIDENCE_THRESHOLD]
+        low_conf = [c for c in citations if c.confidence < self.LOW_CONFIDENCE_THRESHOLD]
         if low_conf:
             warnings.append(
                 f"{len(low_conf)} of {source_count} citations have low "
@@ -170,23 +170,25 @@ class PreGenerationGuardrails:
                 "Answers may not be well-grounded."
             )
 
-        log.info("pre_guardrail.result",
-                 proceed=True,
-                 advice=is_advice,
-                 sources=source_count,
-                 min_met=min_met,
-                 quality=round(avg_conf, 3),
-                 warnings=len(warnings))
+        log.info(
+            "pre_guardrail.result",
+            proceed=True,
+            advice=is_advice,
+            sources=source_count,
+            min_met=min_met,
+            quality=round(avg_conf, 3),
+            warnings=len(warnings),
+        )
 
         return PreGuardrailResult(
-            should_proceed        = True,   # proceed; warnings surfaced to caller
-            block_reason          = None,
-            is_investment_advice  = False,
-            is_assertion_query    = is_assertion,
-            min_sources_met       = min_met,
-            source_count          = source_count,
-            context_quality       = round(avg_conf, 3),
-            warnings              = warnings,
+            should_proceed=True,  # proceed; warnings surfaced to caller
+            block_reason=None,
+            is_investment_advice=False,
+            is_assertion_query=is_assertion,
+            min_sources_met=min_met,
+            source_count=source_count,
+            context_quality=round(avg_conf, 3),
+            warnings=warnings,
         )
 
 
@@ -208,17 +210,17 @@ _UNSAFE_ANSWER_PATTERNS = [
 
 @dataclass
 class PostGuardrailResult:
-    passed:                  bool
-    citation_present:        bool       # Check 4
-    citation_valid:          bool       # Check 4
-    hallucination_risk:      str        # "low" | "medium" | "high"
-    answer_safe:             bool       # Check 6
-    number_consistent:       bool       # Check 7
-    faithfulness_score:      float      # -1 = not computed
-    abstention_detected:     bool
-    unsafe_phrases:          list[str]  = field(default_factory=list)
-    flagged_citations:       list[int]  = field(default_factory=list)
-    warnings:                list[str]  = field(default_factory=list)
+    passed: bool
+    citation_present: bool  # Check 4
+    citation_valid: bool  # Check 4
+    hallucination_risk: str  # "low" | "medium" | "high"
+    answer_safe: bool  # Check 6
+    number_consistent: bool  # Check 7
+    faithfulness_score: float  # -1 = not computed
+    abstention_detected: bool
+    unsafe_phrases: list[str] = field(default_factory=list)
+    flagged_citations: list[int] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         if self.abstention_detected:
@@ -240,33 +242,33 @@ class PostGenerationGuardrails:
       7. Numeric consistency     — numbers in answer appear in cited chunks
     """
 
-    FAITH_THRESHOLD     = 0.25   # flag if faithfulness < this
-    MIN_NUMBER_CHARS    = 3      # ignore 1-2 digit numbers (e.g. "Q3", "Rs 5")
+    FAITH_THRESHOLD = 0.25  # flag if faithfulness < this
+    MIN_NUMBER_CHARS = 3  # ignore 1-2 digit numbers (e.g. "Q3", "Rs 5")
 
     def __init__(self, embed_model=None) -> None:
         self._model = embed_model
 
     def check(
         self,
-        answer:    str,
-        citations: list,        # list[Citation]
-        chunks:    list[dict],
+        answer: str,
+        citations: list,  # list[Citation]
+        chunks: list[dict],
     ) -> PostGuardrailResult:
 
-        warnings:       list[str] = []
+        warnings: list[str] = []
         unsafe_phrases: list[str] = []
-        flagged:        list[int] = []
-        faith           = -1.0
+        flagged: list[int] = []
+        faith = -1.0
 
         # ── Abstention check ──────────────────────────────────────────
         abstained = ABSTENTION_PHRASE in answer.lower()
 
         # ── Check 4: Citation presence + validity ─────────────────────
-        cited_nums = set(int(m) for m in re.findall(r'\[(\d+)\]', answer))
-        available  = {c.number for c in citations}
+        cited_nums = set(int(m) for m in re.findall(r"\[(\d+)\]", answer))
+        available = {c.number for c in citations}
 
-        has_cites   = bool(cited_nums)
-        invalid     = cited_nums - available
+        has_cites = bool(cited_nums)
+        invalid = cited_nums - available
         cites_valid = not bool(invalid)
 
         if not abstained and not has_cites:
@@ -278,10 +280,7 @@ class PostGenerationGuardrails:
         if self._model and cited_nums and not abstained:
             faith = self._faithfulness(answer, cited_nums, citations)
             if 0.0 <= faith < self.FAITH_THRESHOLD:
-                warnings.append(
-                    f"Low faithfulness score ({faith:.3f}). "
-                    "Answer may not be grounded in cited passages."
-                )
+                warnings.append(f"Low faithfulness score ({faith:.3f}). Answer may not be grounded in cited passages.")
 
         hallucination_risk = self._risk_level(faith, len(warnings))
 
@@ -307,63 +306,59 @@ class PostGenerationGuardrails:
 
         # ── Check 7: Numeric consistency ─────────────────────────────
         answer_nums = set(
-            n for n in re.findall(r'\b\d[\d,\.]*\d\b', answer)
-            if len(n.replace(',', '').replace('.', '')) >= self.MIN_NUMBER_CHARS
+            n
+            for n in re.findall(r"\b\d[\d,\.]*\d\b", answer)
+            if len(n.replace(",", "").replace(".", "")) >= self.MIN_NUMBER_CHARS
         )
         nums_ok = True
         if answer_nums and not abstained:
-            cit_map    = {c.number: c.excerpt for c in citations}
+            cit_map = {c.number: c.excerpt for c in citations}
             cited_text = " ".join(cit_map.get(n, "") for n in cited_nums)
             unsupported = [n for n in answer_nums if n not in cited_text]
             if unsupported:
                 nums_ok = False
                 warnings.append(
-                    f"Numbers not found in cited chunks: {unsupported[:5]}. "
-                    "Verify these figures against source documents."
+                    f"Numbers not found in cited chunks: {unsupported[:5]}. Verify these figures against source documents."
                 )
 
-        passed = (
-            abstained or (
-                answer_safe
-                and cites_valid
-                and nums_ok
-                and hallucination_risk != "high"
-            )
+        passed = abstained or (answer_safe and cites_valid and nums_ok and hallucination_risk != "high")
+
+        log.info(
+            "post_guardrail.result",
+            passed=passed,
+            abstained=abstained,
+            safe=answer_safe,
+            risk=hallucination_risk,
+            faithfulness=faith if faith >= 0 else "n/a",
+            warnings=len(warnings),
         )
 
-        log.info("post_guardrail.result",
-                 passed=passed,
-                 abstained=abstained,
-                 safe=answer_safe,
-                 risk=hallucination_risk,
-                 faithfulness=faith if faith >= 0 else "n/a",
-                 warnings=len(warnings))
-
         return PostGuardrailResult(
-            passed               = passed,
-            citation_present     = has_cites,
-            citation_valid       = cites_valid,
-            hallucination_risk   = hallucination_risk,
-            answer_safe          = answer_safe,
-            number_consistent    = nums_ok,
-            faithfulness_score   = round(faith, 3),
-            abstention_detected  = abstained,
-            unsafe_phrases       = unsafe_phrases,
-            flagged_citations    = flagged,
-            warnings             = warnings,
+            passed=passed,
+            citation_present=has_cites,
+            citation_valid=cites_valid,
+            hallucination_risk=hallucination_risk,
+            answer_safe=answer_safe,
+            number_consistent=nums_ok,
+            faithfulness_score=round(faith, 3),
+            abstention_detected=abstained,
+            unsafe_phrases=unsafe_phrases,
+            flagged_citations=flagged,
+            warnings=warnings,
         )
 
     # ------------------------------------------------------------------
 
     def _faithfulness(
         self,
-        answer:     str,
+        answer: str,
         cited_nums: set[int],
-        citations:  list,
+        citations: list,
     ) -> float:
         import numpy as np
+
         cit_map = {c.number: c.excerpt for c in citations}
-        scores  = []
+        scores = []
         for num in sorted(cited_nums):
             excerpt = cit_map.get(num, "")
             if not excerpt:
@@ -390,4 +385,4 @@ class PostGenerationGuardrails:
 # ── Backward-compatibility alias ──────────────────────────────────────────────
 # Code that imported HallucinationGuardrails still works.
 HallucinationGuardrails = PostGenerationGuardrails
-GuardrailResult         = PostGuardrailResult
+GuardrailResult = PostGuardrailResult

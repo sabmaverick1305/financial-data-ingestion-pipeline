@@ -17,8 +17,9 @@ def main() -> None:
 @click.option("--date", "run_date", default=None, help="Target date (YYYY-MM-DD), defaults to today")
 def run(source: str, run_date: str | None) -> None:
     """Run a single ingestion source."""
-    import structlog
     from datetime import date
+
+    import structlog
 
     log = structlog.get_logger()
     target = run_date or date.today().isoformat()

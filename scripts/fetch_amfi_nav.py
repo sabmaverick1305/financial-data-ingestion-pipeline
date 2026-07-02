@@ -11,6 +11,7 @@ Environment variables (via .env or shell):
     S3_PREFIX        (default: amfi/nav)
     AWS_REGION       (default: ap-south-1)
 """
+
 from __future__ import annotations
 
 import io

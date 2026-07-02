@@ -28,12 +28,14 @@ def chunk_text(
             if boundary != -1 and boundary > start + overlap:
                 end = boundary + 1
 
-        chunks.append({
-            "chunk_id": chunk_id,
-            "text": text[start:end].strip(),
-            "start": start,
-            "end": end,
-        })
+        chunks.append(
+            {
+                "chunk_id": chunk_id,
+                "text": text[start:end].strip(),
+                "start": start,
+                "end": end,
+            }
+        )
         chunk_id += 1
 
         if end >= text_len:

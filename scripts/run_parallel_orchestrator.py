@@ -24,6 +24,7 @@ Usage:
 Environment:
     Reads AWS credentials and DB URL from .env via financial_pipeline.config.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,11 +46,11 @@ AWS_KW = dict(
 )
 
 ecs = boto3.client("ecs", **AWS_KW)
-cw  = boto3.client("cloudwatch", **AWS_KW)
+cw = boto3.client("cloudwatch", **AWS_KW)
 
-CLUSTER   = "weather-agent-cluster"
-SUBNETS   = ["subnet-089bc3cd1c8760332"]
-SGS       = ["sg-0eecd839abfcf4daa"]
+CLUSTER = "weather-agent-cluster"
+SUBNETS = ["subnet-089bc3cd1c8760332"]
+SGS = ["sg-0eecd839abfcf4daa"]
 CW_NAMESPACE = "AMFI/Pipeline"
 
 # BATCH_SIZE controls how many docs each task claims per iteration when running
@@ -64,8 +65,11 @@ _hostport, _dbname = _hostdb.split("/", 1)
 _host, _port = (_hostport.split(":", 1) + ["5432"])[:2]
 
 PG_CONNECT = dict(
-    host=_host, port=int(_port), dbname=_dbname,
-    user=_user, password=_pass.replace("%40", "@"),
+    host=_host,
+    port=int(_port),
+    dbname=_dbname,
+    user=_user,
+    password=_pass.replace("%40", "@"),
 )
 
 
@@ -115,10 +119,12 @@ def launch(task_def: str, extra_args: list[str] | None = None, dry_run: bool = F
         container_name = td["taskDefinition"]["containerDefinitions"][0]["name"]
         existing_cmd = td["taskDefinition"]["containerDefinitions"][0].get("command", [])
         run_kw["overrides"] = {
-            "containerOverrides": [{
-                "name": container_name,
-                "command": existing_cmd + extra_args,
-            }]
+            "containerOverrides": [
+                {
+                    "name": container_name,
+                    "command": existing_cmd + extra_args,
+                }
+            ]
         }
 
     resp = ecs.run_task(**run_kw)
@@ -185,7 +191,10 @@ def drain(
     remaining = pending_count(pending_query)
     emit_metric(f"{stage_name}.queue_depth_end", remaining)
     if remaining > 0:
-        print(f"{stage_name}: WARNING — {remaining} docs still pending after tasks exited.", flush=True)
+        print(
+            f"{stage_name}: WARNING — {remaining} docs still pending after tasks exited.",
+            flush=True,
+        )
 
     print(f"{stage_name}: done.", flush=True)
     return True
@@ -240,7 +249,10 @@ def main(dry_run: bool = False) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Print what would be launched without actually running ECS tasks")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print what would be launched without actually running ECS tasks",
+    )
     args = parser.parse_args()
     main(dry_run=args.dry_run)

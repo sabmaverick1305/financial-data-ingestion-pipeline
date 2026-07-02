@@ -29,6 +29,7 @@ Exit codes:
     0 — completed (including "nothing to reset")
     1 — error connecting to DB
 """
+
 from __future__ import annotations
 
 import argparse
@@ -58,8 +59,7 @@ def main(dry_run: bool = False, report: bool = False) -> None:
         if failed:
             print(f"\n=== Failed documents ({len(failed)} shown, most recent first) ===")
             for doc in failed:
-                print(f"  {doc['file_name']:<40} attempts={doc['attempt_count']}  "
-                      f"error={str(doc['last_error'])[:80]}")
+                print(f"  {doc['file_name']:<40} attempts={doc['attempt_count']}  error={str(doc['last_error'])[:80]}")
         else:
             print("\nNo failed documents.")
 
@@ -76,11 +76,8 @@ def main(dry_run: bool = False, report: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Show what would be reset without modifying the DB")
-    parser.add_argument("--report", action="store_true",
-                        help="Also print queue depths and failed document summary")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be reset without modifying the DB")
+    parser.add_argument("--report", action="store_true", help="Also print queue depths and failed document summary")
     args = parser.parse_args()
     main(dry_run=args.dry_run, report=args.report)

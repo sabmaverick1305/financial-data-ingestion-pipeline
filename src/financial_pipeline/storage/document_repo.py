@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import structlog
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
@@ -13,24 +14,24 @@ MAX_ATTEMPTS = 3
 
 
 class Status:
-    UPLOADED           = "uploaded"
-    CLASSIFIED         = "classified"
+    UPLOADED = "uploaded"
+    CLASSIFIED = "classified"
     PROCESSING_STARTED = "processing_started"
-    TEXT_EXTRACTED     = "text_extracted"
-    TABLES_EXTRACTED   = "tables_extracted"
-    PROCESSED          = "processed"
-    CHUNKED            = "chunked"
-    EMBEDDED           = "embedded"
-    INDEXED            = "indexed"
-    FAILED             = "failed"
+    TEXT_EXTRACTED = "text_extracted"
+    TABLES_EXTRACTED = "tables_extracted"
+    PROCESSED = "processed"
+    CHUNKED = "chunked"
+    EMBEDDED = "embedded"
+    INDEXED = "indexed"
+    FAILED = "failed"
 
     # Transient claim states — a row sits here only while a specific worker
     # invocation is actively processing it. claim_expires_at is set at claim
     # time so reset_stale_claims() can recover rows whose worker died without
     # reverting (SIGKILL, OOM, Fargate preemption).
-    TEXT_PROCESSING  = "text_processing"
+    TEXT_PROCESSING = "text_processing"
     TABLE_PROCESSING = "table_processing"
-    OCR_PROCESSING   = "ocr_processing"
+    OCR_PROCESSING = "ocr_processing"
     CHUNK_PROCESSING = "chunk_processing"
     EMBED_PROCESSING = "embed_processing"
 
@@ -42,17 +43,17 @@ class Status:
     #   ocr-worker   (high memory, Docling OCR)    : TEXT_EXTRACTED (no text layer) -> TABLES_EXTRACTED
     #   chunk-worker (low memory,  pure python)    : TABLES_EXTRACTED  -> PROCESSED
     #   embed-worker (low memory,  sentence-transformers CPU): PROCESSED -> EMBEDDED
-    TEXT_PENDING  = PENDING
+    TEXT_PENDING = PENDING
     TABLE_PENDING = (TEXT_EXTRACTED,)
-    OCR_PENDING   = (TEXT_EXTRACTED,)
+    OCR_PENDING = (TEXT_EXTRACTED,)
     CHUNK_PENDING = (TABLES_EXTRACTED,)
     EMBED_PENDING = (PROCESSED,)
 
     # Maps each claim state back to the status to revert to on expiry/failure
     CLAIM_REVERT = {
-        TEXT_PROCESSING:  UPLOADED,
+        TEXT_PROCESSING: UPLOADED,
         TABLE_PROCESSING: TEXT_EXTRACTED,
-        OCR_PROCESSING:   TEXT_EXTRACTED,
+        OCR_PROCESSING: TEXT_EXTRACTED,
         CHUNK_PROCESSING: TABLES_EXTRACTED,
         EMBED_PROCESSING: PROCESSED,
     }
@@ -72,7 +73,8 @@ class DocumentRepository:
     def create_tables(self) -> None:
         """Idempotently create and migrate both tables."""
         with self._engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE IF NOT EXISTS document_metadata (
                     document_id       UUID PRIMARY KEY,
                     source            TEXT NOT NULL,
@@ -104,7 +106,8 @@ class DocumentRepository:
                     created_at        TIMESTAMPTZ DEFAULT NOW(),
                     updated_at        TIMESTAMPTZ DEFAULT NOW()
                 )
-            """))
+            """)
+            )
             # Idempotent migrations for tables created before these columns existed.
             for migration in [
                 "ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS has_text_layer BOOLEAN",
@@ -115,7 +118,8 @@ class DocumentRepository:
             ]:
                 conn.execute(text(migration))
 
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE TABLE IF NOT EXISTS document_processing_log (
                     log_id       UUID PRIMARY KEY,
                     document_id  UUID REFERENCES document_metadata(document_id),
@@ -125,19 +129,24 @@ class DocumentRepository:
                     started_at   TIMESTAMPTZ,
                     completed_at TIMESTAMPTZ
                 )
-            """))
+            """)
+            )
 
             # Index for fast queue queries
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE INDEX IF NOT EXISTS idx_doc_status
                 ON document_metadata (processing_status, has_text_layer, created_at)
-            """))
+            """)
+            )
             # Index for stale claim detection
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE INDEX IF NOT EXISTS idx_doc_claim_expires
                 ON document_metadata (claim_expires_at)
                 WHERE claim_expires_at IS NOT NULL
-            """))
+            """)
+            )
 
         self._log.info("db.tables_ready")
 
@@ -200,13 +209,23 @@ class DocumentRepository:
                     RETURNING document_id, (xmax = 0) AS inserted
                 """),
                 {
-                    "document_id": document_id, "source": source, "provider": provider,
-                    "document_type": document_type, "category": category, "title": title,
-                    "original_url": original_url, "s3_raw_key": s3_raw_key,
-                    "file_name": file_name, "file_type": file_type,
-                    "file_size_bytes": file_size_bytes, "file_hash": file_hash,
-                    "period_year": period_year, "period_month": period_month,
-                    "period_quarter": period_quarter, "volume": volume, "issue": issue,
+                    "document_id": document_id,
+                    "source": source,
+                    "provider": provider,
+                    "document_type": document_type,
+                    "category": category,
+                    "title": title,
+                    "original_url": original_url,
+                    "s3_raw_key": s3_raw_key,
+                    "file_name": file_name,
+                    "file_type": file_type,
+                    "file_size_bytes": file_size_bytes,
+                    "file_hash": file_hash,
+                    "period_year": period_year,
+                    "period_month": period_month,
+                    "period_quarter": period_quarter,
+                    "volume": volume,
+                    "issue": issue,
                 },
             ).fetchone()
 
@@ -227,7 +246,7 @@ class DocumentRepository:
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         with self._engine.begin() as conn:
             conn.execute(
                 text("""
@@ -237,9 +256,13 @@ class DocumentRepository:
                         (:log_id, :document_id, :stage, :status, :message, :started_at, :completed_at)
                 """),
                 {
-                    "log_id": str(uuid.uuid4()), "document_id": document_id,
-                    "stage": stage, "status": status, "message": message,
-                    "started_at": started_at or now, "completed_at": completed_at or now,
+                    "log_id": str(uuid.uuid4()),
+                    "document_id": document_id,
+                    "stage": stage,
+                    "status": status,
+                    "message": message,
+                    "started_at": started_at or now,
+                    "completed_at": completed_at or now,
                 },
             )
 
@@ -346,7 +369,8 @@ class DocumentRepository:
                      WHERE document_id = :document_id
                 """),
                 {
-                    "document_id": document_id, "status": status,
+                    "document_id": document_id,
+                    "status": status,
                     "s3_processed_key": s3_processed_key,
                     "has_text_layer": has_text_layer,
                     "schema_version": schema_version,
@@ -416,10 +440,7 @@ class DocumentRepository:
         placeholders = ", ".join(f"'{s}'" for s in claim_states)
 
         # Build a CASE expression for per-state revert targets
-        case_branches = " ".join(
-            f"WHEN '{claim}' THEN '{revert}'"
-            for claim, revert in Status.CLAIM_REVERT.items()
-        )
+        case_branches = " ".join(f"WHEN '{claim}' THEN '{revert}'" for claim, revert in Status.CLAIM_REVERT.items())
 
         if dry_run:
             sql = f"""
@@ -457,37 +478,46 @@ class DocumentRepository:
     def queue_depths(self) -> dict[str, int]:
         """Return pending count for each pipeline stage — use for CloudWatch metrics."""
         with self._engine.connect() as conn:
-            rows = conn.execute(text("""
+            rows = conn.execute(
+                text("""
                 SELECT
-                    SUM(CASE WHEN processing_status IN ('uploaded','classified') THEN 1 ELSE 0 END)                  AS text_pending,
-                    SUM(CASE WHEN processing_status = 'text_extracted' AND has_text_layer = true  THEN 1 ELSE 0 END) AS table_pending,
-                    SUM(CASE WHEN processing_status = 'text_extracted' AND has_text_layer = false THEN 1 ELSE 0 END) AS ocr_pending,
-                    SUM(CASE WHEN processing_status = 'tables_extracted' THEN 1 ELSE 0 END)                          AS chunk_pending,
-                    SUM(CASE WHEN processing_status = 'processed'        THEN 1 ELSE 0 END)                          AS embed_pending,
+                    SUM(CASE WHEN processing_status IN ('uploaded','classified') THEN 1 ELSE 0 END)                  AS text_pending, # noqa: E501
+                    SUM(CASE WHEN processing_status = 'text_extracted' AND has_text_layer = true  THEN 1 ELSE 0 END) AS table_pending, # noqa: E501
+                    SUM(CASE WHEN processing_status = 'text_extracted' AND has_text_layer = false THEN 1 ELSE 0 END) AS ocr_pending, # noqa: E501
+                    SUM(CASE WHEN processing_status = 'tables_extracted' THEN 1 ELSE 0 END)                          AS chunk_pending, # noqa: E501
+                    SUM(CASE WHEN processing_status = 'processed'        THEN 1 ELSE 0 END)                          AS embed_pending, # noqa: E501
                     SUM(CASE WHEN processing_status = 'embedded'         THEN 1 ELSE 0 END)                          AS embedded,
                     SUM(CASE WHEN processing_status = 'failed'           THEN 1 ELSE 0 END)                          AS failed
                 FROM document_metadata
-            """)).fetchone()
+            """)
+            ).fetchone()
         return {
-            "text_pending":  int(rows[0] or 0),
+            "text_pending": int(rows[0] or 0),
             "table_pending": int(rows[1] or 0),
-            "ocr_pending":   int(rows[2] or 0),
+            "ocr_pending": int(rows[2] or 0),
             "chunk_pending": int(rows[3] or 0),
             "embed_pending": int(rows[4] or 0),
-            "embedded":      int(rows[5] or 0),
-            "failed":        int(rows[6] or 0),
+            "embedded": int(rows[5] or 0),
+            "failed": int(rows[6] or 0),
         }
 
     def get_failed_documents(self, limit: int = 100) -> list[dict]:
         """Return documents in terminal 'failed' state for review."""
         with self._engine.connect() as conn:
-            rows = conn.execute(text("""
+            rows = (
+                conn.execute(
+                    text("""
                 SELECT document_id, file_name, attempt_count, last_error, updated_at
                   FROM document_metadata
                  WHERE processing_status = 'failed'
                  ORDER BY updated_at DESC
                  LIMIT :limit
-            """), {"limit": limit}).mappings().all()
+            """),
+                    {"limit": limit},
+                )
+                .mappings()
+                .all()
+            )
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------
@@ -515,6 +545,7 @@ class DocumentRepository:
         with self._engine.begin() as conn:
             # Register pgvector type so psycopg2 accepts Python lists as vector
             from pgvector.psycopg2 import register_vector
+
             register_vector(conn.connection.dbapi_connection)
 
             # Delete stale chunks (idempotent re-embedding)
@@ -525,18 +556,18 @@ class DocumentRepository:
 
             rows = [
                 {
-                    "chunk_id":        str(uuid.uuid4()),
-                    "document_id":     document_id,
-                    "chunk_index":     chunk.get("chunk_id", i),
-                    "text":            chunk["text"],
-                    "char_start":      chunk.get("start"),
-                    "char_end":        chunk.get("end"),
-                    "token_count":     len(chunk["text"].split()),
-                    "embedding":       embeddings[i],
+                    "chunk_id": str(uuid.uuid4()),
+                    "document_id": document_id,
+                    "chunk_index": chunk.get("chunk_id", i),
+                    "text": chunk["text"],
+                    "char_start": chunk.get("start"),
+                    "char_end": chunk.get("end"),
+                    "token_count": len(chunk["text"].split()),
+                    "embedding": embeddings[i],
                     "embedding_model": model_name,
-                    "period_year":     period_year,
-                    "period_month":    period_month,
-                    "category":        category,
+                    "period_year": period_year,
+                    "period_month": period_month,
+                    "category": category,
                 }
                 for i, chunk in enumerate(chunks)
             ]
@@ -583,7 +614,7 @@ class DocumentRepository:
         params: dict = {
             "embedding": query_embedding,
             "limit": limit,
-            "min_sim": 1.0 - min_similarity,   # cosine distance threshold
+            "min_sim": 1.0 - min_similarity,  # cosine distance threshold
         }
         if period_year is not None:
             filters.append("dc.period_year = :period_year")
@@ -619,6 +650,7 @@ class DocumentRepository:
         """
         with self._engine.connect() as conn:
             from pgvector.psycopg2 import register_vector
+
             register_vector(conn.connection.dbapi_connection)
             rows = conn.execute(text(sql), params).mappings().all()
 
@@ -679,8 +711,8 @@ class DocumentRepository:
     def register_table_assets(
         self,
         document_id: str,
-        tables: list,                  # list[pd.DataFrame]
-        table_meta: list,              # list[TableMeta] — parallel to tables
+        tables: list,  # list[pd.DataFrame]
+        table_meta: list,  # list[TableMeta] — parallel to tables
         prefix: str,
     ) -> int:
         """Upsert one document_table_assets row per extracted table.
@@ -696,25 +728,24 @@ class DocumentRepository:
 
         rows = []
         for i, (df, meta) in enumerate(zip(tables, table_meta or [{}] * len(tables)), start=1):
-            page_no      = getattr(meta, "page_number",   None)
-            table_name   = getattr(meta, "table_name",    None)
-            section_title= getattr(meta, "section_title", None)
-            schema_json  = _json.dumps([
-                {"name": str(col), "dtype": str(df[col].dtype)}
-                for col in df.columns
-            ])
-            rows.append({
-                "table_asset_id": str(uuid.uuid4()),
-                "document_id":    document_id,
-                "table_index":    i,
-                "table_name":     table_name,
-                "page_number":    page_no,
-                "section_title":  section_title,
-                "parquet_s3_key": f"{prefix}/tables/table_{i:03d}.parquet",
-                "row_count":      len(df),
-                "column_count":   len(df.columns),
-                "schema_json":    schema_json,
-            })
+            page_no = getattr(meta, "page_number", None)
+            table_name = getattr(meta, "table_name", None)
+            section_title = getattr(meta, "section_title", None)
+            schema_json = _json.dumps([{"name": str(col), "dtype": str(df[col].dtype)} for col in df.columns])
+            rows.append(
+                {
+                    "table_asset_id": str(uuid.uuid4()),
+                    "document_id": document_id,
+                    "table_index": i,
+                    "table_name": table_name,
+                    "page_number": page_no,
+                    "section_title": section_title,
+                    "parquet_s3_key": f"{prefix}/tables/table_{i:03d}.parquet",
+                    "row_count": len(df),
+                    "column_count": len(df.columns),
+                    "schema_json": schema_json,
+                }
+            )
 
         with self._engine.begin() as conn:
             conn.execute(

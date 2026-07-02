@@ -12,20 +12,22 @@ document moves to 'failed' (terminal).
 Usage:
     python scripts/process_chunk_worker.py [--limit N] [--loop]
 """
+
 from __future__ import annotations
 
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, "src")
 
+import structlog  # noqa: E402
 from _worker_common import SCHEMA_VERSION, init  # noqa: E402
+
 from financial_pipeline.config import settings  # noqa: E402
 from financial_pipeline.processing.chunker import chunk_text  # noqa: E402
 from financial_pipeline.storage.document_repo import Status  # noqa: E402
-import structlog  # noqa: E402
 
 log = structlog.get_logger()
 
@@ -36,7 +38,7 @@ def process_one(doc: dict, s3, repo) -> bool:
     prefix = doc["s3_processed_key"]
     logger = log.bind(document_id=doc_id, file_name=filename, prefix=prefix)
 
-    started_at = datetime.now(tz=timezone.utc)
+    started_at = datetime.now(tz=UTC)
     try:
         text_key = f"{prefix}/text.json"
         obj = s3.get_object(Bucket=settings.s3_bucket, Key=text_key)
@@ -44,26 +46,39 @@ def process_one(doc: dict, s3, repo) -> bool:
         full_text = text_doc.get("full_text", "")
 
         chunks = chunk_text(full_text)
-        chunks_payload = json.dumps({
-            "document_id": doc_id,
-            "schema_version": SCHEMA_VERSION,
-            "total_chunks": len(chunks),
-            "chunks": chunks,
-        }, ensure_ascii=False).encode()
+        chunks_payload = json.dumps(
+            {
+                "document_id": doc_id,
+                "schema_version": SCHEMA_VERSION,
+                "total_chunks": len(chunks),
+                "chunks": chunks,
+            },
+            ensure_ascii=False,
+        ).encode()
         chunks_key = f"{prefix}/chunks.json"
-        s3.put_object(Bucket=settings.s3_bucket, Key=chunks_key,
-                      Body=chunks_payload, ContentType="application/json")
+        s3.put_object(
+            Bucket=settings.s3_bucket,
+            Key=chunks_key,
+            Body=chunks_payload,
+            ContentType="application/json",
+        )
 
-        completed_at = datetime.now(tz=timezone.utc)
-        repo.log_stage(doc_id, "chunking", "success",
-                       message=f"chunks={len(chunks)} key={chunks_key}",
-                       started_at=started_at, completed_at=completed_at)
-        repo.update_status(doc_id, Status.PROCESSED,
-                           s3_processed_key=prefix,
-                           schema_version=SCHEMA_VERSION)
+        completed_at = datetime.now(tz=UTC)
+        repo.log_stage(
+            doc_id,
+            "chunking",
+            "success",
+            message=f"chunks={len(chunks)} key={chunks_key}",
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+        repo.update_status(doc_id, Status.PROCESSED, s3_processed_key=prefix, schema_version=SCHEMA_VERSION)
 
-        logger.info("chunk_worker.done", chunks=len(chunks),
-                    elapsed_s=round((completed_at - started_at).total_seconds(), 1))
+        logger.info(
+            "chunk_worker.done",
+            chunks=len(chunks),
+            elapsed_s=round((completed_at - started_at).total_seconds(), 1),
+        )
         return True
 
     except Exception as exc:
@@ -118,9 +133,9 @@ def main(limit: int | None = None, loop: bool = False) -> None:
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None)
-    parser.add_argument("--loop", action="store_true",
-                        help="Keep processing until queue is empty, then exit")
+    parser.add_argument("--loop", action="store_true", help="Keep processing until queue is empty, then exit")
     args = parser.parse_args()
     main(limit=args.limit, loop=args.loop)

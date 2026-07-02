@@ -15,6 +15,7 @@ Usage::
     print(result.citations)      # structured source list
     print(result.intent.describe())   # what the pipeline understood
 """
+
 from __future__ import annotations
 
 import time
@@ -25,7 +26,7 @@ import structlog
 
 from financial_pipeline.config import settings
 from financial_pipeline.retrieval.query_understanding import QueryAnalyzer, QueryIntent
-from financial_pipeline.retrieval.retriever import Retriever, _rrf_merge
+from financial_pipeline.retrieval.retriever import Retriever
 from financial_pipeline.storage.document_repo import DocumentRepository
 
 log = structlog.get_logger()
@@ -33,50 +34,52 @@ log = structlog.get_logger()
 
 # ── Output types ──────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Citation:
-    number:      int
-    source_type: str            # "chunk" | "table" | "document"
-    file_name:   str | None
+    number: int
+    source_type: str  # "chunk" | "table" | "document"
+    file_name: str | None
     period_year: int | None
-    period_month:int | None
-    category:    str | None
-    preview:     str
-    score:       float | None = None
-    chunk_index: int | None   = None
-    table_index: int | None   = None
+    period_month: int | None
+    category: str | None
+    preview: str
+    score: float | None = None
+    chunk_index: int | None = None
+    table_index: int | None = None
 
 
 @dataclass
 class GroundedContext:
     """Everything downstream (LLM, API response) needs from one retrieval."""
 
-    query:        str
-    intent:       QueryIntent
-    context_text: str                         # formatted for LLM system message
-    citations:    list[Citation]              # numbered, structured
-    raw_results:  list[dict]                  # unformatted, for API pass-through
-    table_data:   list[dict]                  # table summaries when tables fetched
-    stats: dict[str, Any] = field(default_factory=dict)   # timing, counts
+    query: str
+    intent: QueryIntent
+    context_text: str  # formatted for LLM system message
+    citations: list[Citation]  # numbered, structured
+    raw_results: list[dict]  # unformatted, for API pass-through
+    table_data: list[dict]  # table summaries when tables fetched
+    stats: dict[str, Any] = field(default_factory=dict)  # timing, counts
 
 
 # ── Stage 2: Search Router ────────────────────────────────────────────────────
 
+
 @dataclass
 class SearchPlan:
-    chunk_mode:        str   = "hybrid"     # hybrid | semantic | keyword
-    chunk_limit:       int   = 12           # fetch more than we'll return (for MMR)
-    fetch_tables:      bool  = False
-    table_limit:       int   = 5
-    fetch_documents:   bool  = False
-    doc_limit:         int   = 5
+    chunk_mode: str = "hybrid"  # hybrid | semantic | keyword
+    chunk_limit: int = 12  # fetch more than we'll return (for MMR)
+    fetch_tables: bool = False
+    table_limit: int = 5
+    fetch_documents: bool = False
+    doc_limit: int = 5
 
 
 class SearchRouter:
     """Stage 2 — Converts a QueryIntent into a concrete SearchPlan."""
 
     def route(self, intent: QueryIntent, top_k: int = 8) -> SearchPlan:
-        plan = SearchPlan(chunk_limit=top_k * 2)   # fetch 2× for MMR headroom
+        plan = SearchPlan(chunk_limit=top_k * 2)  # fetch 2× for MMR headroom
 
         # Chunk search mode
         if intent.intent_type in ("definition", "factual"):
@@ -84,7 +87,7 @@ class SearchRouter:
         elif intent.intent_type == "trend":
             plan.chunk_mode = "hybrid"
         elif intent.intent_type == "tabular":
-            plan.chunk_mode = "keyword"   # tabular queries have exact term matches
+            plan.chunk_mode = "keyword"  # tabular queries have exact term matches
         elif intent.intent_type == "comparison":
             plan.chunk_mode = "semantic"  # comparisons are conceptual
         elif intent.intent_type == "lookup":
@@ -100,30 +103,33 @@ class SearchRouter:
         if intent.needs_documents or intent.intent_type == "lookup":
             plan.fetch_documents = True
 
-        log.debug("router.plan",
-                  intent=intent.intent_type,
-                  chunk_mode=plan.chunk_mode,
-                  fetch_tables=plan.fetch_tables)
+        log.debug(
+            "router.plan",
+            intent=intent.intent_type,
+            chunk_mode=plan.chunk_mode,
+            fetch_tables=plan.fetch_tables,
+        )
         return plan
 
 
 # ── Stage 3: Multi-Source Fetcher ─────────────────────────────────────────────
 
+
 class MultiSourceFetcher:
     """Stage 3 — Fetches results from all sources the router selected."""
 
     def __init__(self, repo: DocumentRepository, retriever: Retriever) -> None:
-        self._repo      = repo
+        self._repo = repo
         self._retriever = retriever
 
     def fetch(
         self,
         intent: QueryIntent,
-        plan:   SearchPlan,
+        plan: SearchPlan,
     ) -> tuple[list[dict], list[dict], list[dict]]:
         """Returns (chunks, tables, documents)."""
-        chunks    = self._fetch_chunks(intent, plan)
-        tables    = self._fetch_tables(intent, plan) if plan.fetch_tables else []
+        chunks = self._fetch_chunks(intent, plan)
+        tables = self._fetch_tables(intent, plan) if plan.fetch_tables else []
         documents = self._fetch_documents(intent, plan) if plan.fetch_documents else []
         return chunks, tables, documents
 
@@ -131,12 +137,12 @@ class MultiSourceFetcher:
         query = intent.search_query or intent.raw_query
         try:
             results = self._retriever.search(
-                query    = query,
-                mode     = plan.chunk_mode,
-                limit    = plan.chunk_limit,
-                year     = intent.year,
-                month    = intent.month,
-                category = intent.category,
+                query=query,
+                mode=plan.chunk_mode,
+                limit=plan.chunk_limit,
+                year=intent.year,
+                month=intent.month,
+                category=intent.category,
             )
             for r in results:
                 r["_source"] = "chunk"
@@ -225,6 +231,7 @@ class MultiSourceFetcher:
 
 # ── Stage 4: Result Ranker ────────────────────────────────────────────────────
 
+
 class ResultRanker:
     """Stage 4 — Deduplicate, score, and diversify retrieved results.
 
@@ -235,8 +242,8 @@ class ResultRanker:
                          (encourages breadth across the corpus)
     """
 
-    MMR_LAMBDA   = 0.7    # 0=max diversity, 1=max relevance
-    MIN_SCORE    = 0.0    # drop chunks below this similarity
+    MMR_LAMBDA = 0.7  # 0=max diversity, 1=max relevance
+    MIN_SCORE = 0.0  # drop chunks below this similarity
     # Chunks where >40% of characters are table-noise (|, -, spaces in patterns)
     # are mostly raw XLS table rows — useless for prose queries.
     TABLE_NOISE_THRESHOLD = 0.40
@@ -253,42 +260,39 @@ class ResultRanker:
 
     def rank(
         self,
-        chunks:    list[dict],
-        tables:    list[dict],
+        chunks: list[dict],
+        tables: list[dict],
         documents: list[dict],
-        top_k:     int,
-        intent:    QueryIntent,
+        top_k: int,
+        intent: QueryIntent,
     ) -> list[dict]:
 
         # 1. Deduplicate + quality-filter chunks
-        seen_ids:    set[str] = set()
+        seen_ids: set[str] = set()
         seen_prefix: set[str] = set()
         deduped: list[dict] = []
         for r in chunks:
-            cid    = str(r.get("chunk_id", ""))
-            text   = r.get("text") or ""
+            cid = str(r.get("chunk_id", ""))
+            text = r.get("text") or ""
             prefix = text[:80].strip()
             if cid in seen_ids or prefix in seen_prefix:
                 continue
             if (r.get("similarity") or 0) < self.MIN_SCORE:
                 continue
             if not self._is_prose(text, intent):
-                continue    # skip raw table-data chunks for prose queries
+                continue  # skip raw table-data chunks for prose queries
             seen_ids.add(cid)
             seen_prefix.add(prefix)
             deduped.append(r)
 
         # 2. MMR diversity pass — penalise same-document repetition
-        selected:     list[dict] = []
-        doc_seen:     dict[str, int] = {}   # doc_id → count selected from it
+        selected: list[dict] = []
+        doc_seen: dict[str, int] = {}  # doc_id → count selected from it
 
         for candidate in deduped:
             doc_id = str(candidate.get("document_id", ""))
             penalty = doc_seen.get(doc_id, 0) * (1 - self.MMR_LAMBDA)
-            rel_score = (
-                candidate.get("similarity") or
-                candidate.get("rrf_score") or 0.5
-            )
+            rel_score = candidate.get("similarity") or candidate.get("rrf_score") or 0.5
             mmr_score = self.MMR_LAMBDA * rel_score - penalty
             candidate["_mmr_score"] = round(mmr_score, 5)
             selected.append(candidate)
@@ -309,10 +313,7 @@ class ResultRanker:
                 if len(ranked) < top_k + 2:
                     ranked.append(doc)
 
-        log.debug("ranker.done",
-                  chunks_in=len(deduped),
-                  tables_in=len(tables),
-                  ranked_out=len(ranked))
+        log.debug("ranker.done", chunks_in=len(deduped), tables_in=len(tables), ranked_out=len(ranked))
         return ranked
 
 
@@ -326,20 +327,21 @@ If the answer is not in the passages, say: "This information is not in the provi
 Use exact figures when the context provides them. Do not fabricate data.
 """
 
+
 class ContextAssembler:
     """Stage 5 — Format ranked results into LLM-ready text with numbered citations."""
 
-    MAX_CHUNK_CHARS   = 600
+    MAX_CHUNK_CHARS = 600
     MAX_CONTEXT_CHARS = 6000
 
     def assemble(
         self,
-        ranked:  list[dict],
-        intent:  QueryIntent,
+        ranked: list[dict],
+        intent: QueryIntent,
     ) -> tuple[str, list[Citation]]:
         """Returns (context_text, citations)."""
-        passages:   list[str]     = []
-        citations:  list[Citation] = []
+        passages: list[str] = []
+        citations: list[Citation] = []
         total_chars = 0
 
         for i, item in enumerate(ranked, 1):
@@ -358,7 +360,7 @@ class ContextAssembler:
                 meta = self._meta(item)
                 rows = item.get("row_count", "?")
                 passage = (
-                    f"[{i}] {meta}  (table #{item.get('table_index',i)})\n"
+                    f"[{i}] {meta}  (table #{item.get('table_index', i)})\n"
                     f"Columns: {cols}\n"
                     f"Rows: {rows}  |  "
                     f"Key: {item.get('parquet_s3_key', '')}"
@@ -366,7 +368,7 @@ class ContextAssembler:
 
             elif src == "document":
                 meta = self._meta(item)
-                passage = f"[{i}] {meta}\nDocument: {item.get('file_name','')}  |  {item.get('s3_processed_key','')}"
+                passage = f"[{i}] {meta}\nDocument: {item.get('file_name', '')}  |  {item.get('s3_processed_key', '')}"
 
             else:
                 continue
@@ -377,30 +379,32 @@ class ContextAssembler:
             passages.append(passage)
             total_chars += len(passage)
 
-            citations.append(Citation(
-                number      = i,
-                source_type = src,
-                file_name   = item.get("file_name"),
-                period_year = item.get("period_year"),
-                period_month= item.get("period_month"),
-                category    = item.get("category"),
-                preview     = (item.get("text") or item.get("table_name") or "")[:200],
-                score       = item.get("similarity") or item.get("rrf_score") or item.get("_mmr_score"),
-                chunk_index = item.get("chunk_index"),
-                table_index = item.get("table_index"),
-            ))
+            citations.append(
+                Citation(
+                    number=i,
+                    source_type=src,
+                    file_name=item.get("file_name"),
+                    period_year=item.get("period_year"),
+                    period_month=item.get("period_month"),
+                    category=item.get("category"),
+                    preview=(item.get("text") or item.get("table_name") or "")[:200],
+                    score=item.get("similarity") or item.get("rrf_score") or item.get("_mmr_score"),
+                    chunk_index=item.get("chunk_index"),
+                    table_index=item.get("table_index"),
+                )
+            )
 
         context_text = "\n\n".join(passages) if passages else "No relevant content found."
         return context_text, citations
 
     def build_llm_messages(
         self,
-        question:     str,
+        question: str,
         context_text: str,
     ) -> list[dict]:
         return [
             {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user",   "content": f"Context:\n\n{context_text}\n\nQuestion: {question}"},
+            {"role": "user", "content": f"Context:\n\n{context_text}\n\nQuestion: {question}"},
         ]
 
     @staticmethod
@@ -418,6 +422,7 @@ class ContextAssembler:
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
+
 class RetrievalPipeline:
     """Orchestrates all 5 retrieval stages.
 
@@ -433,43 +438,54 @@ class RetrievalPipeline:
 
     def __init__(
         self,
-        repo:      DocumentRepository,
+        repo: DocumentRepository,
         retriever: Retriever,
-        top_k:     int | None = None,
+        top_k: int | None = None,
     ) -> None:
-        self._analyzer  = QueryAnalyzer()
-        self._router    = SearchRouter()
-        self._fetcher   = MultiSourceFetcher(repo, retriever)
-        self._ranker    = ResultRanker()
+        self._analyzer = QueryAnalyzer()
+        self._router = SearchRouter()
+        self._fetcher = MultiSourceFetcher(repo, retriever)
+        self._ranker = ResultRanker()
         self._assembler = ContextAssembler()
-        self._top_k     = top_k or settings.api_top_k
+        self._top_k = top_k or settings.api_top_k
 
     # ------------------------------------------------------------------
 
     def retrieve(
         self,
-        query:    str,
-        top_k:    int | None = None,
+        query: str,
+        top_k: int | None = None,
         # explicit overrides (passed from API when user sets them directly)
-        year:     int | None = None,
-        month:    int | None = None,
+        year: int | None = None,
+        month: int | None = None,
         category: str | None = None,
-        mode:     str | None = None,   # override chunk search mode
+        mode: str | None = None,  # override chunk search mode
     ) -> GroundedContext:
         t0 = time.perf_counter()
-        k  = top_k or self._top_k
+        k = top_k or self._top_k
 
         # ── Stage 1: Understand ───────────────────────────────────────
         intent = self._analyzer.analyze(query)
         # API-level overrides take priority over extracted values
-        if year:     intent.year     = year
-        if month:    intent.month    = month
-        if category: intent.category = category
-        log.info("pipeline.intent", **{k: v for k, v in {
-            "intent": intent.intent_type,
-            "year": intent.year, "month": intent.month,
-            "needs_tables": intent.needs_tables,
-        }.items() if v is not None})
+        if year:
+            intent.year = year
+        if month:
+            intent.month = month
+        if category:
+            intent.category = category
+        log.info(
+            "pipeline.intent",
+            **{
+                k: v
+                for k, v in {
+                    "intent": intent.intent_type,
+                    "year": intent.year,
+                    "month": intent.month,
+                    "needs_tables": intent.needs_tables,
+                }.items()
+                if v is not None
+            },
+        )
 
         # ── Stage 2: Route ────────────────────────────────────────────
         plan = self._router.route(intent, top_k=k)
@@ -486,31 +502,28 @@ class RetrievalPipeline:
         context_text, citations = self._assembler.assemble(ranked, intent)
 
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
-        log.info("pipeline.done",
-                 results=len(ranked),
-                 citations=len(citations),
-                 latency_ms=elapsed_ms)
+        log.info("pipeline.done", results=len(ranked), citations=len(citations), latency_ms=elapsed_ms)
 
         return GroundedContext(
-            query        = query,
-            intent       = intent,
-            context_text = context_text,
-            citations    = citations,
-            raw_results  = ranked,
-            table_data   = tables,
-            stats        = {
-                "latency_ms":      elapsed_ms,
-                "chunks_fetched":  len(chunks),
-                "tables_fetched":  len(tables),
-                "docs_fetched":    len(documents),
+            query=query,
+            intent=intent,
+            context_text=context_text,
+            citations=citations,
+            raw_results=ranked,
+            table_data=tables,
+            stats={
+                "latency_ms": elapsed_ms,
+                "chunks_fetched": len(chunks),
+                "tables_fetched": len(tables),
+                "docs_fetched": len(documents),
                 "ranked_returned": len(ranked),
-                "chunk_mode":      plan.chunk_mode,
+                "chunk_mode": plan.chunk_mode,
             },
         )
 
     def build_llm_messages(
         self,
-        question:     str,
+        question: str,
         context_text: str,
     ) -> list[dict]:
         return self._assembler.build_llm_messages(question, context_text)

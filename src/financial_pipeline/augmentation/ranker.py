@@ -13,6 +13,7 @@ Model: cross-encoder/ms-marco-MiniLM-L-6-v2
 Fallback: If the cross-encoder is not available or disabled, falls back to
 the original retrieval scores (similarity / rrf_score / _mmr_score).
 """
+
 from __future__ import annotations
 
 import structlog
@@ -26,6 +27,7 @@ _ce_cache: dict = {}
 def _get_cross_encoder(model_name: str = CROSS_ENCODER_MODEL):
     if model_name not in _ce_cache:
         from sentence_transformers import CrossEncoder
+
         log.info("ranker.cross_encoder_loading", model=model_name)
         _ce_cache[model_name] = CrossEncoder(model_name)
         log.info("ranker.cross_encoder_ready", model=model_name)
@@ -63,15 +65,15 @@ class ContextRanker:
 
     def __init__(
         self,
-        use_cross_encoder: bool  = True,
-        top_k:             int   = 8,
-        min_score:         float = -5.0,
-        model_name:        str   = CROSS_ENCODER_MODEL,
+        use_cross_encoder: bool = True,
+        top_k: int = 8,
+        min_score: float = -5.0,
+        model_name: str = CROSS_ENCODER_MODEL,
     ) -> None:
-        self._use_ce    = use_cross_encoder
-        self._top_k     = top_k
+        self._use_ce = use_cross_encoder
+        self._top_k = top_k
         self._min_score = min_score
-        self._model     = model_name
+        self._model = model_name
 
     def rerank(self, query: str, chunks: list[dict]) -> list[dict]:
         """Return at most *top_k* chunks sorted by cross-encoder relevance."""
@@ -90,10 +92,10 @@ class ContextRanker:
     # ------------------------------------------------------------------
 
     def _cross_encoder_rank(self, query: str, chunks: list[dict]) -> list[dict]:
-        ce     = _get_cross_encoder(self._model)
+        ce = _get_cross_encoder(self._model)
         # Truncate each passage to 512 chars — CE tokenises internally but
         # very long passages slow batch inference significantly.
-        pairs  = [(query, (c.get("text") or "")[:512]) for c in chunks]
+        pairs = [(query, (c.get("text") or "")[:512]) for c in chunks]
         scores = ce.predict(pairs).tolist()
 
         ranked = sorted(zip(scores, chunks), key=lambda x: x[0], reverse=True)
@@ -102,25 +104,25 @@ class ContextRanker:
         for score, chunk in ranked[: self._top_k]:
             if score < self._min_score:
                 continue
-            chunk["_ce_score"]    = round(float(score), 4)
+            chunk["_ce_score"] = round(float(score), 4)
             chunk["_rank_method"] = "cross_encoder"
             result.append(chunk)
 
-        log.debug("ranker.cross_encoder_done",
-                  input=len(chunks), output=len(result),
-                  top_score=round(ranked[0][0], 4) if ranked else None,
-                  bottom_score=round(ranked[-1][0], 4) if ranked else None)
+        log.debug(
+            "ranker.cross_encoder_done",
+            input=len(chunks),
+            output=len(result),
+            top_score=round(ranked[0][0], 4) if ranked else None,
+            bottom_score=round(ranked[-1][0], 4) if ranked else None,
+        )
         return result
 
     def _fallback_rank(self, chunks: list[dict]) -> list[dict]:
         """Rank by existing retrieval scores when CE is disabled."""
+
         def score(c: dict) -> float:
-            return (
-                c.get("_ce_score") or
-                c.get("similarity") or
-                c.get("rrf_score") or
-                c.get("_mmr_score") or 0.0
-            )
+            return c.get("_ce_score") or c.get("similarity") or c.get("rrf_score") or c.get("_mmr_score") or 0.0
+
         ranked = sorted(chunks, key=score, reverse=True)[: self._top_k]
         for c in ranked:
             c.setdefault("_rank_method", "fallback")

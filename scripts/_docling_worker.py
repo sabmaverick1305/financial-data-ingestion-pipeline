@@ -15,28 +15,30 @@ In --loop mode each task self-drains its queue until empty, then exits. This
 eliminates the need for a wave-based orchestrator re-launching tasks — a fixed
 pool of N concurrent tasks each run until there is nothing left to do.
 """
+
 from __future__ import annotations
 
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 sys.path.insert(0, "src")
 
+import structlog  # noqa: E402
 from _worker_common import (  # noqa: E402
     SCHEMA_VERSION,
     df_to_parquet_bytes,
     init,
     processed_prefix,
 )
+
 from financial_pipeline.config import settings  # noqa: E402
 from financial_pipeline.storage.document_repo import Status  # noqa: E402
-import structlog  # noqa: E402
 
 log = structlog.get_logger()
 
-LOOP_IDLE_SLEEP_S = 5   # seconds to wait when queue is empty in --loop mode
+LOOP_IDLE_SLEEP_S = 5  # seconds to wait when queue is empty in --loop mode
 
 
 def process_one(doc: dict, s3, repo, extractor, stage_name: str, claim_status: str) -> bool:
@@ -46,7 +48,7 @@ def process_one(doc: dict, s3, repo, extractor, stage_name: str, claim_status: s
     prefix = doc.get("s3_processed_key") or processed_prefix(doc)
     logger = log.bind(document_id=doc_id, file_name=filename, prefix=prefix)
 
-    started_at = datetime.now(tz=timezone.utc)
+    started_at = datetime.now(tz=UTC)
     try:
         logger.info(f"{stage_name}.downloading", key=raw_key)
         obj = s3.get_object(Bucket=settings.s3_bucket, Key=raw_key)
@@ -54,28 +56,42 @@ def process_one(doc: dict, s3, repo, extractor, stage_name: str, claim_status: s
 
         result = extractor.extract(raw)
 
-        text_payload = json.dumps({
-            "document_id": doc_id,
-            "file_name": filename,
-            "has_text_layer": result.has_text_layer,
-            "extraction_engine": result.extraction_engine,
-            "schema_version": SCHEMA_VERSION,
-            "metadata": result.metadata,
-            "pages": result.pages,
-            "figures": result.figures,
-            "full_text": result.full_text,
-        }, ensure_ascii=False).encode()
-        s3.put_object(Bucket=settings.s3_bucket, Key=f"{prefix}/text.json",
-                      Body=text_payload, ContentType="application/json")
-        s3.put_object(Bucket=settings.s3_bucket, Key=f"{prefix}/markdown.md",
-                      Body=result.markdown.encode(), ContentType="text/markdown")
+        text_payload = json.dumps(
+            {
+                "document_id": doc_id,
+                "file_name": filename,
+                "has_text_layer": result.has_text_layer,
+                "extraction_engine": result.extraction_engine,
+                "schema_version": SCHEMA_VERSION,
+                "metadata": result.metadata,
+                "pages": result.pages,
+                "figures": result.figures,
+                "full_text": result.full_text,
+            },
+            ensure_ascii=False,
+        ).encode()
+        s3.put_object(
+            Bucket=settings.s3_bucket,
+            Key=f"{prefix}/text.json",
+            Body=text_payload,
+            ContentType="application/json",
+        )
+        s3.put_object(
+            Bucket=settings.s3_bucket,
+            Key=f"{prefix}/markdown.md",
+            Body=result.markdown.encode(),
+            ContentType="text/markdown",
+        )
 
         table_keys: list[str] = []
         for i, df in enumerate(result.tables, start=1):
             tbl_key = f"{prefix}/tables/table_{i:03d}.parquet"
-            s3.put_object(Bucket=settings.s3_bucket, Key=tbl_key,
-                          Body=df_to_parquet_bytes(df),
-                          ContentType="application/octet-stream")
+            s3.put_object(
+                Bucket=settings.s3_bucket,
+                Key=tbl_key,
+                Body=df_to_parquet_bytes(df),
+                ContentType="application/octet-stream",
+            )
             table_keys.append(tbl_key)
 
         # Register each table in document_table_assets (page, shape, schema, S3 key)
@@ -86,16 +102,22 @@ def process_one(doc: dict, s3, repo, extractor, stage_name: str, claim_status: s
             prefix=prefix,
         )
 
-        completed_at = datetime.now(tz=timezone.utc)
-        repo.log_stage(doc_id, stage_name, "success",
-                       message=f"engine={result.extraction_engine} tables={len(table_keys)} "
-                               f"failed_tables={result.failed_tables}",
-                       started_at=started_at, completed_at=completed_at)
-        repo.update_status(doc_id, Status.TABLES_EXTRACTED,
-                           s3_processed_key=prefix, schema_version=SCHEMA_VERSION)
+        completed_at = datetime.now(tz=UTC)
+        repo.log_stage(
+            doc_id,
+            stage_name,
+            "success",
+            message=f"engine={result.extraction_engine} tables={len(table_keys)} failed_tables={result.failed_tables}",
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+        repo.update_status(doc_id, Status.TABLES_EXTRACTED, s3_processed_key=prefix, schema_version=SCHEMA_VERSION)
 
-        logger.info(f"{stage_name}.done", tables=len(table_keys),
-                    elapsed_s=round((completed_at - started_at).total_seconds(), 1))
+        logger.info(
+            f"{stage_name}.done",
+            tables=len(table_keys),
+            elapsed_s=round((completed_at - started_at).total_seconds(), 1),
+        )
         return True
 
     except Exception as exc:

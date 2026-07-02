@@ -23,6 +23,7 @@ Examples:
     # Filter by document category
     python scripts/search.py "scheme count" --category monthly
 """
+
 from __future__ import annotations
 
 import sys
@@ -37,17 +38,19 @@ MODEL_NAME = "all-MiniLM-L6-v2"
 
 _model = None
 
+
 def get_model():
     global _model
     if _model is None:
         from sentence_transformers import SentenceTransformer
+
         _model = SentenceTransformer(MODEL_NAME)
     return _model
 
 
 def rrf_merge(
     semantic_results: list[dict],
-    keyword_results:  list[dict],
+    keyword_results: list[dict],
     k: int = 60,
 ) -> list[dict]:
     """Reciprocal Rank Fusion — combines two ranked lists without score normalisation.
@@ -56,12 +59,12 @@ def rrf_merge(
     k=60 is the standard constant (Cormack et al., 2009).
     """
     scores: dict[str, float] = {}
-    meta:   dict[str, dict]  = {}
+    meta: dict[str, dict] = {}
 
     for rank, result in enumerate(semantic_results, start=1):
         cid = str(result["chunk_id"])
         scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank)
-        meta[cid]   = result
+        meta[cid] = result
 
     for rank, result in enumerate(keyword_results, start=1):
         cid = str(result["chunk_id"])
@@ -76,13 +79,13 @@ def rrf_merge(
 def format_result(i: int, result: dict, mode: str) -> str:
     """Pretty-print a single search result."""
     lines = [
-        f"\n{'─'*70}",
-        f"  #{i+1}  {result.get('file_name', 'unknown')}",
+        f"\n{'─' * 70}",
+        f"  #{i + 1}  {result.get('file_name', 'unknown')}",
     ]
 
-    year  = result.get("period_year")
+    year = result.get("period_year")
     month = result.get("period_month")
-    cat   = result.get("category", "")
+    cat = result.get("category", "")
     if year:
         lines.append(f"       Period : {year}/{month:02d}" if month else f"       Period : {year}")
     if cat:
@@ -102,13 +105,13 @@ def format_result(i: int, result: dict, mode: str) -> str:
 
 
 def search(
-    query:    str,
-    mode:     str = "hybrid",
-    limit:    int = 10,
-    year:     int | None = None,
-    month:    int | None = None,
+    query: str,
+    mode: str = "hybrid",
+    limit: int = 10,
+    year: int | None = None,
+    month: int | None = None,
     category: str | None = None,
-    min_sim:  float = 0.0,
+    min_sim: float = 0.0,
 ) -> list[dict]:
     if not settings.postgres_url:
         print("POSTGRES_URL not set.", file=sys.stderr)
@@ -117,10 +120,10 @@ def search(
     repo = DocumentRepository(settings.postgres_url)
 
     semantic_results: list[dict] = []
-    keyword_results:  list[dict] = []
+    keyword_results: list[dict] = []
 
     if mode in ("semantic", "hybrid"):
-        model     = get_model()
+        model = get_model()
         embedding = model.encode(query, normalize_embeddings=True).tolist()
         semantic_results = repo.search_similar(
             query_embedding=embedding,
@@ -149,25 +152,33 @@ def search(
 
 def main() -> None:
     import argparse
+
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("query",               help="Search query string")
-    parser.add_argument("--mode",   default="hybrid",
-                        choices=["semantic", "keyword", "hybrid"],
-                        help="Search mode (default: hybrid)")
-    parser.add_argument("--limit",  type=int, default=5,
-                        help="Number of results to return (default: 5)")
-    parser.add_argument("--year",   type=int, default=None,
-                        help="Filter by period year (e.g. 2024)")
-    parser.add_argument("--month",  type=int, default=None,
-                        help="Filter by period month (e.g. 6)")
-    parser.add_argument("--category", default=None,
-                        choices=["monthly", "quarterly", "unknown"],
-                        help="Filter by document category")
-    parser.add_argument("--min-sim", type=float, default=0.0,
-                        help="Minimum cosine similarity threshold (semantic mode)")
+    parser.add_argument("query", help="Search query string")
+    parser.add_argument(
+        "--mode",
+        default="hybrid",
+        choices=["semantic", "keyword", "hybrid"],
+        help="Search mode (default: hybrid)",
+    )
+    parser.add_argument("--limit", type=int, default=5, help="Number of results to return (default: 5)")
+    parser.add_argument("--year", type=int, default=None, help="Filter by period year (e.g. 2024)")
+    parser.add_argument("--month", type=int, default=None, help="Filter by period month (e.g. 6)")
+    parser.add_argument(
+        "--category",
+        default=None,
+        choices=["monthly", "quarterly", "unknown"],
+        help="Filter by document category",
+    )
+    parser.add_argument(
+        "--min-sim",
+        type=float,
+        default=0.0,
+        help="Minimum cosine similarity threshold (semantic mode)",
+    )
     args = parser.parse_args()
 
     print(f'\nSearching: "{args.query}"  [mode={args.mode}  limit={args.limit}]')
@@ -175,13 +186,13 @@ def main() -> None:
         print(f"Filters: year={args.year}  month={args.month}  category={args.category}")
 
     results = search(
-        query    = args.query,
-        mode     = args.mode,
-        limit    = args.limit,
-        year     = args.year,
-        month    = args.month,
-        category = args.category,
-        min_sim  = args.min_sim,
+        query=args.query,
+        mode=args.mode,
+        limit=args.limit,
+        year=args.year,
+        month=args.month,
+        category=args.category,
+        min_sim=args.min_sim,
     )
 
     if not results:
@@ -192,7 +203,7 @@ def main() -> None:
     for i, result in enumerate(results):
         print(format_result(i, result, args.mode))
 
-    print(f"\n{'─'*70}")
+    print(f"\n{'─' * 70}")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ Produces:
   - A context block with numbered citations
   - OpenAI-compatible message list for direct use with the chat API
 """
+
 from __future__ import annotations
 
 SYSTEM_PROMPT = """\
@@ -25,7 +26,7 @@ Rules:
 class ContextBuilder:
     """Converts a list of retrieved chunk dicts into LLM-ready text."""
 
-    MAX_CHARS_PER_CHUNK = 800   # truncate very long chunks to keep context tight
+    MAX_CHARS_PER_CHUNK = 800  # truncate very long chunks to keep context tight
 
     def build_context_block(self, chunks: list[dict]) -> str:
         """Return a numbered context block ready to embed in a prompt."""
@@ -45,35 +46,34 @@ class ContextBuilder:
 
     def build_messages(
         self,
-        query:  str,
+        query: str,
         chunks: list[dict],
     ) -> list[dict]:
         """Build an OpenAI-compatible messages list (system + user turn)."""
         context = self.build_context_block(chunks)
-        user_content = (
-            f"Context passages:\n\n{context}\n\n"
-            f"Question: {query}"
-        )
+        user_content = f"Context passages:\n\n{context}\n\nQuestion: {query}"
         return [
-            {"role": "system",  "content": SYSTEM_PROMPT},
-            {"role": "user",    "content": user_content},
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
         ]
 
     def format_sources(self, chunks: list[dict]) -> list[dict]:
         """Return a clean source list suitable for API responses."""
         sources = []
         for i, chunk in enumerate(chunks, 1):
-            sources.append({
-                "citation":    i,
-                "file_name":   chunk.get("file_name"),
-                "period_year": chunk.get("period_year"),
-                "period_month":chunk.get("period_month"),
-                "category":    chunk.get("category"),
-                "chunk_index": chunk.get("chunk_index"),
-                "similarity":  chunk.get("similarity"),
-                "rrf_score":   chunk.get("rrf_score"),
-                "preview":     (chunk.get("text") or "")[:200].strip() + "…",
-            })
+            sources.append(
+                {
+                    "citation": i,
+                    "file_name": chunk.get("file_name"),
+                    "period_year": chunk.get("period_year"),
+                    "period_month": chunk.get("period_month"),
+                    "category": chunk.get("category"),
+                    "chunk_index": chunk.get("chunk_index"),
+                    "similarity": chunk.get("similarity"),
+                    "rrf_score": chunk.get("rrf_score"),
+                    "preview": (chunk.get("text") or "")[:200].strip() + "…",
+                }
+            )
         return sources
 
     # ------------------------------------------------------------------

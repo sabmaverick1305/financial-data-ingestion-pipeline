@@ -35,9 +35,9 @@ class Settings(BaseSettings):
 
     # LLM — supports OpenAI (sk-...) and Anthropic/Claude (sk-ant-...)
     # Provider is auto-detected from the key prefix.
-    openai_api_key: str = ""      # OpenAI key  OR  Anthropic key (sk-ant-...)
+    openai_api_key: str = ""  # OpenAI key  OR  Anthropic key (sk-ant-...)
     openai_base_url: str = "https://api.openai.com/v1"
-    openai_model: str = "gpt-4o-mini"          # OpenAI default
+    openai_model: str = "gpt-4o-mini"  # OpenAI default
     anthropic_model: str = "claude-haiku-4-5-20251001"  # Claude Haiku 4.5 — fast + cost-efficient
 
     @property
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # Retrieval API server
     api_host: str = "0.0.0.0"
     api_port: int = 8080
-    api_top_k: int = 8        # chunks returned per query by default
+    api_top_k: int = 8  # chunks returned per query by default
     api_cors_origins: str = "*"
 
 

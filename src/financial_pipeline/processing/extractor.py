@@ -51,9 +51,10 @@ def _dedupe_columns(columns) -> list[str]:
 @dataclass
 class TableMeta:
     """Per-table metadata alongside each extracted DataFrame."""
+
     page_number: int | None = None
-    table_name:  str | None = None      # caption or label from Docling
-    section_title: str | None = None    # nearest heading (best-effort)
+    table_name: str | None = None  # caption or label from Docling
+    section_title: str | None = None  # nearest heading (best-effort)
 
 
 @dataclass
@@ -78,6 +79,7 @@ class DocumentExtractionError(RuntimeError):
 # ──────────────────────────────────────────────────────────────────────────
 # Stage 1 — text-worker (low memory: PyMuPDF + pandas, no ML models loaded)
 # ──────────────────────────────────────────────────────────────────────────
+
 
 class TextExtractor:
     """
@@ -140,12 +142,11 @@ class TextExtractor:
         up to SAMPLE_PAGES pages spread evenly across the document and require
         TEXT_PAGE_RATIO of them to have text before classifying as text-layer.
         """
-        import random
         import pymupdf
 
         SAMPLE_PAGES = 20
         MIN_WORDS_PER_PAGE = 10
-        TEXT_PAGE_RATIO = 0.4   # 40% of sampled pages must have text
+        TEXT_PAGE_RATIO = 0.4  # 40% of sampled pages must have text
 
         doc = None
         try:
@@ -251,9 +252,7 @@ class TextExtractor:
         try:
             xl = pd.ExcelFile(io.BytesIO(raw), engine=engine)
         except Exception as exc:
-            raise DocumentExtractionError(
-                f"Failed to open spreadsheet using engine={engine}: {exc}"
-            ) from exc
+            raise DocumentExtractionError(f"Failed to open spreadsheet using engine={engine}: {exc}") from exc
 
         tables: list[pd.DataFrame] = []
         markdown_parts: list[str] = []
@@ -314,9 +313,7 @@ class TextExtractor:
     def _clean_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.dropna(how="all")
         df = df.dropna(axis=1, how="all")
-        df.columns = _dedupe_columns(
-            str(col).strip().replace("\n", " ") for col in df.columns
-        )
+        df.columns = _dedupe_columns(str(col).strip().replace("\n", " ") for col in df.columns)
 
         # Object columns with mixed types (e.g. numbers and strings in the
         # same column — common in AMFI's hand-formatted sheets) make pyarrow
@@ -334,6 +331,7 @@ class TextExtractor:
 # ──────────────────────────────────────────────────────────────────────────
 # Stage 2 — table-worker / ocr-worker (high memory: Docling + torch)
 # ──────────────────────────────────────────────────────────────────────────
+
 
 class _DoclingExtractorBase:
     """Shared Docling conversion logic. Subclassed by TableExtractor (ocr=False)
@@ -427,9 +425,7 @@ class _DoclingExtractorBase:
             opts.do_table_structure = True
             opts.accelerator_options = accel
 
-            self.__class__._converter = DocumentConverter(
-                format_options={"pdf": PdfFormatOption(pipeline_options=opts)}
-            )
+            self.__class__._converter = DocumentConverter(format_options={"pdf": PdfFormatOption(pipeline_options=opts)})
 
         return self.__class__._converter
 
@@ -452,11 +448,9 @@ class _DoclingExtractorBase:
             pages = [{"page": 1, "text": markdown}]
         return pages
 
-    def _extract_docling_tables(
-        self, doc: Any
-    ) -> tuple[list[pd.DataFrame], list[TableMeta], int]:
+    def _extract_docling_tables(self, doc: Any) -> tuple[list[pd.DataFrame], list[TableMeta], int]:
         tables: list[pd.DataFrame] = []
-        metas:  list[TableMeta]   = []
+        metas: list[TableMeta] = []
         failed = 0
 
         for table_index, tbl in enumerate(getattr(doc, "tables", []), start=1):
