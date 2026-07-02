@@ -1,0 +1,83 @@
+name: Rollback
+
+# Emergency rollback: repoint all worker task definitions to a previous image tag.
+# Triggered manually only — never runs automatically.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "ECR image tag to roll back to (e.g. a1b2c3d4 or previous-sha)"
+        required: true
+      reason:
+        description: "Reason for rollback (goes into deployment log)"
+        required: true
+
+env:
+  AWS_REGION:   us-east-1
+  ECR_REGISTRY: 468895762981.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPO:     amfi-doc-processor
+  ECS_CLUSTER:  weather-agent-cluster
+
+jobs:
+  rollback:
+    name: Rollback → ${{ inputs.image_tag }}
+    runs-on: ubuntu-latest
+    environment: production   # requires manual approval in GitHub Environments
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Verify rollback image exists in ECR
+        run: |
+          echo "Verifying image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:${{ inputs.image_tag }}"
+          aws ecr describe-images \
+            --repository-name "${{ env.ECR_REPO }}" \
+            --image-ids imageTag="${{ inputs.image_tag }}" \
+            --query 'imageDetails[0].imagePushedAt' \
+            --output text
+          echo "Image exists — proceeding with rollback"
+
+      - name: Roll back all worker task definitions
+        run: |
+          IMAGE="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:${{ inputs.image_tag }}"
+          WORKERS="amfi-text-worker amfi-table-worker amfi-ocr-worker amfi-chunk-worker amfi-embed-worker"
+
+          for worker in $WORKERS; do
+            echo "Rolling back ${worker} → ${IMAGE}"
+
+            CURRENT=$(aws ecs describe-task-definition \
+              --task-definition "$worker" \
+              --query 'taskDefinition' --output json)
+
+            NEW_DEF=$(echo "$CURRENT" | jq \
+              --arg image "$IMAGE" \
+              '.containerDefinitions[0].image = $image |
+               del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                   .compatibilities, .registeredAt, .registeredBy)')
+
+            NEW_ARN=$(aws ecs register-task-definition \
+              --cli-input-json "$NEW_DEF" \
+              --query 'taskDefinition.taskDefinitionArn' --output text)
+
+            echo "  ↩ ${NEW_ARN}"
+          done
+
+      - name: Rollback summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## ↩ Rollback Completed
+
+          | Item | Value |
+          |---|---|
+          | Rolled back to | \`${{ inputs.image_tag }}\` |
+          | Triggered by   | \`${{ github.actor }}\` |
+          | Reason         | ${{ inputs.reason }} |
+          | Workers        | all 5 (text · table · ocr · chunk · embed) |
+          | Timestamp      | $(date -u +"%Y-%m-%d %H:%M:%S UTC") |
+          EOF

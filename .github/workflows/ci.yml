@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-validate:
+    name: Lint & Import Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dev dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff mypy
+          pip install -e ".[dev]" --no-deps 2>/dev/null || true
+          # Install only the lightweight deps needed for import checks
+          pip install pydantic pydantic-settings structlog sqlalchemy psycopg2-binary
+
+      - name: Ruff lint
+        run: ruff check src/ scripts/
+
+      - name: Ruff format check
+        run: ruff format --check src/ scripts/
+
+      - name: Validate core imports
+        run: |
+          PYTHONPATH=src python -c "
+          from financial_pipeline.config import Settings
+          from financial_pipeline.storage.document_repo import DocumentRepository, Status
+          from financial_pipeline.retrieval.query_understanding import QueryAnalyzer
+          from financial_pipeline.retrieval.hybrid import HybridRetriever, HybridConfig, ContextOptimizer
+          from financial_pipeline.augmentation.guardrails import PreGenerationGuardrails, PostGenerationGuardrails
+          from financial_pipeline.augmentation.pipeline import AugmentationPipeline
+          from financial_pipeline.api.schemas import AskResponse, GuardrailReport
+          print('All imports: OK')
+          "
+
+      - name: Validate QueryAnalyzer intent detection
+        run: |
+          PYTHONPATH=src python -c "
+          from financial_pipeline.retrieval.query_understanding import QueryAnalyzer
+          qa = QueryAnalyzer()
+          cases = [
+              ('What SEBI guidelines exist for derivatives?', 'factual'),
+              ('How many schemes are there in total?',        'tabular'),
+              ('Compare equity vs debt AUM',                  'comparison'),
+              ('How has AUM grown over the years?',           'trend'),
+              ('What is a balanced advantage fund?',          'definition'),
+          ]
+          for q, expected in cases:
+              got = qa.analyze(q).intent_type
+              assert got == expected, f'Expected {expected}, got {got} for: {q}'
+              print(f'  {got:12} ← {q[:55]}')
+          print('Intent detection: OK')
+          "
+
+      - name: Validate pre-guardrail blocks investment advice
+        run: |
+          PYTHONPATH=src python -c "
+          from financial_pipeline.augmentation.guardrails import PreGenerationGuardrails
+          pre = PreGenerationGuardrails()
+          advice_queries = [
+              'Should I invest in SBI Bluechip fund?',
+              'Which fund do you recommend for retirement?',
+              'Best fund to buy right now?',
+          ]
+          for q in advice_queries:
+              r = pre.check(q, [], 'factual')
+              assert not r.should_proceed, f'Should have blocked: {q}'
+              print(f'  BLOCKED: {q[:55]}')
+          print('Pre-guardrail blocks: OK')
+          "
+
+      - name: Validate post-guardrail catches unsafe answers
+        run: |
+          PYTHONPATH=src python -c "
+          from financial_pipeline.augmentation.guardrails import PostGenerationGuardrails
+          from financial_pipeline.augmentation.citations import Citation
+          post = PostGenerationGuardrails()
+          unsafe = 'You should invest in this fund as it gives guaranteed returns [1].'
+          cit = [Citation(1,'chunk','f.pdf',2024,3,'monthly',0,None,'text',0.75,'ce')]
+          r = post.check(unsafe, cit, [])
+          assert not r.answer_safe, 'Should have flagged unsafe answer'
+          print(f'  Unsafe phrases caught: {r.unsafe_phrases}')
+          print('Post-guardrail safety: OK')
+          "
+
+      - name: Validate ContextOptimizer
+        run: |
+          PYTHONPATH=src python -c "
+          from financial_pipeline.retrieval.hybrid import ContextOptimizer
+          opt = ContextOptimizer()
+          chunks = [
+              {'chunk_id': f'c{i}', 'document_id': f'doc{i%2}',
+               'text': ('same text repeated ' * 20) if i < 2 else f'unique text {i} ' * 10,
+               'period_year': 2024-i, 'period_month': 6, '_source': 'chunk',
+               '_signals': 'dense', 'rrf_score': 0.05}
+              for i in range(6)
+          ]
+          result, stats = opt.optimize(chunks, final_top_k=4)
+          assert stats['dedup_removed'] >= 1, 'Dedup should have removed near-duplicates'
+          assert stats['diversity_capped'] >= 1, 'Diversity cap should have fired'
+          print(f'  dedup={stats[\"dedup_removed\"]}  diversity={stats[\"diversity_capped\"]}  final={len(result)}')
+          print('ContextOptimizer: OK')
+          "
+
+  dockerfile-lint:
+    name: Dockerfile Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Dockerfile with hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3008,DL3009,DL3013,DL3042
+          # DL3008 pin apt versions — intentional: we want latest slim updates
+          # DL3009 clean apt cache — handled by --no-cache in pip
+          # DL3013 pin pip packages — pinned in pyproject.toml
+          # DL3042 pip cache — intentional: no-cache set

@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AMFI NAV ingestion pipeline.
+  Flow: EventBridge Scheduler → Lambda (AMFI Connector) → S3 raw
+
+# ---------------------------------------------------------------------------
+# Parameters
+# ---------------------------------------------------------------------------
+Parameters:
+
+  S3BucketName:
+    Type: String
+    Default: mf-finance-kb
+    Description: Existing S3 bucket that receives raw NAV files.
+
+  S3Prefix:
+    Type: String
+    Default: amfi/nav
+    Description: Key prefix inside the bucket (no trailing slash).
+
+  ScheduleExpression:
+    Type: String
+    Default: "cron(30 3 * * ? *)"
+    Description: >
+      EventBridge Scheduler cron/rate expression.
+      Default = 09:00 IST daily (03:30 UTC).
+
+  LambdaTimeout:
+    Type: Number
+    Default: 60
+    Description: Lambda timeout in seconds.
+
+  LambdaMemoryMB:
+    Type: Number
+    Default: 256
+    Description: Lambda memory in MB.
+
+# ---------------------------------------------------------------------------
+# Resources
+# ---------------------------------------------------------------------------
+Resources:
+
+  # ── Lambda execution role ─────────────────────────────────────────────────
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3PutRawNav
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+
+  # ── Lambda function (AMFI Connector) ─────────────────────────────────────
+  AmfiConnectorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-amfi-connector"
+      Description: Fetches AMFI NAV text file and uploads raw bytes to S3.
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: !Ref LambdaTimeout
+      MemorySize: !Ref LambdaMemoryMB
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref S3BucketName
+          S3_PREFIX: !Ref S3Prefix
+      Code:
+        # Inline code — stdlib + boto3 only, no extra deps needed.
+        # Keep in sync with infra/lambda/amfi_connector/handler.py.
+        ZipFile: |
+          from __future__ import annotations
+          import json, os, urllib.request
+          from datetime import date, datetime, timezone
+          import boto3
+
+          AMFI_NAV_URL = "https://portal.amfiindia.com/spages/NAVAll.txt"
+
+          def _fetch(url, timeout=30):
+              req = urllib.request.Request(url, headers={"User-Agent": "amfi-nav-connector/1.0"})
+              with urllib.request.urlopen(req, timeout=timeout) as r:
+                  return r.read()
+
+          def lambda_handler(event, context):
+              bucket = os.environ["S3_BUCKET"]
+              prefix = os.environ.get("S3_PREFIX", "amfi/nav").rstrip("/")
+              today = date.today().isoformat()
+
+              print(json.dumps({"event": "fetch.started", "url": AMFI_NAV_URL}))
+              raw = _fetch(AMFI_NAV_URL)
+              print(json.dumps({"event": "fetch.completed", "bytes": len(raw)}))
+
+              key = f"{prefix}/raw/{today}/NAVAll.txt"
+              boto3.client("s3").put_object(
+                  Bucket=bucket,
+                  Key=key,
+                  Body=raw,
+                  ContentType="text/plain; charset=utf-8",
+                  Metadata={
+                      "source-url": AMFI_NAV_URL,
+                      "ingested-at": datetime.now(timezone.utc).isoformat(),
+                  },
+              )
+              print(json.dumps({"event": "upload.completed", "s3_key": key, "bytes": len(raw)}))
+              return {"statusCode": 200, "body": json.dumps({"s3_key": key, "bytes": len(raw), "date": today})}
+
+  # ── EventBridge Scheduler execution role ──────────────────────────────────
+  SchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-scheduler-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: InvokeAmfiConnector
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt AmfiConnectorFunction.Arn
+
+  # ── EventBridge Scheduler ─────────────────────────────────────────────────
+  AmfiNavSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-daily-nav-fetch"
+      Description: "Fetch AMFI NAV data on schedule and store to S3 raw."
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Asia/Kolkata
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !GetAtt AmfiConnectorFunction.Arn
+        RoleArn: !GetAtt SchedulerExecutionRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 2
+          MaximumEventAgeInSeconds: 300
+        Input: "{}"
+
+# ---------------------------------------------------------------------------
+# Outputs
+# ---------------------------------------------------------------------------
+Outputs:
+
+  BucketName:
+    Description: S3 bucket receiving raw NAV files.
+    Value: !Ref S3BucketName
+    Export:
+      Name: !Sub "${AWS::StackName}-bucket"
+
+  LambdaFunctionName:
+    Description: AMFI Connector Lambda function name.
+    Value: !Ref AmfiConnectorFunction
+    Export:
+      Name: !Sub "${AWS::StackName}-lambda"
+
+  LambdaFunctionArn:
+    Description: AMFI Connector Lambda ARN.
+    Value: !GetAtt AmfiConnectorFunction.Arn
+
+  ScheduleName:
+    Description: EventBridge Scheduler name.
+    Value: !Ref AmfiNavSchedule
+
+  S3RawPrefix:
+    Description: S3 key prefix for raw NAV files.
+    Value: !Sub "s3://${S3BucketName}/${S3Prefix}/raw/"

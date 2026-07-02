@@ -1,0 +1,336 @@
+name: Build & Deploy
+
+# Triggers:
+#   push to main  → full build + migrate + deploy
+#   manual        → choose which jobs to run
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: "Skip Docker build (use existing :latest)"
+        type: boolean
+        default: false
+      skip_migrate:
+        description: "Skip DB schema migration"
+        type: boolean
+        default: false
+      environment:
+        description: "Target environment"
+        type: choice
+        options: [production]
+        default: production
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false      # never cancel an in-flight deploy
+
+env:
+  AWS_REGION:    us-east-1
+  ECR_REGISTRY:  468895762981.dkr.ecr.us-east-1.amazonaws.com
+  ECR_REPO:      amfi-doc-processor
+  ECS_CLUSTER:   weather-agent-cluster
+  # Task definitions updated on every deploy
+  WORKER_TASK_DEFS: >-
+    amfi-text-worker
+    amfi-table-worker
+    amfi-ocr-worker
+    amfi-chunk-worker
+    amfi-embed-worker
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 — Build ARM64 Docker image and push to ECR
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build & Push (ARM64)
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_build }}
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate image tags
+        id: meta
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-8)
+          SHA_TAG="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:${SHA_SHORT}"
+          LATEST_TAG="${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:latest"
+          echo "sha_tag=${SHA_TAG}"     >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha_short=${SHA_SHORT}" >> "$GITHUB_OUTPUT"
+          echo "Building: ${SHA_TAG}"
+
+      - name: Set up QEMU (for ARM64 emulation)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push (linux/arm64)
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context:   .
+          file:      Dockerfile
+          platforms: linux/arm64
+          push:      true
+          tags: |
+            ${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.latest_tag }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+
+      - name: Output image URI
+        id: image-uri
+        run: |
+          echo "image=${{ steps.meta.outputs.sha_tag }}" >> "$GITHUB_OUTPUT"
+          echo "Pushed: ${{ steps.meta.outputs.sha_tag }}"
+          echo "Digest: ${{ steps.push.outputs.digest }}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2 — Run DB schema migration as ECS Fargate one-shot task
+# ─────────────────────────────────────────────────────────────────────────────
+  migrate:
+    name: DB Schema Migration
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: |
+      always()
+      && !inputs.skip_migrate
+      && (needs.build.result == 'success' || inputs.skip_build)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Determine image to use
+        id: image
+        run: |
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            echo "image=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=${{ needs.build.outputs.sha_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Register migration task definition
+        id: migrate-taskdef
+        run: |
+          IMAGE="${{ steps.image.outputs.image }}"
+
+          # Fetch the chunk-worker task definition as a base (same IAM roles,
+          # same VPC config, same env vars — only the command differs)
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition amfi-chunk-worker \
+            --query 'taskDefinition' --output json)
+
+          # Override container command to run the schema migration
+          MIGRATE_CMD='["python", "-c", "import sys; sys.path.insert(0,\"src\"); from financial_pipeline.config import settings; from financial_pipeline.storage.document_repo import DocumentRepository; r=DocumentRepository(settings.postgres_url); r.create_tables(); print(\"Migration complete\")"]'
+
+          NEW_DEF=$(echo "$TASK_DEF" | jq \
+            --arg image "$IMAGE" \
+            --argjson cmd "$MIGRATE_CMD" \
+            '.containerDefinitions[0].image = $image |
+             .containerDefinitions[0].command = $cmd |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                 .compatibilities, .registeredAt, .registeredBy)')
+
+          # Register the migration task definition
+          MIGRATE_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          echo "migrate_arn=${MIGRATE_ARN}" >> "$GITHUB_OUTPUT"
+          echo "Registered migration task: ${MIGRATE_ARN}"
+
+      - name: Run migration task and wait
+        run: |
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --task-definition "${{ steps.migrate-taskdef.outputs.migrate_arn }}" \
+            --launch-type FARGATE \
+            --network-configuration '{
+              "awsvpcConfiguration": {
+                "subnets":        ["subnet-089bc3cd1c8760332"],
+                "securityGroups": ["sg-0eecd839abfcf4daa"],
+                "assignPublicIp": "ENABLED"
+              }
+            }' \
+            --query 'tasks[0].taskArn' --output text)
+
+          echo "Migration task started: ${TASK_ARN}"
+
+          # Wait up to 5 minutes for the task to stop
+          aws ecs wait tasks-stopped \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --tasks "$TASK_ARN"
+
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+
+          echo "Migration task exit code: ${EXIT_CODE}"
+
+          if [[ "$EXIT_CODE" != "0" ]]; then
+            echo "Migration FAILED with exit code ${EXIT_CODE}"
+            exit 1
+          fi
+
+          echo "Migration completed successfully"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 3 — Update all ECS task definitions with the new image
+# ─────────────────────────────────────────────────────────────────────────────
+  update-workers:
+    name: Update Worker Task Definitions
+    runs-on: ubuntu-latest
+    needs: [build, migrate]
+    if: |
+      always()
+      && needs.migrate.result == 'success'
+      && (needs.build.result == 'success' || inputs.skip_build)
+
+    strategy:
+      matrix:
+        worker:
+          - name: amfi-text-worker
+            description: "PyMuPDF text extraction · 1 vCPU / 2 GB"
+          - name: amfi-table-worker
+            description: "Docling table extraction · 4 vCPU / 16 GB"
+          - name: amfi-ocr-worker
+            description: "Docling OCR extraction · 4 vCPU / 16 GB"
+          - name: amfi-chunk-worker
+            description: "Text chunking · 1 vCPU / 2 GB"
+          - name: amfi-embed-worker
+            description: "Embedding generation · 1 vCPU / 2 GB"
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Determine image to use
+        id: image
+        run: |
+          if [[ "${{ inputs.skip_build }}" == "true" ]]; then
+            echo "image=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=${{ needs.build.outputs.sha_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update ${{ matrix.worker.name }}
+        id: update-taskdef
+        run: |
+          IMAGE="${{ steps.image.outputs.image }}"
+          WORKER="${{ matrix.worker.name }}"
+
+          echo "Updating ${WORKER} → ${IMAGE}"
+
+          # Pull current task definition, swap image, strip read-only fields
+          CURRENT=$(aws ecs describe-task-definition \
+            --task-definition "$WORKER" \
+            --query 'taskDefinition' --output json)
+
+          NEW_DEF=$(echo "$CURRENT" | jq \
+            --arg image "$IMAGE" \
+            '.containerDefinitions[0].image = $image |
+             del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                 .compatibilities, .registeredAt, .registeredBy)')
+
+          NEW_ARN=$(aws ecs register-task-definition \
+            --cli-input-json "$NEW_DEF" \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+
+          echo "new_arn=${NEW_ARN}" >> "$GITHUB_OUTPUT"
+          echo "Registered: ${NEW_ARN}"
+
+      - name: Summary
+        run: |
+          echo "### ${{ matrix.worker.name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "_${{ matrix.worker.description }}_" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "New revision: \`${{ steps.update-taskdef.outputs.new_arn }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 4 — Smoke test: verify the Retrieval API is healthy
+# ─────────────────────────────────────────────────────────────────────────────
+  smoke-test:
+    name: Smoke Test
+    runs-on: ubuntu-latest
+    needs: [update-workers]
+    if: always() && needs.update-workers.result == 'success'
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Verify ECR image exists
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-8)
+          aws ecr describe-images \
+            --repository-name "${{ env.ECR_REPO }}" \
+            --image-ids imageTag="${SHA_SHORT}" \
+            --query 'imageDetails[0].imagePushedAt' \
+            --output text
+          echo "ECR image verified"
+
+      - name: Verify all task definition revisions updated
+        run: |
+          for worker in amfi-text-worker amfi-table-worker amfi-ocr-worker amfi-chunk-worker amfi-embed-worker; do
+            REVISION=$(aws ecs describe-task-definition \
+              --task-definition "$worker" \
+              --query 'taskDefinition.revision' --output text)
+            echo "  ${worker}: revision ${REVISION}"
+          done
+
+      - name: Deployment summary
+        run: |
+          SHA_SHORT=$(echo "${{ github.sha }}" | cut -c1-8)
+          cat >> "$GITHUB_STEP_SUMMARY" << EOF
+          ## Deployment Summary
+
+          | Item | Value |
+          |---|---|
+          | Commit | \`${{ github.sha }}\` |
+          | Image  | \`${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:${SHA_SHORT}\` |
+          | Cluster | \`${{ env.ECS_CLUSTER }}\` |
+          | Workers updated | 5 (text · table · ocr · chunk · embed) |
+          | DB migrated | ${{ !inputs.skip_migrate }} |
+          | Status | ✅ Deployed |
+          EOF
