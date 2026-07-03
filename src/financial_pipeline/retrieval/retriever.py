@@ -117,6 +117,7 @@ class Retriever:
                 query=query,
                 limit=limit * 2 if mode == "hybrid" else limit,
                 period_year=year,
+                period_month=month,
                 category=category,
             )
             for r in keyword:

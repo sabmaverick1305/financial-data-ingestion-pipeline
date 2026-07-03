@@ -64,7 +64,8 @@ class GroundingResult:
 class CitationFormatter:
     """Converts re-ranked chunks into structured Citation objects."""
 
-    MAX_EXCERPT_CHARS = 500
+    MAX_EXCERPT_CHARS_PROSE = 500
+    MAX_EXCERPT_CHARS_TABLE = 2500   # AMFI table headers are ~500 chars; data rows follow after
 
     def format(self, chunks: list[dict]) -> list[Citation]:
         citations = []
@@ -77,6 +78,11 @@ class CitationFormatter:
             else:
                 confidence = max(0.0, min(1.0, float(score)))
 
+            limit = (
+                self.MAX_EXCERPT_CHARS_TABLE
+                if text.startswith("|")
+                else self.MAX_EXCERPT_CHARS_PROSE
+            )
             citations.append(
                 Citation(
                     number=i,
@@ -87,7 +93,7 @@ class CitationFormatter:
                     category=chunk.get("category"),
                     chunk_index=chunk.get("chunk_index"),
                     table_index=chunk.get("table_index"),
-                    excerpt=text[: self.MAX_EXCERPT_CHARS],
+                    excerpt=text[:limit],
                     confidence=round(confidence, 3),
                     rank_method=chunk.get("_rank_method", "fallback"),
                 )

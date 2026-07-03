@@ -87,7 +87,7 @@ class SearchRouter:
         elif intent.intent_type == "trend":
             plan.chunk_mode = "hybrid"
         elif intent.intent_type == "tabular":
-            plan.chunk_mode = "keyword"  # tabular queries have exact term matches
+            plan.chunk_mode = "hybrid"  # AMFI table chunks need semantic + keyword; keyword-only misses column headers
         elif intent.intent_type == "comparison":
             plan.chunk_mode = "semantic"  # comparisons are conceptual
         elif intent.intent_type == "lookup":
@@ -146,10 +146,63 @@ class MultiSourceFetcher:
             )
             for r in results:
                 r["_source"] = "chunk"
+
+            # For tabular queries with specific scheme types, all table chunks
+            # share the same header embedding so vector search can't rank them.
+            # Inject exact-match chunks directly to guarantee the right row is
+            # included regardless of embedding similarity.
+            if intent.scheme_types and intent.intent_type in ("tabular", "factual"):
+                exact = self._fetch_scheme_chunks(intent)
+                if exact:
+                    exact_ids = {str(r.get("chunk_id")) for r in exact}
+                    results = exact + [r for r in results if str(r.get("chunk_id")) not in exact_ids]
+                    log.debug("fetcher.scheme_inject", scheme_types=intent.scheme_types, injected=len(exact))
+
             return results
         except Exception as exc:
             log.warning("fetcher.chunks_failed", error=str(exc))
             return []
+
+    def _fetch_scheme_chunks(self, intent: QueryIntent) -> list[dict]:
+        """Direct ILIKE search for chunks mentioning the detected scheme types.
+        Bypasses vector similarity so the right table row is always retrieved."""
+        from sqlalchemy import text as sa_text
+        results = []
+        for scheme in intent.scheme_types[:2]:   # cap at 2 scheme types
+            conditions = ["dc.text ILIKE :pattern"]
+            params: dict = {"pattern": f"%{scheme}%", "limit": 3}
+            if intent.year:
+                conditions.append("dc.period_year = :year")
+                params["year"] = intent.year
+            if intent.month:
+                conditions.append("dc.period_month = :month")
+                params["month"] = intent.month
+            if intent.category:
+                conditions.append("dc.category = :cat")
+                params["cat"] = intent.category
+            sql = f"""
+                SELECT dc.chunk_id, dc.chunk_index, dc.text,
+                       dc.period_year, dc.period_month, dc.category,
+                       dm.file_name, dm.document_type, dm.s3_processed_key,
+                       1.0 AS similarity
+                FROM document_chunks dc
+                JOIN document_metadata dm ON dc.document_id = dm.document_id
+                WHERE {' AND '.join(conditions)}
+                ORDER BY dc.period_year DESC NULLS LAST,
+                         dc.period_month DESC NULLS LAST,
+                         dc.chunk_index ASC
+                LIMIT :limit
+            """
+            try:
+                with self._repo._engine.connect() as conn:
+                    rows = conn.execute(sa_text(sql), params).mappings().all()
+                for r in rows:
+                    d = dict(r)
+                    d["similarity"] = float(d.get("similarity") or 1.0)
+                    results.append(d | {"_source": "chunk", "search_mode": "exact"})
+            except Exception as exc:
+                log.warning("fetcher.scheme_chunks_failed", scheme=scheme, error=str(exc))
+        return results
 
     def _fetch_tables(self, intent: QueryIntent, plan: SearchPlan) -> list[dict]:
         """Query document_table_assets for tables matching the intent filters."""
@@ -274,8 +327,18 @@ class ResultRanker:
         for r in chunks:
             cid = str(r.get("chunk_id", ""))
             text = r.get("text") or ""
-            prefix = text[:80].strip()
-            if cid in seen_ids or prefix in seen_prefix:
+
+            # Table chunks all start with the same long header row, so a
+            # text-prefix fingerprint collapses all of them into one result.
+            # For table chunks: deduplicate by chunk_id only (UUID, always unique).
+            # For prose chunks: also deduplicate by text prefix to catch
+            # near-identical overlap chunks.
+            is_table_chunk = text.lstrip().startswith("|")
+            prefix = "" if is_table_chunk else text[:80].strip()
+
+            if cid in seen_ids:
+                continue
+            if not is_table_chunk and prefix in seen_prefix:
                 continue
             if (r.get("similarity") or 0) < self.MIN_SCORE:
                 continue
@@ -331,8 +394,9 @@ Use exact figures when the context provides them. Do not fabricate data.
 class ContextAssembler:
     """Stage 5 — Format ranked results into LLM-ready text with numbered citations."""
 
-    MAX_CHUNK_CHARS = 600
-    MAX_CONTEXT_CHARS = 6000
+    MAX_CHUNK_CHARS_PROSE = 600
+    MAX_CHUNK_CHARS_TABLE = 2500   # AMFI headers are ~500 chars; need room for data rows
+    MAX_CONTEXT_CHARS = 12000
 
     def assemble(
         self,
@@ -349,8 +413,13 @@ class ContextAssembler:
 
             if src == "chunk":
                 text = (item.get("text") or "").strip()
-                if len(text) > self.MAX_CHUNK_CHARS:
-                    text = text[: self.MAX_CHUNK_CHARS] + "…"
+                limit = (
+                    self.MAX_CHUNK_CHARS_TABLE
+                    if text.startswith("|")
+                    else self.MAX_CHUNK_CHARS_PROSE
+                )
+                if len(text) > limit:
+                    text = text[:limit] + "…"
                 meta = self._meta(item)
                 passage = f"[{i}] {meta}\n{text}"
 
@@ -451,6 +520,26 @@ class RetrievalPipeline:
 
     # ------------------------------------------------------------------
 
+    def _resolve_latest_month(self, year: int, category: str | None) -> int | None:
+        """Return the latest month with embedded documents for the given year."""
+        from sqlalchemy import text as sa_text
+        conditions = ["period_year = :year", "processing_status = 'embedded'"]
+        params: dict = {"year": year}
+        if category:
+            conditions.append("category = :cat")
+            params["cat"] = category
+        sql = f"""
+            SELECT MAX(period_month) FROM document_metadata
+            WHERE {' AND '.join(conditions)}
+        """
+        try:
+            with self._fetcher._repo._engine.connect() as conn:
+                result = conn.execute(sa_text(sql), params).scalar()
+            return int(result) if result else None
+        except Exception as exc:
+            log.warning("pipeline.month_resolve_failed", error=str(exc))
+            return None
+
     def retrieve(
         self,
         query: str,
@@ -473,6 +562,18 @@ class RetrievalPipeline:
             intent.month = month
         if category:
             intent.category = category
+
+        # ── Latest-month resolution ───────────────────────────────────
+        # When year is given but month is not, and the intent is NOT a trend
+        # (which needs all months), resolve to the latest available month
+        # for that year.  This prevents mixing Jan/Feb/Mar/Apr/May results
+        # for a point-in-time query like "folios in large cap funds in 2026".
+        if intent.year and not intent.month and intent.intent_type not in ("trend", "comparison"):
+            resolved = self._resolve_latest_month(intent.year, intent.category)
+            if resolved:
+                intent.month = resolved
+                log.info("pipeline.month_resolved", year=intent.year, month=resolved)
+
         log.info(
             "pipeline.intent",
             **{

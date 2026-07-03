@@ -26,6 +26,7 @@ import structlog  # noqa: E402
 from _worker_common import SCHEMA_VERSION, init  # noqa: E402
 
 from financial_pipeline.config import settings  # noqa: E402
+from financial_pipeline.processing.chunk_guardrail import Outcome, check_chunks  # noqa: E402
 from financial_pipeline.processing.chunker import chunk_text  # noqa: E402
 from financial_pipeline.storage.document_repo import Status  # noqa: E402
 
@@ -46,12 +47,43 @@ def process_one(doc: dict, s3, repo) -> bool:
         full_text = text_doc.get("full_text", "")
 
         chunks = chunk_text(full_text)
+
+        # ── Guardrail: validate chunk quality before writing anything ──────
+        guard = check_chunks(chunks, full_text, doc_id=doc_id, file_name=filename)
+
+        if guard.outcome == Outcome.BLOCK:
+            # Revert document so it can be retried after chunker is fixed.
+            # Log errors to the pipeline stage log for human review.
+            error_summary = "; ".join(guard.errors)
+            repo.record_failure(
+                doc_id,
+                error=f"chunk_guardrail blocked: {error_summary}",
+                revert_status=Status.TABLES_EXTRACTED,
+            )
+            repo.log_stage(
+                doc_id, "chunking", "blocked",
+                message=f"guardrail blocked — {error_summary}",
+                started_at=started_at,
+                completed_at=datetime.now(tz=UTC),
+            )
+            logger.warning(
+                "chunk_worker.guardrail_blocked",
+                errors=guard.errors,
+                stats=guard.stats,
+            )
+            return False
+        # WARN outcome: log but do not block
+        if guard.warnings:
+            logger.warning("chunk_worker.guardrail_warned", warnings=guard.warnings, stats=guard.stats)
+        # ── End guardrail ──────────────────────────────────────────────────
+
         chunks_payload = json.dumps(
             {
                 "document_id": doc_id,
                 "schema_version": SCHEMA_VERSION,
                 "total_chunks": len(chunks),
                 "chunks": chunks,
+                "chunk_quality": guard.stats,
             },
             ensure_ascii=False,
         ).encode()
@@ -68,7 +100,7 @@ def process_one(doc: dict, s3, repo) -> bool:
             doc_id,
             "chunking",
             "success",
-            message=f"chunks={len(chunks)} key={chunks_key}",
+            message=f"chunks={len(chunks)} key={chunks_key} quality={guard.outcome.value}",
             started_at=started_at,
             completed_at=completed_at,
         )
@@ -77,6 +109,7 @@ def process_one(doc: dict, s3, repo) -> bool:
         logger.info(
             "chunk_worker.done",
             chunks=len(chunks),
+            quality=guard.outcome.value,
             elapsed_s=round((completed_at - started_at).total_seconds(), 1),
         )
         return True

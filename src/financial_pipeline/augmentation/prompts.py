@@ -96,8 +96,9 @@ market corrections [2].
 class PromptBuilder:
     """Builds LLM-ready message lists from retrieved chunks and intent."""
 
-    MAX_CONTEXT_CHARS = 7000  # stay well within 8 K token context
-    MAX_CHUNK_CHARS = 600
+    MAX_CONTEXT_CHARS = 14000
+    MAX_CHUNK_CHARS_PROSE = 600
+    MAX_CHUNK_CHARS_TABLE = 2500   # AMFI table headers ~500 chars; data rows follow
 
     def build(
         self,
@@ -140,8 +141,13 @@ class PromptBuilder:
 
         for c in citations:
             text = c.excerpt.strip()
-            if len(text) > self.MAX_CHUNK_CHARS:
-                text = text[: self.MAX_CHUNK_CHARS] + "…"
+            limit = (
+                self.MAX_CHUNK_CHARS_TABLE
+                if text.startswith("|")
+                else self.MAX_CHUNK_CHARS_PROSE
+            )
+            if len(text) > limit:
+                text = text[:limit] + "…"
 
             ref = c.reference_string()
             part = f"[{c.number}] {ref}\n{text}"

@@ -301,6 +301,12 @@ class QueryAnalyzer:
         if re.search(r"\b(latest|recent|current|today|now)\b", q) and not intent.year:
             intent.prefer_recent = True
 
+        # Year given but no month → user wants the latest available data for that year.
+        # Mark prefer_recent so the ContextOptimizer and pipeline can resolve the month.
+        # Exception: trend queries want all months, not just the latest.
+        if intent.year and not intent.month and not intent.quarter:
+            intent.prefer_recent = True
+
         # Category hints from temporal language
         if "monthly" in q or "month of" in q:
             intent.category = "monthly"
@@ -361,8 +367,11 @@ class QueryAnalyzer:
     def _build_search_query(self, raw: str, q: str, intent: QueryIntent) -> None:
         """Remove meta-terms that hurt semantic search quality."""
         cleaned = raw
-        # Remove year (prevents over-anchoring in vector space)
-        if intent.year:
+        # Remove year only when a specific month is also present — the month
+        # already scopes the search and the year adds noise.
+        # When no month is given, keep the year so column headers like
+        # "No. of Folios as on May 31, 2026" are matched correctly.
+        if intent.year and intent.month:
             cleaned = re.sub(r"\b" + str(intent.year) + r"\b", "", cleaned)
         # Remove bare month names (kept in intent.month already)
         for name in MONTH_MAP:

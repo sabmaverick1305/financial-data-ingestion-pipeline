@@ -661,6 +661,7 @@ class DocumentRepository:
         query: str,
         limit: int = 10,
         period_year: int | None = None,
+        period_month: int | None = None,
         category: str | None = None,
     ) -> list[dict]:
         """Full-text keyword search via PostgreSQL tsvector / GIN index."""
@@ -670,6 +671,9 @@ class DocumentRepository:
         if period_year is not None:
             filters.append("dc.period_year = :period_year")
             params["period_year"] = period_year
+        if period_month is not None:
+            filters.append("dc.period_month = :period_month")
+            params["period_month"] = period_month
         if category is not None:
             filters.append("dc.category = :category")
             params["category"] = category
