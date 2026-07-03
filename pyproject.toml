@@ -35,6 +35,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "openai>=1.30",                  # LLM client (OpenAI / any OpenAI-compatible endpoint)
     "anthropic>=0.40",               # Claude (Anthropic) LLM client
+    "langgraph>=0.2",                # RAG orchestration graph
 ]
 
 [project.optional-dependencies]

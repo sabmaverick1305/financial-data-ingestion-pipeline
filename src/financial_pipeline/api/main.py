@@ -43,6 +43,7 @@ from financial_pipeline.api.schemas import (
     Source,
 )
 from financial_pipeline.augmentation.pipeline import AugmentationPipeline
+from financial_pipeline.graph import build_graph, NodeFactory
 from financial_pipeline.config import settings
 from financial_pipeline.evaluation.observability import RequestTrace, emitter
 from financial_pipeline.retrieval.pipeline import RetrievalPipeline
@@ -61,6 +62,7 @@ class _AppState:
     pipeline: RetrievalPipeline | None = None
     augment: AugmentationPipeline | None = None
     rag: RAGPipeline | None = None  # kept for fallback
+    graph = None  # compiled LangGraph — set in lifespan
 
 
 _state = _AppState()
@@ -79,10 +81,13 @@ async def lifespan(app: FastAPI):
         top_k_augment=6,
     )
     _state.rag = RAGPipeline(_state.retriever)  # fallback only
+    factory      = NodeFactory(repo=_state.repo, retriever=_state.retriever)
+    _state.graph = build_graph(factory)
     log.info(
         "api.ready",
         embed_model=settings.embed_model,
         llm=f"{settings.llm_provider}/{settings.active_llm_model}",
+        graph="langgraph",
     )
     yield
     log.info("api.shutdown")
@@ -232,63 +237,59 @@ def ask(req: AskRequest) -> AskResponse:
     5. Generate  — Claude / OpenAI with temperature tuned per intent
     6. Guardrails— citation validity, number consistency, faithfulness score
     """
-    augment = _get_augment()
-    if not augment.is_configured():
-        raise HTTPException(501, "LLM not configured. Set OPENAI_API_KEY (or Anthropic sk-ant-...) in .env.")
+    if _state.graph is None:
+        raise HTTPException(503, "LangGraph not initialised.")
 
     try:
-        resp = augment.run(
-            question=req.question,
-            year=req.year,
-            month=req.month,
-            category=req.category,
-            model=req.model,
-            top_k=req.top_k,
-        )
-    except ValueError as exc:
-        raise HTTPException(501, str(exc))
+        result = _state.graph.invoke({
+            "query":        req.question,
+            "retry_count":  0,
+            "repair_count": 0,
+        })
     except Exception as exc:
         log.exception("api.ask_error", error=str(exc))
         raise HTTPException(500, str(exc))
 
-    # Emit per-request observability trace to CloudWatch
-    g = resp.guardrail
-    trace = RequestTrace.from_augmented_response(resp, request_id=str(id(resp)), question=req.question)
-    emitter.record(trace)
-    log.info("api.ask_trace", **trace.to_log_dict())
+    resp_dict = result.get("response", {})
+    g         = resp_dict.get("guardrail", {})
+
+    log.info("api.ask_done",
+             grade=result.get("grade"),
+             retry_count=result.get("retry_count"),
+             citations=resp_dict.get("retrieval_count", 0))
 
     return AskResponse(
         question=req.question,
-        answer=resp.answer,
+        answer=resp_dict.get("answer", ""),
         sources=[
             Source(
-                citation=c.number,
-                file_name=c.file_name,
-                period_year=c.period_year,
-                period_month=c.period_month,
-                category=c.category,
-                preview=c.excerpt[:200],
+                citation=s["citation"],
+                file_name=s.get("file_name"),
+                period_year=s.get("period_year"),
+                period_month=s.get("period_month"),
+                category=s.get("category"),
+                preview=s.get("preview", ""),
             )
-            for c in resp.citations
+            for s in resp_dict.get("sources", [])
         ],
-        model=resp.generation.model if resp.generation else "",
-        latency_ms=resp.augment_stats.get("total_latency_ms", 0),
-        prompt_tokens=resp.generation.prompt_tokens if resp.generation else 0,
-        completion_tokens=resp.generation.completion_tokens if resp.generation else 0,
-        retrieval_count=resp.augment_stats.get("chunks_retrieved", 0),
+        model=resp_dict.get("model", ""),
+        latency_ms=resp_dict.get("latency_ms", 0),
+        prompt_tokens=resp_dict.get("prompt_tokens", 0),
+        completion_tokens=resp_dict.get("completion_tokens", 0),
+        retrieval_count=resp_dict.get("retrieval_count", 0),
         guardrail=GuardrailReport(
-            pre_passed=g.pre_passed,
-            post_passed=g.post_passed,
-            blocked=g.blocked,
-            block_reason=g.block_reason,
-            is_investment_advice=g.is_investment_advice,
-            answer_safe=g.answer_safe,
-            hallucination_risk=g.hallucination_risk,
-            faithfulness_score=g.faithfulness_score,
-            citation_valid=g.citation_valid,
-            number_consistent=g.number_consistent,
-            abstention_detected=g.abstention_detected,
-            warnings=g.warnings,
+            pre_passed=g.get("pre_passed", True),
+            post_passed=g.get("post_passed", True),
+            blocked=g.get("blocked", False),
+            block_reason=g.get("block_reason"),
+            is_investment_advice=g.get("is_investment_advice", False),
+            answer_safe=g.get("answer_safe", True),
+            hallucination_risk=g.get("hallucination_risk", "unknown"),
+            faithfulness_score=g.get("faithfulness_score", -1.0),
+            citation_valid=g.get("citation_valid", True),
+            number_consistent=g.get("number_consistent", True),
+            abstention_detected=g.get("abstention_detected", False),
+            warnings=g.get("warnings", []),
         ),
     )
 

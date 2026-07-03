@@ -1,0 +1,553 @@
+"""Node functions for the RAG LangGraph.
+
+Every node follows the LangGraph contract:
+    (state: RAGState) -> dict   ← partial state update only
+
+Dependencies (repo, retriever, ranker, generator) are injected via
+NodeFactory, which is instantiated once at app startup and passed to
+graph.py when the compiled graph is built.
+"""
+from __future__ import annotations
+
+import re
+import time
+
+import structlog
+
+from financial_pipeline.augmentation.citations import CitationFormatter
+from financial_pipeline.augmentation.generator import AnswerGenerator
+from financial_pipeline.augmentation.guardrails import (
+    PostGenerationGuardrails,
+    PreGenerationGuardrails,
+)
+from financial_pipeline.augmentation.prompts import PromptBuilder
+from financial_pipeline.augmentation.ranker import ContextRanker
+from financial_pipeline.retrieval.hybrid import ContextOptimizer
+from financial_pipeline.retrieval.pipeline import SearchRouter
+from financial_pipeline.retrieval.query_understanding import QueryAnalyzer
+from financial_pipeline.retrieval.retriever import _rrf_merge
+from financial_pipeline.graph.state import RAGState
+
+log = structlog.get_logger()
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+_RETRIEVAL_BRANCH_ALL = ["dense", "sparse", "table", "metadata"]
+_STOPWORDS = frozenset({
+    "what", "is", "the", "are", "how", "many", "give", "me",
+    "show", "find", "list", "total", "please", "can", "you",
+    "tell", "about", "for", "in", "of", "a", "an",
+})
+
+
+# ── Dependency container ──────────────────────────────────────────────────────
+
+class NodeFactory:
+    """Holds all shared dependencies and exposes nodes as bound methods.
+
+    Instantiate once at app startup:
+
+        factory = NodeFactory(repo=repo, retriever=retriever)
+        graph   = build_graph(factory)
+    """
+
+    def __init__(self, repo, retriever) -> None:
+        self._repo      = repo
+        self._retriever = retriever
+        self._analyzer  = QueryAnalyzer()
+        self._router    = SearchRouter()
+        self._ranker    = ContextRanker(use_cross_encoder=True, top_k=8)
+        self._optimizer = ContextOptimizer()
+        self._cit_fmt   = CitationFormatter()
+        self._prompter  = PromptBuilder()
+        self._pre_guard = PreGenerationGuardrails()
+        self._post_guard= PostGenerationGuardrails()
+        self._generator = AnswerGenerator()
+
+    # ── Node 1: analyze_query ─────────────────────────────────────────────────
+
+    def analyze_query(self, state: RAGState) -> dict:
+        query  = state.get("query", "")
+        intent = self._analyzer.analyze(query)
+        log.info("node.analyze_query", intent=intent.intent_type,
+                 year=intent.year, month=intent.month,
+                 scheme_types=intent.scheme_types)
+        return {
+            "intent":         intent,
+            "retry_count":    state.get("retry_count", 0),
+            "repair_count":   state.get("repair_count", 0),
+            "rewritten_query": None,
+        }
+
+    # ── Node 2: route ─────────────────────────────────────────────────────────
+
+    def route(self, state: RAGState) -> dict:
+        intent = state["intent"]
+
+        # On CRAG retry, use rewritten query
+        if state.get("rewritten_query"):
+            intent.search_query = state["rewritten_query"]
+
+        plan           = self._router.route(intent, top_k=12)
+        active_branches: list[str] = ["dense", "sparse"]
+
+        if plan.fetch_tables or intent.intent_type in ("tabular", "factual"):
+            active_branches.append("table")
+        if plan.fetch_documents or intent.intent_type == "lookup":
+            active_branches.append("metadata")
+
+        log.info("node.route", branches=active_branches,
+                 chunk_mode=plan.chunk_mode, intent=intent.intent_type)
+        return {"active_branches": active_branches}
+
+    # ── Nodes 3a–3d: parallel retrieval ──────────────────────────────────────
+
+    def retrieve_dense(self, state: RAGState) -> dict:
+        intent = state["intent"]
+        query  = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        try:
+            results = self._repo.search_similar(
+                query_embedding=self._retriever._encode(query),
+                limit=20,
+                period_year=intent.year,
+                period_month=intent.month,
+                category=intent.category,
+            )
+            for r in results:
+                r["_source"] = "chunk"
+                r["search_mode"] = "dense"
+            log.debug("node.retrieve_dense", count=len(results))
+            return {"dense_results": results}
+        except Exception as exc:
+            log.warning("node.retrieve_dense.failed", error=str(exc))
+            return {"dense_results": []}
+
+    def retrieve_sparse(self, state: RAGState) -> dict:
+        intent = state["intent"]
+        query  = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        try:
+            results = self._repo.search_fulltext(
+                query=query,
+                limit=20,
+                period_year=intent.year,
+                period_month=intent.month,
+                category=intent.category,
+            )
+            for r in results:
+                r["_source"] = "chunk"
+                r["search_mode"] = "sparse"
+            log.debug("node.retrieve_sparse", count=len(results))
+            return {"sparse_results": results}
+        except Exception as exc:
+            log.warning("node.retrieve_sparse.failed", error=str(exc))
+            return {"sparse_results": []}
+
+    def retrieve_table(self, state: RAGState) -> dict:
+        intent  = state["intent"]
+        results = []
+
+        # Exact-match injection for known scheme types
+        for scheme in intent.scheme_types[:2]:
+            try:
+                from sqlalchemy import text as sa_text
+                conditions = ["dc.text ILIKE :pattern"]
+                params: dict = {"pattern": f"%{scheme}%", "limit": 3}
+                if intent.year:
+                    conditions.append("dc.period_year = :year")
+                    params["year"] = intent.year
+                if intent.month:
+                    conditions.append("dc.period_month = :month")
+                    params["month"] = intent.month
+                if intent.category:
+                    conditions.append("dc.category = :cat")
+                    params["cat"] = intent.category
+
+                sql = f"""
+                    SELECT dc.chunk_id, dc.chunk_index, dc.text,
+                           dc.period_year, dc.period_month, dc.category,
+                           dm.file_name, dm.document_type, dm.s3_processed_key,
+                           1.0 AS similarity
+                    FROM document_chunks dc
+                    JOIN document_metadata dm ON dc.document_id = dm.document_id
+                    WHERE {' AND '.join(conditions)}
+                    ORDER BY dc.period_year DESC NULLS LAST,
+                             dc.period_month DESC NULLS LAST,
+                             dc.chunk_index ASC
+                    LIMIT :limit
+                """
+                with self._repo._engine.connect() as conn:
+                    rows = conn.execute(sa_text(sql), params).mappings().all()
+                for r in rows:
+                    d = dict(r)
+                    d["similarity"]   = float(d.get("similarity") or 1.0)
+                    d["_source"]      = "chunk"
+                    d["search_mode"]  = "exact"
+                    results.append(d)
+            except Exception as exc:
+                log.warning("node.retrieve_table.scheme_failed",
+                            scheme=scheme, error=str(exc))
+
+        log.debug("node.retrieve_table", count=len(results))
+        return {"table_results": results}
+
+    def retrieve_metadata(self, state: RAGState) -> dict:
+        intent = state["intent"]
+        try:
+            from sqlalchemy import text as sa_text
+            conditions = ["1=1"]
+            params: dict = {"limit": 5}
+            if intent.year:
+                conditions.append("period_year = :year")
+                params["year"] = intent.year
+            if intent.month:
+                conditions.append("period_month = :month")
+                params["month"] = intent.month
+            if intent.category:
+                conditions.append("category = :cat")
+                params["cat"] = intent.category
+
+            sql = f"""
+                SELECT document_id, file_name, file_type, category,
+                       period_year, period_month, s3_processed_key
+                FROM document_metadata
+                WHERE {' AND '.join(conditions)}
+                ORDER BY period_year DESC NULLS LAST,
+                         period_month DESC NULLS LAST
+                LIMIT :limit
+            """
+            with self._repo._engine.connect() as conn:
+                rows = conn.execute(sa_text(sql), params).mappings().all()
+            results = [dict(r) | {"_source": "document"} for r in rows]
+            log.debug("node.retrieve_metadata", count=len(results))
+            return {"metadata_results": results}
+        except Exception as exc:
+            log.warning("node.retrieve_metadata.failed", error=str(exc))
+            return {"metadata_results": []}
+
+    # ── Node 4: rrf_fusion ────────────────────────────────────────────────────
+
+    def rrf_fusion(self, state: RAGState) -> dict:
+        dense    = state.get("dense_results", [])
+        sparse   = state.get("sparse_results", [])
+        table    = state.get("table_results", [])
+        metadata = state.get("metadata_results", [])
+
+        # Table + exact chunks prepended before RRF so they survive the merge
+        chunk_lists = [table + dense, sparse]
+        fused = _rrf_merge(chunk_lists[0], chunk_lists[1], limit=20)
+
+        # Append metadata separately (different source type)
+        fused += metadata
+
+        log.debug("node.rrf_fusion",
+                  dense=len(dense), sparse=len(sparse),
+                  table=len(table), fused=len(fused))
+        return {"fused_results": fused}
+
+    # ── Node 5: rerank ────────────────────────────────────────────────────────
+
+    def rerank(self, state: RAGState) -> dict:
+        query  = state.get("rewritten_query") or state["intent"].search_query or state["query"]
+        chunks = [r for r in state.get("fused_results", [])
+                  if r.get("_source") == "chunk"]
+        docs   = [r for r in state.get("fused_results", [])
+                  if r.get("_source") == "document"]
+
+        reranked = self._ranker.rerank(query, chunks)
+        reranked += docs   # documents don't go through cross-encoder
+
+        log.debug("node.rerank", input=len(chunks), output=len(reranked))
+        return {"reranked_results": reranked}
+
+    # ── Node 6: context_optimizer ─────────────────────────────────────────────
+
+    def context_optimizer(self, state: RAGState) -> dict:
+        reranked = state.get("reranked_results", [])
+        intent   = state.get("intent")
+
+        if not reranked:
+            return {
+                "optimized_results": [],
+                "optimizer_stats": {"reason": "no_reranked_results"},
+            }
+
+        try:
+            optimized, stats = self._optimizer.optimize(
+                chunks=reranked, intent=intent, final_top_k=8,
+            )
+        except Exception as exc:
+            # Safeguard 2: optimizer crash → pass raw results forward
+            log.warning("node.context_optimizer.exception", error=str(exc))
+            return {
+                "optimized_results": reranked,
+                "optimizer_stats": {"reason": "optimizer_error", "error": str(exc)},
+            }
+
+        # Safeguard 1: aggressive passes reduced list to empty → top-8 fallback
+        if not optimized:
+            log.warning("node.context_optimizer.empty_output")
+            return {
+                "optimized_results": reranked[:8],
+                "optimizer_stats": {**stats, "reason": "fallback_after_empty_optimize"},
+            }
+
+        log.debug("node.context_optimizer", before=len(reranked), after=len(optimized))
+        return {"optimized_results": optimized, "optimizer_stats": stats}
+
+    # ── Node 7: grade_context ─────────────────────────────────────────────────
+
+    def grade_context(self, state: RAGState) -> dict:
+        results = state.get("optimized_results", [])
+        intent  = state.get("intent")
+        query   = state.get("query", "").lower()
+
+        if not results:
+            log.info("node.grade_context", grade="retry", reason="no_results")
+            return {"grade": "retry"}
+
+        combined_text = " ".join(r.get("text", "") for r in results).lower()
+
+        # Check 1: scheme type must appear in retrieved text
+        if intent and intent.scheme_types:
+            missing = [s for s in intent.scheme_types
+                       if s.lower() not in combined_text]
+            if missing:
+                log.info("node.grade_context", grade="retry",
+                         reason="scheme_missing", missing=missing)
+                return {"grade": "retry"}
+
+        # Check 2: numeric queries need at least one number in retrieved text
+        numeric_query = any(kw in query for kw in
+                            ("folio", "aum", "nav", "how many", "number of",
+                             "total", "inflow", "outflow", "crore", "lakh"))
+        if numeric_query:
+            has_numbers = bool(re.search(r'\d[\d,\.]+\d', combined_text))
+            if not has_numbers:
+                log.info("node.grade_context", grade="retry",
+                         reason="no_numbers_for_numeric_query")
+                return {"grade": "retry"}
+
+        log.info("node.grade_context", grade="sufficient",
+                 result_count=len(results))
+        return {"grade": "sufficient"}
+
+    # ── Node 8: rewrite_query ─────────────────────────────────────────────────
+
+    def rewrite_query(self, state: RAGState) -> dict:
+        original    = state.get("rewritten_query") or state.get("query", "")
+        intent      = state.get("intent")
+        retry_count = state.get("retry_count", 0)
+
+        tokens   = [t for t in original.lower().split() if t not in _STOPWORDS]
+        rewritten = " ".join(tokens)
+
+        # On second retry, force scheme types to the front
+        if intent and intent.scheme_types and retry_count >= 1:
+            prefix    = " ".join(intent.scheme_types)
+            rewritten = f"{prefix} {rewritten}"
+
+        # Append temporal context if present but not in rewritten query
+        if intent and intent.year and str(intent.year) not in rewritten:
+            rewritten = f"{rewritten} {intent.year}"
+
+        new_count = retry_count + 1
+        log.info("node.rewrite_query", retry=new_count, rewritten=rewritten[:80])
+        return {
+            "rewritten_query": rewritten.strip(),
+            "retry_count":     new_count,
+        }
+
+    # ── Node 9: augment ───────────────────────────────────────────────────────
+
+    def augment(self, state: RAGState) -> dict:
+        optimized = state.get("optimized_results", [])
+        citations = self._cit_fmt.format(optimized)
+
+        # Build context_text using PromptBuilder's internal block builder
+        context_text = self._prompter._context_block(optimized, citations)
+
+        log.info("node.augment", citations=len(citations),
+                 context_chars=len(context_text))
+        return {"citations": citations, "context_text": context_text}
+
+    # ── Node 10: pre_guardrail ────────────────────────────────────────────────
+
+    def pre_guardrail(self, state: RAGState) -> dict:
+        intent   = state.get("intent")
+        citations= state.get("citations", [])
+        intent_t = intent.intent_type if intent else "factual"
+
+        result  = self._pre_guard.check(
+            question=state.get("query", ""),
+            citations=citations,
+            intent_type=intent_t,
+        )
+        blocked = not result.should_proceed
+        log.info("node.pre_guardrail", blocked=blocked,
+                 advice=result.is_investment_advice)
+        return {"pre_result": result, "blocked": blocked}
+
+    # ── Node 11: generate ─────────────────────────────────────────────────────
+
+    def generate(self, state: RAGState) -> dict:
+        query        = state.get("query", "")
+        context_text = state.get("context_text", "No relevant content found.")
+        citations    = state.get("citations", [])
+        intent       = state.get("intent")
+        intent_t     = intent.intent_type if intent else "factual"
+
+        # Build full messages list (system prompt + user turn with context)
+        messages = self._prompter.build(
+            question=query,
+            chunks=state.get("optimized_results", []),
+            citations=citations,
+            intent_type=intent_t,
+        )
+
+        result = self._generator.generate(messages, intent_type=intent_t)
+
+        log.info("node.generate", model=result.model,
+                 prompt_tokens=result.prompt_tokens,
+                 completion_tokens=result.completion_tokens,
+                 latency_ms=result.latency_ms)
+        return {
+            "answer": result.answer,
+            "generation_meta": {
+                "model":             result.model,
+                "provider":          result.provider,
+                "prompt_tokens":     result.prompt_tokens,
+                "completion_tokens": result.completion_tokens,
+                "latency_ms":        result.latency_ms,
+            },
+        }
+
+    # ── Node 12: post_guardrail ───────────────────────────────────────────────
+
+    def post_guardrail(self, state: RAGState) -> dict:
+        answer    = state.get("answer", "")
+        citations = state.get("citations", [])
+
+        result = self._post_guard.check(
+            answer=answer,
+            citations=citations,
+            chunks=state.get("optimized_results", []),
+        )
+        log.info("node.post_guardrail", passed=result.passed,
+                 risk=result.hallucination_risk, safe=result.answer_safe)
+        return {"post_result": result}
+
+    # ── Node 13: repair ───────────────────────────────────────────────────────
+
+    def repair(self, state: RAGState) -> dict:
+        original_answer = state.get("answer", "")
+        post_result     = state.get("post_result")
+        citations       = state.get("citations", [])
+        repair_count    = state.get("repair_count", 0)
+
+        try:
+            repaired      = original_answer
+            num_citations = len(citations)
+
+            # Fix 1: strip sentences with invalid [N] citation markers
+            if post_result and not post_result.citation_valid:
+                def _cite_ok(sentence: str) -> bool:
+                    markers = [int(m) for m in re.findall(r'\[(\d+)\]', sentence)]
+                    return all(1 <= m <= num_citations for m in markers)
+                sentences = re.split(r'(?<=[.!?])\s+', repaired)
+                repaired  = " ".join(s for s in sentences if _cite_ok(s))
+
+            # Fix 2: strip sentences with numbers not grounded in cited text
+            if post_result and not post_result.number_consistent:
+                cited_text = " ".join(c.excerpt for c in citations)
+                def _nums_grounded(sentence: str) -> bool:
+                    nums = re.findall(r'\b\d[\d,\.]*\d\b', sentence)
+                    return all(n in cited_text for n in nums if len(n) >= 3)
+                sentences = re.split(r'(?<=[.!?])\s+', repaired)
+                repaired  = " ".join(s for s in sentences if _nums_grounded(s))
+
+            log.info("node.repair.done",
+                     before=len(original_answer), after=len(repaired))
+            return {
+                "answer":          repaired,
+                "repair_attempted": True,
+                "repair_count":    repair_count + 1,
+            }
+
+        except Exception as exc:
+            # Production safeguard: repair crash must not strand the graph.
+            # Return original answer + increment repair_count so
+            # post_guardrail routes to abstain on next evaluation.
+            log.warning("node.repair.failed", error=str(exc))
+            return {
+                "answer":          original_answer,
+                "repair_attempted": True,
+                "repair_count":    repair_count + 1,
+            }
+
+    # ── Node 14: format_response ──────────────────────────────────────────────
+
+    def format_response(self, state: RAGState) -> dict:
+        intent      = state.get("intent")
+        pre_result  = state.get("pre_result")
+        post_result = state.get("post_result")
+        gen_meta    = state.get("generation_meta", {})
+        citations   = state.get("citations", [])
+        blocked     = state.get("blocked", False)
+        grade       = state.get("grade", "sufficient")
+
+        # Determine final answer text
+        if blocked:
+            answer = (pre_result.block_reason if pre_result and pre_result.block_reason
+                      else "This query cannot be answered due to policy restrictions.")
+        elif grade == "abstain" or (not state.get("answer")):
+            answer = ("This information is not available in the provided AMFI documents "
+                      "after multiple retrieval attempts.")
+        else:
+            answer = state.get("answer", "")
+
+        response = {
+            "question":          state.get("query", ""),
+            "answer":            answer,
+            "sources": [
+                {
+                    "citation":     c.number,
+                    "file_name":    c.file_name,
+                    "period_year":  c.period_year,
+                    "period_month": c.period_month,
+                    "category":     c.category,
+                    "preview":      c.excerpt[:200],
+                }
+                for c in citations
+            ],
+            "model":              gen_meta.get("model", ""),
+            "latency_ms":         gen_meta.get("latency_ms", 0),
+            "prompt_tokens":      gen_meta.get("prompt_tokens", 0),
+            "completion_tokens":  gen_meta.get("completion_tokens", 0),
+            "retrieval_count":    len(citations),
+            "retry_count":        state.get("retry_count", 0),
+            "repair_attempted":   state.get("repair_attempted", False),
+            "guardrail": {
+                "blocked":              blocked,
+                "block_reason":         pre_result.block_reason if pre_result else None,
+                "is_investment_advice": pre_result.is_investment_advice if pre_result else False,
+                "pre_passed":           pre_result.should_proceed if pre_result else True,
+                "post_passed":          post_result.passed if post_result else True,
+                "answer_safe":          post_result.answer_safe if post_result else True,
+                "hallucination_risk":   post_result.hallucination_risk if post_result else "unknown",
+                "faithfulness_score":   post_result.faithfulness_score if post_result else -1.0,
+                "citation_valid":       post_result.citation_valid if post_result else True,
+                "number_consistent":    post_result.number_consistent if post_result else True,
+                "abstention_detected":  post_result.abstention_detected if post_result else False,
+                "warnings": (
+                    (pre_result.warnings if pre_result else []) +
+                    (post_result.warnings if post_result else [])
+                ),
+            },
+            "optimizer_stats": state.get("optimizer_stats", {}),
+            "grade":           grade,
+        }
+
+        log.info("node.format_response",
+                 blocked=blocked, answer_len=len(answer),
+                 citations=len(citations))
+        return {"response": response}
