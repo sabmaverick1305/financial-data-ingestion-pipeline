@@ -42,10 +42,8 @@ from financial_pipeline.api.schemas import (
     SearchResponse,
     Source,
 )
-from financial_pipeline.augmentation.pipeline import AugmentationPipeline
 from financial_pipeline.graph import build_graph, NodeFactory
 from financial_pipeline.config import settings
-from financial_pipeline.evaluation.observability import RequestTrace, emitter
 from financial_pipeline.retrieval.pipeline import RetrievalPipeline
 from financial_pipeline.retrieval.rag import RAGPipeline
 from financial_pipeline.retrieval.retriever import Retriever
@@ -60,8 +58,7 @@ class _AppState:
     repo: DocumentRepository | None = None
     retriever: Retriever | None = None
     pipeline: RetrievalPipeline | None = None
-    augment: AugmentationPipeline | None = None
-    rag: RAGPipeline | None = None  # kept for fallback
+    rag: RAGPipeline | None = None
     graph = None  # compiled LangGraph — set in lifespan
 
 
@@ -74,13 +71,7 @@ async def lifespan(app: FastAPI):
     _state.repo = DocumentRepository(settings.postgres_url)
     _state.retriever = Retriever(_state.repo, settings.embed_model)
     _state.pipeline = RetrievalPipeline(_state.repo, _state.retriever)
-    _state.augment = AugmentationPipeline(
-        _state.pipeline,
-        use_cross_encoder=True,
-        top_k_retrieve=12,
-        top_k_augment=6,
-    )
-    _state.rag = RAGPipeline(_state.retriever)  # fallback only
+    _state.rag = RAGPipeline(_state.retriever)
     factory      = NodeFactory(repo=_state.repo, retriever=_state.retriever)
     _state.graph = build_graph(factory)
     log.info(
@@ -133,12 +124,6 @@ def _get_pipeline() -> RetrievalPipeline:
     if _state.pipeline is None:
         raise HTTPException(503, "Retrieval pipeline not initialised")
     return _state.pipeline
-
-
-def _get_augment() -> AugmentationPipeline:
-    if _state.augment is None:
-        raise HTTPException(503, "Augmentation pipeline not initialised")
-    return _state.augment
 
 
 def _get_rag() -> RAGPipeline:
