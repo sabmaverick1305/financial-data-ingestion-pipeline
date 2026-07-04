@@ -25,11 +25,16 @@ from financial_pipeline.graph.edges import (
     after_pre_guardrail,
     after_route,
 )
+from financial_pipeline.graph.edges_analytical import after_extract, is_range_query
 from financial_pipeline.graph.nodes import NodeFactory
+from financial_pipeline.graph.nodes_analytical import AnalyticalNodeFactory
 from financial_pipeline.graph.state import RAGState
 
 
-def build_graph(factory: NodeFactory):
+def build_graph(
+    factory: NodeFactory,
+    analytical: AnalyticalNodeFactory | None = None,
+):
     """Build and compile the RAG graph with injected dependencies.
 
     Parameters
@@ -37,12 +42,17 @@ def build_graph(factory: NodeFactory):
     factory:
         NodeFactory instance created once at app startup.
         Holds repo, retriever, ranker, generator and all stateless helpers.
+    analytical:
+        AnalyticalNodeFactory for year-range aggregation queries.
+        If None, a default instance is created using factory's repo.
 
     Returns
     -------
     CompiledGraph
         Ready to call via graph.invoke({...}) or graph.stream({...}).
     """
+    if analytical is None:
+        analytical = AnalyticalNodeFactory(repo=factory._repo)
     g = StateGraph(RAGState)
 
     # ── Nodes ──────────────────────────────────────────────────────────────
@@ -65,11 +75,18 @@ def build_graph(factory: NodeFactory):
     g.add_node("repair",            factory.repair)
     g.add_node("format_response",   factory.format_response)
 
+    # ── Analytical agent nodes ──────────────────────────────────────────────
+    g.add_node("plan_years",     analytical.plan_years)
+    g.add_node("retrieve_year",  analytical.retrieve_year)
+    g.add_node("extract_metric", analytical.extract_metric)
+    g.add_node("synthesize",     analytical.synthesize)
+
     # ── Entry point ────────────────────────────────────────────────────────
     g.set_entry_point("analyze_query")
 
     # ── Linear edges ───────────────────────────────────────────────────────
-    g.add_edge("analyze_query",     "route")
+    # analyze_query now branches: range query → analytical, else → parallel
+    # (replaced the direct edge to route)
     g.add_edge("rrf_fusion",        "rerank")
     g.add_edge("rerank",            "context_optimizer")
     g.add_edge("context_optimizer", "grade_context")
@@ -78,6 +95,22 @@ def build_graph(factory: NodeFactory):
     g.add_edge("generate",          "post_guardrail")
     g.add_edge("repair",            "post_guardrail")   # bounded repair loop
     g.add_edge("format_response",   END)
+
+    # ── Analytical agent edges ─────────────────────────────────────────────
+    # Entry branch: range query → plan_years, all others → route
+    g.add_conditional_edges(
+        "analyze_query",
+        is_range_query,
+        {"plan_years": "plan_years", "route": "route"},
+    )
+    g.add_edge("plan_years",    "retrieve_year")
+    g.add_edge("retrieve_year", "extract_metric")
+    g.add_conditional_edges(
+        "extract_metric",
+        after_extract,
+        {"retrieve_year": "retrieve_year", "synthesize": "synthesize"},
+    )
+    g.add_edge("synthesize", "post_guardrail")   # reuses existing guardrail path
 
     # ── Routing from route node ────────────────────────────────────────────
     # lookup intent  → retrieve_metadata_first (sequential: find doc first)

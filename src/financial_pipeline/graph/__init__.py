@@ -15,5 +15,6 @@ Entry point:
 
 from .graph import build_graph
 from .nodes import NodeFactory
+from .nodes_analytical import AnalyticalNodeFactory
 
-__all__ = ["build_graph", "NodeFactory"]
+__all__ = ["build_graph", "NodeFactory", "AnalyticalNodeFactory"]

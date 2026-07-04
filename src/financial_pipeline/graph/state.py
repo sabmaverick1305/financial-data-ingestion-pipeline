@@ -24,6 +24,13 @@ class RAGState(TypedDict, total=False):
     found_document_ids: list[str]   # set by retrieve_metadata_first;
                                     # empty = not found → fallback to parallel
 
+    # ── analytical agent (year-range aggregation loop) ────
+    pending_years:     list[int]    # years left to process: [2020, 2021, …]
+    current_year:      int | None   # year being processed in this iteration
+    year_results:      dict         # {2020: {"value":"832","month":10}, …}
+    extraction_metric: str          # "funds_mobilized"|"folios"|"aum"|"nav"
+    is_analytical:     bool         # True → post_guardrail skips number_consistent check
+
     # ── parallel retrieval ─────────────────────────────────
     dense_results:     list[dict]
     sparse_results:    list[dict]

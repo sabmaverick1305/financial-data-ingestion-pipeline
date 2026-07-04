@@ -596,8 +596,18 @@ class NodeFactory:
             citations=citations,
             chunks=state.get("optimized_results", []),
         )
+
+        # Analytical agent: numbers come from structured extraction, not RAG chunks.
+        # The number_consistent check compares answer digits against cited text —
+        # meaningless when there are no chunk citations. Override to avoid stripping
+        # valid extracted values from the synthesized answer.
+        if state.get("is_analytical"):
+            result.number_consistent = True
+            result.passed = result.answer_safe and result.hallucination_risk != "high"
+
         log.info("node.post_guardrail", passed=result.passed,
-                 risk=result.hallucination_risk, safe=result.answer_safe)
+                 risk=result.hallucination_risk, safe=result.answer_safe,
+                 analytical=state.get("is_analytical", False))
         return {"post_result": result}
 
     # ── Node 13: repair ───────────────────────────────────────────────────────
