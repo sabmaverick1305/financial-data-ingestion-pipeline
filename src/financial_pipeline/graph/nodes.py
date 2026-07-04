@@ -361,7 +361,10 @@ class NodeFactory:
         # retrieve_table already picked 2 representative chunks per year —
         # pass them through with RRF ordering intact rather than filtering.
         if getattr(intent, "year_from", None) and getattr(intent, "year_to", None):
-            reranked = chunks[:8] + docs
+            # Keep ALL chunks — window-function SQL already capped at 2/year.
+            # Cutting to [:8] would drop 2024/2025/2026 which arrive last in
+            # year-ASC order.
+            reranked = chunks + docs
             log.debug("node.rerank.passthrough",
                       reason="year_range", chunks=len(reranked))
         else:
@@ -383,6 +386,36 @@ class NodeFactory:
                 "optimizer_stats": {"reason": "no_reranked_results"},
             }
 
+        year_from = getattr(intent, "year_from", None)
+        year_to   = getattr(intent, "year_to", None)
+
+        # Year-range path: Jaccard dedup treats all table chunks as near-duplicates
+        # because they share the same long column header (85%+ word overlap).
+        # Replace with year-based dedup: keep the 2 best chunks per year so
+        # every year in the range is represented in the LLM context.
+        if year_from and year_to:
+            from collections import defaultdict
+            by_year: dict = defaultdict(list)
+            for chunk in reranked:
+                yr = chunk.get("period_year")
+                if yr:
+                    by_year[yr].append(chunk)
+
+            optimized = []
+            for yr in sorted(by_year.keys()):        # year ASC → oldest first
+                optimized.extend(by_year[yr][:2])    # max 2 chunks per year
+
+            years_found = sorted(by_year.keys())
+            stats = {
+                "year_based_dedup": True,
+                "years_found":      years_found,
+                "chunks_per_year":  {yr: len(by_year[yr]) for yr in years_found},
+            }
+            log.info("node.context_optimizer.year_range",
+                     years=years_found, output=len(optimized))
+            return {"optimized_results": optimized, "optimizer_stats": stats}
+
+        # Point-in-time path: standard ContextOptimizer passes
         try:
             optimized, stats = self._optimizer.optimize(
                 chunks=reranked, intent=intent, final_top_k=8,
@@ -431,13 +464,32 @@ class NodeFactory:
         # Check 2: numeric queries need at least one number in retrieved text
         numeric_query = any(kw in query for kw in
                             ("folio", "aum", "nav", "how many", "number of",
-                             "total", "inflow", "outflow", "crore", "lakh"))
+                             "total", "inflow", "outflow", "crore", "lakh",
+                             "investment", "mobilized", "mobilised"))
         if numeric_query:
             has_numbers = bool(re.search(r'\d[\d,\.]+\d', combined_text))
             if not has_numbers:
                 log.info("node.grade_context", grade="retry",
                          reason="no_numbers_for_numeric_query")
                 return {"grade": "retry"}
+
+        # Check 3: year-range queries need data from at least half the years
+        year_from = getattr(intent, "year_from", None)
+        year_to   = getattr(intent, "year_to", None)
+        if year_from and year_to:
+            years_needed   = set(range(year_from, year_to + 1))
+            years_in_ctx   = {r.get("period_year") for r in results
+                              if r.get("period_year")}
+            years_covered  = years_needed & years_in_ctx
+            min_coverage   = max(1, len(years_needed) // 2)   # at least 50%
+            if len(years_covered) < min_coverage:
+                log.info("node.grade_context", grade="retry",
+                         reason="insufficient_year_coverage",
+                         covered=sorted(years_covered),
+                         needed=sorted(years_needed))
+                return {"grade": "retry"}
+            log.info("node.grade_context", grade="sufficient",
+                     years_covered=sorted(years_covered))
 
         log.info("node.grade_context", grade="sufficient",
                  result_count=len(results))
