@@ -91,6 +91,8 @@ class Retriever:
         month: int | None = None,
         category: str | None = None,
         min_sim: float = 0.0,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> list[dict]:
         """Return ranked chunks for *query* using the requested mode."""
         if not query.strip():
@@ -108,6 +110,8 @@ class Retriever:
                 period_month=month,
                 category=category,
                 min_similarity=min_sim,
+                year_from=year_from,
+                year_to=year_to,
             )
             for r in semantic:
                 r["search_mode"] = "semantic"
@@ -119,6 +123,8 @@ class Retriever:
                 period_year=year,
                 period_month=month,
                 category=category,
+                year_from=year_from,
+                year_to=year_to,
             )
             for r in keyword:
                 r["search_mode"] = "keyword"

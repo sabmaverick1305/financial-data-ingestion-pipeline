@@ -99,6 +99,15 @@ TREND_SIGNALS = frozenset(
         "how has",
         "evolution",
         "trajectory",
+        # multi-year range signals
+        "year wise",
+        "year-wise",
+        "yearwise",
+        "year by year",
+        "annually",
+        "each year",
+        "every year",
+        "from 20",          # catches "from 2020 to 2026" style queries
     }
 )
 
@@ -214,6 +223,11 @@ class QueryIntent:
     month: int | None = None
     quarter: str | None = None  # "Q1" … "Q4"
 
+    # Year range (multi-year trend queries: "from 2020 to 2026")
+    # When set, year is cleared to None so the retriever uses the range instead.
+    year_from: int | None = None
+    year_to:   int | None = None
+
     # Document filters
     category: str | None = None  # "monthly" | "quarterly"
 
@@ -267,6 +281,7 @@ class QueryAnalyzer:
         intent = QueryIntent(raw_query=query, search_query=query)
         q = query.lower().strip()
 
+        self._extract_year_range(q, intent)   # must run before _extract_temporal
         self._extract_temporal(q, intent)
         self._classify_intent(q, intent)
         self._extract_entities(q, intent)
@@ -277,12 +292,45 @@ class QueryAnalyzer:
 
     # ------------------------------------------------------------------
 
+    def _extract_year_range(self, q: str, intent: QueryIntent) -> None:
+        """Detect multi-year range patterns before single-year extraction runs.
+
+        Patterns matched:
+          "from 2020 to 2026"
+          "2020 to 2026"
+          "2020 through 2026"
+          "2020-2026"   (hyphen — not a month range)
+          "2020 – 2026" (en-dash)
+
+        When a range is found:
+          - year_from / year_to are set
+          - year is cleared (don't pin to a single year)
+          - intent_type is forced to "trend"
+          - prefer_recent is cleared (avoid resolving to one month)
+        """
+        range_m = re.search(
+            r'\b(20[0-2]\d)\s*(?:to|through|–|-)\s*(20[0-2]\d)\b',
+            q,
+        )
+        if range_m:
+            y1, y2 = int(range_m.group(1)), int(range_m.group(2))
+            if y1 != y2:                   # "2026-2026" is not a range
+                intent.year_from     = min(y1, y2)
+                intent.year_to       = max(y1, y2)
+                intent.year          = None    # cleared — range replaces single year
+                intent.intent_type   = "trend"
+                intent.prefer_recent = False
+                intent.time_sensitive = True
+
     def _extract_temporal(self, q: str, intent: QueryIntent) -> None:
         # Year: 2009–2029
-        year_m = re.search(r"\b(20[0-2]\d)\b", q)
-        if year_m:
-            intent.year = int(year_m.group(1))
-            intent.time_sensitive = True
+        # Skip single-year extraction when a range was already found — the
+        # regex would pick up year_from (the earlier year) and overwrite None.
+        if not (intent.year_from and intent.year_to):
+            year_m = re.search(r"\b(20[0-2]\d)\b", q)
+            if year_m:
+                intent.year = int(year_m.group(1))
+                intent.time_sensitive = True
 
         # Month by name
         for name, num in MONTH_MAP.items():
@@ -303,8 +351,9 @@ class QueryAnalyzer:
 
         # Year given but no month → user wants the latest available data for that year.
         # Mark prefer_recent so the ContextOptimizer and pipeline can resolve the month.
-        # Exception: trend queries want all months, not just the latest.
-        if intent.year and not intent.month and not intent.quarter:
+        # Exceptions: trend queries want all months; range queries already set prefer_recent=False.
+        if (intent.year and not intent.month and not intent.quarter
+                and not (intent.year_from and intent.year_to)):
             intent.prefer_recent = True
 
         # Category hints from temporal language

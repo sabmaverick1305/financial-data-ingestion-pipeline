@@ -103,9 +103,11 @@ class NodeFactory:
     # ── Nodes 3a–3d: parallel retrieval ──────────────────────────────────────
 
     def retrieve_dense(self, state: RAGState) -> dict:
-        intent  = state["intent"]
-        query   = state.get("rewritten_query") or intent.search_query or intent.raw_query
-        doc_ids = state.get("found_document_ids") or None   # set by lookup sequential path
+        intent    = state["intent"]
+        query     = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        doc_ids   = state.get("found_document_ids") or None
+        year_from = getattr(intent, "year_from", None)
+        year_to   = getattr(intent, "year_to", None)
         try:
             results = self._repo.search_similar(
                 query_embedding=self._retriever._encode(query),
@@ -114,6 +116,8 @@ class NodeFactory:
                 period_month=intent.month,
                 category=intent.category,
                 document_ids=doc_ids,
+                year_from=year_from,
+                year_to=year_to,
             )
             for r in results:
                 r["_source"] = "chunk"
@@ -125,9 +129,11 @@ class NodeFactory:
             return {"dense_results": []}
 
     def retrieve_sparse(self, state: RAGState) -> dict:
-        intent  = state["intent"]
-        query   = state.get("rewritten_query") or intent.search_query or intent.raw_query
-        doc_ids = state.get("found_document_ids") or None   # set by lookup sequential path
+        intent    = state["intent"]
+        query     = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        doc_ids   = state.get("found_document_ids") or None
+        year_from = getattr(intent, "year_from", None)
+        year_to   = getattr(intent, "year_to", None)
         try:
             results = self._repo.search_fulltext(
                 query=query,
@@ -136,6 +142,8 @@ class NodeFactory:
                 period_month=intent.month,
                 category=intent.category,
                 document_ids=doc_ids,
+                year_from=year_from,
+                year_to=year_to,
             )
             for r in results:
                 r["_source"] = "chunk"
@@ -147,42 +155,77 @@ class NodeFactory:
             return {"sparse_results": []}
 
     def retrieve_table(self, state: RAGState) -> dict:
-        intent  = state["intent"]
-        doc_ids = state.get("found_document_ids") or None   # set by lookup sequential path
-        results = []
+        intent    = state.get("intent")
+        if not intent:
+            return {"table_results": []}
+        doc_ids   = state.get("found_document_ids") or None
+        year_from = getattr(intent, "year_from", None)
+        year_to   = getattr(intent, "year_to", None)
+        results   = []
 
         # Exact-match injection for known scheme types
         for scheme in intent.scheme_types[:2]:
             try:
                 from sqlalchemy import text as sa_text
-                conditions = ["dc.text ILIKE :pattern"]
-                params: dict = {"pattern": f"%{scheme}%", "limit": 3}
-                if intent.year:
-                    conditions.append("dc.period_year = :year")
-                    params["year"] = intent.year
-                if intent.month:
-                    conditions.append("dc.period_month = :month")
-                    params["month"] = intent.month
-                if intent.category:
-                    conditions.append("dc.category = :cat")
-                    params["cat"] = intent.category
-                if doc_ids:
-                    conditions.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
-                    params["doc_ids"] = doc_ids
-
-                sql = f"""
-                    SELECT dc.chunk_id, dc.chunk_index, dc.text,
-                           dc.period_year, dc.period_month, dc.category,
-                           dm.file_name, dm.document_type, dm.s3_processed_key,
-                           1.0 AS similarity
-                    FROM document_chunks dc
-                    JOIN document_metadata dm ON dc.document_id = dm.document_id
-                    WHERE {' AND '.join(conditions)}
-                    ORDER BY dc.period_year DESC NULLS LAST,
-                             dc.period_month DESC NULLS LAST,
-                             dc.chunk_index ASC
-                    LIMIT :limit
-                """
+                if year_from and year_to:
+                    # Year-range query: use a window function to get 2 chunks
+                    # per year so all years 2020-2026 are represented, not
+                    # just the most recent year at the top of ORDER BY DESC.
+                    params: dict = {
+                        "pattern":  f"%{scheme}%",
+                        "year_from": year_from,
+                        "year_to":   year_to,
+                    }
+                    sql = """
+                        SELECT chunk_id, chunk_index, text,
+                               period_year, period_month, category,
+                               file_name, document_type, s3_processed_key,
+                               1.0 AS similarity
+                        FROM (
+                            SELECT dc.chunk_id, dc.chunk_index, dc.text,
+                                   dc.period_year, dc.period_month, dc.category,
+                                   dm.file_name, dm.document_type, dm.s3_processed_key,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY dc.period_year
+                                       ORDER BY dc.chunk_index ASC
+                                   ) AS rn
+                            FROM document_chunks dc
+                            JOIN document_metadata dm ON dc.document_id = dm.document_id
+                            WHERE dc.text ILIKE :pattern
+                              AND dc.period_year BETWEEN :year_from AND :year_to
+                        ) ranked
+                        WHERE rn <= 2
+                        ORDER BY period_year ASC, period_month ASC
+                    """
+                else:
+                    # Point-in-time query: simple filters + recency ordering
+                    conditions = ["dc.text ILIKE :pattern"]
+                    params: dict = {"pattern": f"%{scheme}%", "limit": 3}
+                    if intent.year:
+                        conditions.append("dc.period_year = :year")
+                        params["year"] = intent.year
+                    if intent.month:
+                        conditions.append("dc.period_month = :month")
+                        params["month"] = intent.month
+                    if intent.category:
+                        conditions.append("dc.category = :cat")
+                        params["cat"] = intent.category
+                    if doc_ids:
+                        conditions.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
+                        params["doc_ids"] = doc_ids
+                    sql = f"""
+                        SELECT dc.chunk_id, dc.chunk_index, dc.text,
+                               dc.period_year, dc.period_month, dc.category,
+                               dm.file_name, dm.document_type, dm.s3_processed_key,
+                               1.0 AS similarity
+                        FROM document_chunks dc
+                        JOIN document_metadata dm ON dc.document_id = dm.document_id
+                        WHERE {' AND '.join(conditions)}
+                        ORDER BY dc.period_year DESC NULLS LAST,
+                                 dc.period_month DESC NULLS LAST,
+                                 dc.chunk_index ASC
+                        LIMIT :limit
+                    """
                 with self._repo._engine.connect() as conn:
                     rows = conn.execute(sa_text(sql), params).mappings().all()
                 for r in rows:
@@ -305,14 +348,25 @@ class NodeFactory:
     # ── Node 5: rerank ────────────────────────────────────────────────────────
 
     def rerank(self, state: RAGState) -> dict:
-        query  = state.get("rewritten_query") or state["intent"].search_query or state["query"]
+        intent = state.get("intent")
+        query  = state.get("rewritten_query") or (intent.search_query if intent else "") or state.get("query", "")
         chunks = [r for r in state.get("fused_results", [])
                   if r.get("_source") == "chunk"]
         docs   = [r for r in state.get("fused_results", [])
                   if r.get("_source") == "document"]
 
-        reranked = self._ranker.rerank(query, chunks)
-        reranked += docs   # documents don't go through cross-encoder
+        # For year-range trend queries, the cross-encoder scores each chunk
+        # against the full multi-year query and rejects historically-relevant
+        # chunks that only match one specific year. The window-function SQL in
+        # retrieve_table already picked 2 representative chunks per year —
+        # pass them through with RRF ordering intact rather than filtering.
+        if getattr(intent, "year_from", None) and getattr(intent, "year_to", None):
+            reranked = chunks[:8] + docs
+            log.debug("node.rerank.passthrough",
+                      reason="year_range", chunks=len(reranked))
+        else:
+            reranked = self._ranker.rerank(query, chunks)
+            reranked += docs
 
         log.debug("node.rerank", input=len(chunks), output=len(reranked))
         return {"reranked_results": reranked}

@@ -605,6 +605,8 @@ class DocumentRepository:
         category: str | None = None,
         min_similarity: float = 0.0,
         document_ids: list[str] | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> list[dict]:
         """Vector similarity search using pgvector cosine distance.
 
@@ -630,6 +632,10 @@ class DocumentRepository:
         if document_ids:
             filters.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
             params["doc_ids"] = document_ids
+        if year_from and year_to:
+            filters.append("dc.period_year BETWEEN :year_from AND :year_to")
+            params["year_from"] = year_from
+            params["year_to"]   = year_to
 
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
 
@@ -669,6 +675,8 @@ class DocumentRepository:
         period_month: int | None = None,
         category: str | None = None,
         document_ids: list[str] | None = None,
+        year_from: int | None = None,
+        year_to: int | None = None,
     ) -> list[dict]:
         """Full-text keyword search via PostgreSQL tsvector / GIN index."""
         filters = ["to_tsvector('english', dc.text) @@ plainto_tsquery('english', :query)"]
@@ -686,6 +694,10 @@ class DocumentRepository:
         if document_ids:
             filters.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
             params["doc_ids"] = document_ids
+        if year_from and year_to:
+            filters.append("dc.period_year BETWEEN :year_from AND :year_to")
+            params["year_from"] = year_from
+            params["year_to"]   = year_to
 
         where = "WHERE " + " AND ".join(filters)
 
