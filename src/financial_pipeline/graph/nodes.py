@@ -103,8 +103,9 @@ class NodeFactory:
     # ── Nodes 3a–3d: parallel retrieval ──────────────────────────────────────
 
     def retrieve_dense(self, state: RAGState) -> dict:
-        intent = state["intent"]
-        query  = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        intent  = state["intent"]
+        query   = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        doc_ids = state.get("found_document_ids") or None   # set by lookup sequential path
         try:
             results = self._repo.search_similar(
                 query_embedding=self._retriever._encode(query),
@@ -112,6 +113,7 @@ class NodeFactory:
                 period_year=intent.year,
                 period_month=intent.month,
                 category=intent.category,
+                document_ids=doc_ids,
             )
             for r in results:
                 r["_source"] = "chunk"
@@ -123,8 +125,9 @@ class NodeFactory:
             return {"dense_results": []}
 
     def retrieve_sparse(self, state: RAGState) -> dict:
-        intent = state["intent"]
-        query  = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        intent  = state["intent"]
+        query   = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        doc_ids = state.get("found_document_ids") or None   # set by lookup sequential path
         try:
             results = self._repo.search_fulltext(
                 query=query,
@@ -132,6 +135,7 @@ class NodeFactory:
                 period_year=intent.year,
                 period_month=intent.month,
                 category=intent.category,
+                document_ids=doc_ids,
             )
             for r in results:
                 r["_source"] = "chunk"
@@ -144,6 +148,7 @@ class NodeFactory:
 
     def retrieve_table(self, state: RAGState) -> dict:
         intent  = state["intent"]
+        doc_ids = state.get("found_document_ids") or None   # set by lookup sequential path
         results = []
 
         # Exact-match injection for known scheme types
@@ -161,6 +166,9 @@ class NodeFactory:
                 if intent.category:
                     conditions.append("dc.category = :cat")
                     params["cat"] = intent.category
+                if doc_ids:
+                    conditions.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
+                    params["doc_ids"] = doc_ids
 
                 sql = f"""
                     SELECT dc.chunk_id, dc.chunk_index, dc.text,
@@ -223,6 +231,56 @@ class NodeFactory:
         except Exception as exc:
             log.warning("node.retrieve_metadata.failed", error=str(exc))
             return {"metadata_results": []}
+
+    # ── Sequential lookup path: metadata first ────────────────────────────────
+
+    def retrieve_metadata_first(self, state: RAGState) -> dict:
+        """Phase 1 of the lookup sequential path.
+
+        Runs the same metadata query as retrieve_metadata but additionally
+        extracts document_ids so downstream retrieve_dense/sparse/table nodes
+        can scope their search to exactly those documents.
+        """
+        intent = state["intent"]
+        try:
+            from sqlalchemy import text as sa_text
+            conditions = ["1=1"]
+            params: dict = {"limit": 5}
+            if intent.year:
+                conditions.append("period_year = :year")
+                params["year"] = intent.year
+            if intent.month:
+                conditions.append("period_month = :month")
+                params["month"] = intent.month
+            if intent.category:
+                conditions.append("category = :cat")
+                params["cat"] = intent.category
+
+            sql = f"""
+                SELECT document_id, file_name, file_type, category,
+                       period_year, period_month, s3_processed_key
+                FROM document_metadata
+                WHERE {' AND '.join(conditions)}
+                ORDER BY period_year DESC NULLS LAST,
+                         period_month DESC NULLS LAST
+                LIMIT :limit
+            """
+            with self._repo._engine.connect() as conn:
+                rows = conn.execute(sa_text(sql), params).mappings().all()
+
+            results      = [dict(r) | {"_source": "document"} for r in rows]
+            doc_ids      = [str(r["document_id"]) for r in rows]
+
+            log.info("node.retrieve_metadata_first",
+                     found=len(doc_ids),
+                     doc_ids=doc_ids[:3])
+            return {
+                "metadata_results":    results,
+                "found_document_ids":  doc_ids,
+            }
+        except Exception as exc:
+            log.warning("node.retrieve_metadata_first.failed", error=str(exc))
+            return {"metadata_results": [], "found_document_ids": []}
 
     # ── Node 4: rrf_fusion ────────────────────────────────────────────────────
 

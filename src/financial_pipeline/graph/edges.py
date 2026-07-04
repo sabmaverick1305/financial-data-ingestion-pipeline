@@ -5,10 +5,11 @@ that LangGraph uses to select the next node.
 
 Edge map
 --------
-after_grade          : grade_context → augment | rewrite_query | format_response
-after_pre_guardrail  : pre_guardrail → generate | format_response
-after_post_guardrail : post_guardrail → repair  | format_response
-fan_out              : route → [Send × active_branches]  (parallel fan-out)
+after_grade            : grade_context → augment | rewrite_query | format_response
+after_pre_guardrail    : pre_guardrail → generate | format_response
+after_post_guardrail   : post_guardrail → repair  | format_response
+after_route            : route → retrieve_metadata_first (lookup) | parallel fan-out
+after_metadata_first   : retrieve_metadata_first → targeted fan-out | fallback fan-out
 """
 from __future__ import annotations
 
@@ -86,16 +87,48 @@ def after_post_guardrail(state: RAGState) -> str:
     return "format_response"
 
 
-# ── Edge 4: fan_out (route → parallel retrieval branches) ─────────────────────
+# ── Edge 4a: internal fan-out helper ─────────────────────────────────────────
 
-def fan_out(state: RAGState) -> list[Send]:
-    """Fan-out from route to one or more retrieval branch nodes in parallel.
+def _fan_out(state: RAGState) -> list[Send]:
+    """Internal helper: parallel fan-out to all active retrieval branches.
 
-    LangGraph executes all Send targets concurrently.  Each branch node
-    writes only to its own result key (dense_results, sparse_results, …)
-    so there are no write conflicts.
-
-    Only branches listed in state["active_branches"] are activated.
+    Each branch node writes only to its own result key so there are no
+    write conflicts. LangGraph executes all Send targets concurrently.
     """
     branches = state.get("active_branches", ["dense", "sparse"])
     return [Send(f"retrieve_{branch}", state) for branch in branches]
+
+
+# ── Edge 4b: after_route (replaces bare fan_out on the route node) ───────────
+
+def after_route(state: RAGState):
+    """Route after the route node.
+
+    lookup intent → retrieve_metadata_first (sequential: find doc first)
+    all others    → parallel fan-out via _fan_out
+    """
+    intent = state.get("intent")
+    if intent and intent.intent_type == "lookup":
+        return "retrieve_metadata_first"
+    return _fan_out(state)
+
+
+# ── Edge 4c: after_metadata_first ────────────────────────────────────────────
+
+def after_metadata_first(state: RAGState) -> list[Send]:
+    """Route after retrieve_metadata_first (Phase 1 of lookup sequential path).
+
+    found_document_ids set  → targeted fan-out scoped to those document IDs
+    found_document_ids empty → fallback to normal parallel fan-out
+    """
+    doc_ids  = state.get("found_document_ids", [])
+    # Never re-invoke metadata — it already ran in Phase 1
+    branches = [b for b in state.get("active_branches", ["dense", "sparse"])
+                if b != "metadata"]
+
+    if doc_ids:
+        # Phase 2: search inside the found documents only
+        return [Send(f"retrieve_{b}", state) for b in branches]
+
+    # Fallback: document not found in metadata → normal parallel search
+    return _fan_out(state)

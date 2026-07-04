@@ -20,9 +20,10 @@ from langgraph.graph import END, StateGraph
 
 from financial_pipeline.graph.edges import (
     after_grade,
+    after_metadata_first,
     after_post_guardrail,
     after_pre_guardrail,
-    fan_out,
+    after_route,
 )
 from financial_pipeline.graph.nodes import NodeFactory
 from financial_pipeline.graph.state import RAGState
@@ -50,8 +51,9 @@ def build_graph(factory: NodeFactory):
     g.add_node("retrieve_dense",    factory.retrieve_dense)
     g.add_node("retrieve_sparse",   factory.retrieve_sparse)
     g.add_node("retrieve_table",    factory.retrieve_table)
-    g.add_node("retrieve_metadata", factory.retrieve_metadata)
-    g.add_node("rrf_fusion",        factory.rrf_fusion)
+    g.add_node("retrieve_metadata",       factory.retrieve_metadata)
+    g.add_node("retrieve_metadata_first", factory.retrieve_metadata_first)
+    g.add_node("rrf_fusion",              factory.rrf_fusion)
     g.add_node("rerank",            factory.rerank)
     g.add_node("context_optimizer", factory.context_optimizer)
     g.add_node("grade_context",     factory.grade_context)
@@ -77,14 +79,20 @@ def build_graph(factory: NodeFactory):
     g.add_edge("repair",            "post_guardrail")   # bounded repair loop
     g.add_edge("format_response",   END)
 
-    # ── Parallel fan-out: route → retrieval branches ───────────────────────
-    # fan_out returns [Send("retrieve_dense", state), Send("retrieve_sparse", state), …]
-    # LangGraph executes all Send targets concurrently then merges at rrf_fusion.
-    g.add_conditional_edges("route", fan_out)
+    # ── Routing from route node ────────────────────────────────────────────
+    # lookup intent  → retrieve_metadata_first (sequential: find doc first)
+    # all others     → parallel fan-out via Send
+    g.add_conditional_edges("route", after_route)
 
-    # Fan-in: every retrieval branch converges at rrf_fusion
+    # Fan-in: parallel retrieval branches converge at rrf_fusion
     for branch in ("dense", "sparse", "table", "metadata"):
         g.add_edge(f"retrieve_{branch}", "rrf_fusion")
+
+    # ── Sequential lookup path ─────────────────────────────────────────────
+    # retrieve_metadata_first → targeted fan-out (doc IDs found)
+    #                         → fallback fan-out  (doc IDs empty)
+    # Both paths converge at rrf_fusion via the branch edges above.
+    g.add_conditional_edges("retrieve_metadata_first", after_metadata_first)
 
     # ── Conditional edges ──────────────────────────────────────────────────
     g.add_conditional_edges(

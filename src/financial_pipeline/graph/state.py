@@ -20,6 +20,10 @@ class RAGState(TypedDict, total=False):
     intent:            QueryIntent
     active_branches:   list[str]   # ["dense","sparse","table","metadata"]
 
+    # ── sequential lookup path ────────────────────────────
+    found_document_ids: list[str]   # set by retrieve_metadata_first;
+                                    # empty = not found → fallback to parallel
+
     # ── parallel retrieval ─────────────────────────────────
     dense_results:     list[dict]
     sparse_results:    list[dict]

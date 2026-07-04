@@ -604,11 +604,13 @@ class DocumentRepository:
         period_month: int | None = None,
         category: str | None = None,
         min_similarity: float = 0.0,
+        document_ids: list[str] | None = None,
     ) -> list[dict]:
         """Vector similarity search using pgvector cosine distance.
 
         Returns chunks ranked by cosine similarity to the query embedding,
-        with optional filters on year, month, and document category.
+        with optional filters on year, month, document category, and
+        a specific set of document_ids (used by the lookup sequential path).
         """
         filters = []
         params: dict = {
@@ -625,6 +627,9 @@ class DocumentRepository:
         if category is not None:
             filters.append("dc.category = :category")
             params["category"] = category
+        if document_ids:
+            filters.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
+            params["doc_ids"] = document_ids
 
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
 
@@ -663,6 +668,7 @@ class DocumentRepository:
         period_year: int | None = None,
         period_month: int | None = None,
         category: str | None = None,
+        document_ids: list[str] | None = None,
     ) -> list[dict]:
         """Full-text keyword search via PostgreSQL tsvector / GIN index."""
         filters = ["to_tsvector('english', dc.text) @@ plainto_tsquery('english', :query)"]
@@ -677,6 +683,9 @@ class DocumentRepository:
         if category is not None:
             filters.append("dc.category = :category")
             params["category"] = category
+        if document_ids:
+            filters.append("CAST(dc.document_id AS text) = ANY(:doc_ids)")
+            params["doc_ids"] = document_ids
 
         where = "WHERE " + " AND ".join(filters)
 
