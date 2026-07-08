@@ -100,7 +100,8 @@ class Settings(BaseSettings):
     # job resolves the latest dated snapshot automatically (see s3_source.py).
     mf_scheme_master_s3_prefix: str = "amfi/mf_scheme_master/raw"
     mfapi_default_start_date: str = "2000-01-01"
-    mfapi_request_delay_seconds: float = 0.3
+    mfapi_request_delay_seconds: float = 0.15
+    mfapi_max_workers: int = 10
 
     # Postgres-backed LangGraph checkpointer (storage/checkpointer.py) —
     # persists every node's state per thread_id, enabling replay/resumability.

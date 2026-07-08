@@ -112,7 +112,8 @@ code = (
     ')\n'
     'print(result)\n'
 )
-print(json.dumps(["python", "-c", code]))
+# ENTRYPOINT is ["python"] — do not repeat "python" in the command override.
+print(json.dumps(["-c", code]))
 PYEOF
 )
 

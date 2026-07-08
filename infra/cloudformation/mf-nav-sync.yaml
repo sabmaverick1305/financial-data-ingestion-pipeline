@@ -83,8 +83,10 @@ Resources:
           Essential: true
           # Default command = incremental sync (last N days). The one-time
           # full historical backfill overrides this command at run-task time.
+          # NOTE: Dockerfile's ENTRYPOINT is ["python"] — do not repeat
+          # "python" here, or ECS runs `python python -c ...` and fails
+          # trying to open a file literally named "python".
           Command:
-            - python
             - -c
             - !Sub |
               import sys; sys.path.insert(0, "src")

@@ -130,10 +130,18 @@ class MFIngestionRepository:
             )
 
     def upsert_nav_history(self, records: list[NavRecord], raw_s3_key: str | None = None) -> tuple[int, int]:
-        """Bulk upsert for one scheme's NAV rows. Returns (inserted, updated)."""
+        """Bulk upsert for one scheme's NAV rows. Returns (inserted, updated).
+
+        Batches all rows into a handful of multi-row INSERT statements (one
+        round trip per batch) rather than SQLAlchemy's default executemany,
+        which issues one round trip per row via the DBAPI — at ~250ms RTT to
+        a cross-region RDS instance that's ~30 min for a single scheme's
+        26-year NAV history instead of ~1s.
+        """
         if not records:
             return (0, 0)
         scheme_code = records[0].scheme_code
+        batch_size = 1000
         with self._engine.begin() as conn:
             existing = conn.execute(
                 text("SELECT nav_date FROM mf_nav_history WHERE scheme_code = :scheme_code"),
@@ -144,20 +152,28 @@ class MFIngestionRepository:
             updated = len(new_dates & existing_dates)
             inserted = len(new_dates - existing_dates)
 
-            conn.execute(
-                text("""
-                    INSERT INTO mf_nav_history (scheme_code, nav_date, nav, source, raw_s3_key, created_at, updated_at)
-                    VALUES (:scheme_code, :nav_date, :nav, 'mfapi', :raw_s3_key, NOW(), NOW())
-                    ON CONFLICT (scheme_code, nav_date) DO UPDATE SET
-                        nav = EXCLUDED.nav,
-                        raw_s3_key = EXCLUDED.raw_s3_key,
-                        updated_at = NOW()
-                """),
-                [
-                    {"scheme_code": r.scheme_code, "nav_date": r.nav_date, "nav": r.nav, "raw_s3_key": raw_s3_key}
-                    for r in records
-                ],
-            )
+            for batch_start in range(0, len(records), batch_size):
+                batch = records[batch_start : batch_start + batch_size]
+                value_rows = []
+                params: dict[str, object] = {}
+                for i, r in enumerate(batch):
+                    value_rows.append(f"(:scheme_code_{i}, :nav_date_{i}, :nav_{i}, 'mfapi', :raw_s3_key, NOW(), NOW())")
+                    params[f"scheme_code_{i}"] = r.scheme_code
+                    params[f"nav_date_{i}"] = r.nav_date
+                    params[f"nav_{i}"] = r.nav
+                params["raw_s3_key"] = raw_s3_key
+
+                conn.execute(
+                    text(f"""
+                        INSERT INTO mf_nav_history (scheme_code, nav_date, nav, source, raw_s3_key, created_at, updated_at)
+                        VALUES {", ".join(value_rows)}
+                        ON CONFLICT (scheme_code, nav_date) DO UPDATE SET
+                            nav = EXCLUDED.nav,
+                            raw_s3_key = EXCLUDED.raw_s3_key,
+                            updated_at = NOW()
+                    """),
+                    params,
+                )
         return (inserted, updated)
 
     def upsert_sync_status(

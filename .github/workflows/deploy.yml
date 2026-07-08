@@ -153,7 +153,10 @@ jobs:
             --query 'taskDefinition' --output json)
 
           # Override container command to run the schema migration
-          MIGRATE_CMD='["python", "-c", "import sys; sys.path.insert(0,\"src\"); from financial_pipeline.config import settings; from financial_pipeline.storage.document_repo import DocumentRepository; r=DocumentRepository(settings.postgres_url); r.create_tables(); print(\"Migration complete\")"]'
+          # Dockerfile's ENTRYPOINT is ["python"] — the command must NOT repeat
+          # "python" itself (that would run `python python -c ...`, which fails
+          # trying to open a file literally named "python").
+          MIGRATE_CMD='["-c", "import sys; sys.path.insert(0,\"src\"); from financial_pipeline.config import settings; from financial_pipeline.storage.document_repo import DocumentRepository; r=DocumentRepository(settings.postgres_url); r.create_tables(); print(\"Migration complete\")"]'
 
           NEW_DEF=$(echo "$TASK_DEF" | jq \
             --arg image "$IMAGE" \
