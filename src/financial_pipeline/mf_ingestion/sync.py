@@ -211,14 +211,29 @@ def run_sync(
         requested_end_date=date.fromisoformat(end_date),
     )
 
-    valid: list[SchemeRecord] = []
+    # The S3 scheme-master snapshot has been observed to contain each
+    # scheme_code exactly twice (byte-identical duplicate entries) — dedupe
+    # here so every scheme is fetched/upserted once, not twice. Without this,
+    # duplicate scheme_codes get submitted as separate concurrent futures,
+    # doubling API calls and DB writes for no benefit (upserts are idempotent,
+    # so the second pass just re-does the same work the first one already did).
+    valid_by_code: dict[str, SchemeRecord] = {}
     invalid_count = 0
+    duplicate_count = 0
     for raw in raw_records:
         try:
-            valid.append(parse_scheme_record(raw))
+            parsed = parse_scheme_record(raw)
         except InvalidSchemeRecord as exc:
             invalid_count += 1
             run_log.warning("mf_ingestion.invalid_record", reason=exc.reason, raw=exc.raw)
+            continue
+        if parsed.scheme_code in valid_by_code:
+            duplicate_count += 1
+        else:
+            valid_by_code[parsed.scheme_code] = parsed
+    valid: list[SchemeRecord] = list(valid_by_code.values())
+    if duplicate_count:
+        run_log.info("mf_ingestion.duplicates_skipped", duplicate_count=duplicate_count, unique_schemes=len(valid))
 
     counts = {f"{k}_count": 0 for k in _STATUS_COUNT_KEYS}
     counts["nav_rows_inserted"] = 0

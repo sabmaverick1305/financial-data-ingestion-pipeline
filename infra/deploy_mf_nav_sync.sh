@@ -88,9 +88,13 @@ cmd_status() {
 }
 
 cmd_backfill() {
-  TASKDEF=$(_aws cloudformation describe-stacks \
-    --stack-name "$STACK_NAME" \
-    --query "Stacks[0].Outputs[?OutputKey=='TaskDefinitionArn'].OutputValue" --output text)
+  # NOTE: resolve the LATEST task definition revision directly, not via the
+  # CloudFormation stack's TaskDefinitionArn output — CI's update-workers job
+  # registers new revisions (image bumps) by calling the ECS API directly, so
+  # the CFN-tracked revision drifts stale as soon as CI runs after a deploy.
+  TASKDEF=$(_aws ecs describe-task-definition \
+    --task-definition amfi-mf-nav-sync-worker \
+    --query "taskDefinition.taskDefinitionArn" --output text)
   CLUSTER=$(_aws cloudformation describe-stacks \
     --stack-name "$STACK_NAME" \
     --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" --output text)
