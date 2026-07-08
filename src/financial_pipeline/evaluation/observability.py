@@ -261,9 +261,133 @@ class MetricsEmitter:
         return self._client
 
 
+# ── LangSmith per-run feedback emitter ───────────────────────────────────────
+
+# Metrics emitted as LangSmith feedback keys (all scores in [0, 1]):
+_LS_FEEDBACK_KEYS: list[tuple[str, str]] = [
+    ("faithfulness_embed",   "Answer embedding cosine similarity vs cited chunks"),
+    ("citation_coverage",    "Fraction of answer sentences with a [N] citation"),
+    ("citation_validity",    "Fraction of [N] markers pointing to a valid source"),
+    ("keyword_recall",       "Fraction of expected keywords found in answer/sources"),
+    ("numeric_precision",    "Fraction of numbers in answer grounded in cited sources"),
+    ("expected_num_hit",     "Fraction of expected numbers found in answer/sources"),
+    ("abstention_correct",   "Abstention behaviour matched expectation (bool → 0/1)"),
+    ("pre_blocked",          "Pre-guardrail blocked the query (bool → 0/1)"),
+    ("post_passed",          "Post-guardrail passed (bool → 0/1)"),
+]
+
+
+class LangSmithFeedbackEmitter:
+    """Pushes per-case eval metric scores as LangSmith run feedback.
+
+    Each eval case produces one LangGraph run (identified by a UUID passed
+    via RunnableConfig). After the case completes, call record_case() to
+    attach all metric scores to that run in LangSmith.
+
+    No-ops silently when LANGSMITH_API_KEY is not set or the SDK is absent.
+    """
+
+    def __init__(self) -> None:
+        self._client = None
+        self._enabled: bool | None = None   # None = uninitialised
+
+    def _get_client(self):
+        if self._enabled is False:
+            return None
+        if self._client is not None:
+            return self._client
+        try:
+            import os
+            from langsmith import Client
+            if not os.environ.get("LANGSMITH_API_KEY"):
+                self._enabled = False
+                return None
+            self._client = Client()
+            self._enabled = True
+            log.info("langsmith.feedback_emitter_ready")
+            return self._client
+        except Exception as exc:
+            log.warning("langsmith.client_init_failed", error=str(exc))
+            self._enabled = False
+            return None
+
+    def record_case(self, run_id: str | None, result: dict) -> None:
+        """Attach per-case metric scores to the LangSmith run identified by run_id."""
+        client = self._get_client()
+        if client is None or not run_id:
+            return
+
+        for key, comment in _LS_FEEDBACK_KEYS:
+            val = result.get(key)
+            if val is None:
+                continue
+            # Booleans → 1.0/0.0; floats kept as-is; skip unavailable (-1)
+            if isinstance(val, bool):
+                score = 1.0 if val else 0.0
+            else:
+                score = float(val)
+                if score < 0:
+                    continue
+
+            try:
+                client.create_feedback(
+                    run_id=run_id,
+                    key=key,
+                    score=score,
+                    comment=comment,
+                )
+            except Exception as exc:
+                log.warning("langsmith.feedback_failed", key=key, error=str(exc))
+
+    def record_aggregate(self, run_id: str | None, metrics) -> None:
+        """Attach aggregated EvalMetrics scores to a summary run in LangSmith.
+
+        metrics is an EvalMetrics dataclass instance.
+        """
+        client = self._get_client()
+        if client is None or not run_id:
+            return
+
+        aggregate_keys = [
+            ("hit_at_5",               "Retrieval Hit@5"),
+            ("hit_at_10",              "Retrieval Hit@10"),
+            ("mrr",                    "Mean Reciprocal Rank"),
+            ("ndcg_at_10",             "NDCG@10"),
+            ("ce_avg_improvement",     "Cross-encoder avg rank improvement"),
+            ("ce_promotion_rate",      "Cross-encoder promotion rate"),
+            ("citation_coverage_avg",  "Avg citation coverage across cases"),
+            ("citation_validity_avg",  "Avg citation validity across cases"),
+            ("faithfulness_avg",       "Avg faithfulness (embedding cosine sim)"),
+            ("keyword_recall_avg",     "Avg keyword recall"),
+            ("abstention_acc",         "Abstention accuracy"),
+            ("numeric_precision_avg",  "Avg numeric precision"),
+            ("expected_number_hit_avg","Avg expected number hit rate"),
+            ("advice_block_rate",      "Investment-advice block rate (goal: 1.0)"),
+            ("false_positive_rate",    "False-positive block rate (goal: 0.0)"),
+            ("safety_catch_rate",      "Safety catch rate"),
+        ]
+        for attr, comment in aggregate_keys:
+            val = getattr(metrics, attr, None)
+            if val is None:
+                continue
+            score = float(val)
+            if score < 0:
+                continue
+            try:
+                client.create_feedback(
+                    run_id=run_id,
+                    key=f"aggregate.{attr}",
+                    score=score,
+                    comment=comment,
+                )
+            except Exception as exc:
+                log.warning("langsmith.aggregate_feedback_failed", key=attr, error=str(exc))
+
+
 # ── Module-level singleton ────────────────────────────────────────────────────
 # Import and use this in api/main.py:
 #   from financial_pipeline.evaluation.observability import emitter
 #   emitter.record(trace)
 
 emitter = MetricsEmitter()
+ls_feedback = LangSmithFeedbackEmitter()

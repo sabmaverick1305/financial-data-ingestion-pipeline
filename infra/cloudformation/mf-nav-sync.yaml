@@ -1,0 +1,183 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Mutual fund scheme/NAV sync pipeline (mfapi.in).
+  Flow: EventBridge Scheduler → ECS Fargate task (amfi-mf-nav-sync-worker) →
+  reads the latest scheme-master snapshot from S3, fetches per-scheme NAV
+  history from api.mfapi.in, upserts into Postgres (mf_scheme_master,
+  mf_nav_history, mf_scheme_sync_status, mf_ingestion_log).
+  Reuses the existing amfi-doc-processor image, ECS cluster, and IAM roles —
+  independent of the AMFI PDF pipeline's own task definitions.
+
+Parameters:
+
+  EcsClusterName:
+    Type: String
+    Default: weather-agent-cluster
+    Description: Existing ECS cluster (shared with the AMFI PDF pipeline workers).
+
+  EcrImage:
+    Type: String
+    Description: Full ECR image URI (repo:tag) to run — must contain the mf_ingestion module.
+
+  TaskRoleArn:
+    Type: String
+    Default: arn:aws:iam::468895762981:role/amfi-doc-processor-task-role
+    Description: Existing task role — already grants s3:GetObject/PutObject/ListBucket on mf-finance-kb.
+
+  ExecutionRoleArn:
+    Type: String
+    Default: arn:aws:iam::468895762981:role/amfi-ecs-execution-role
+    Description: Existing ECS task execution role (ECR pull + CloudWatch Logs).
+
+  Subnet:
+    Type: String
+    Default: subnet-089bc3cd1c8760332
+
+  SecurityGroup:
+    Type: String
+    Default: sg-0eecd839abfcf4daa
+
+  PostgresUrl:
+    Type: String
+    NoEcho: true
+    Description: SQLAlchemy Postgres URL (same DB as the AMFI PDF pipeline workers).
+
+  S3Bucket:
+    Type: String
+    Default: mf-finance-kb
+
+  IncrementalLookbackDays:
+    Type: Number
+    Default: 10
+    Description: >
+      Days of NAV history the daily schedule re-fetches (upserts are
+      idempotent, so overlap with the previous run is harmless — this just
+      covers gaps from a missed/failed run). The one-time full backfill
+      (2000-01-01 onward) is run manually via `aws ecs run-task` with a
+      command override, not through this schedule.
+
+  ScheduleExpression:
+    Type: String
+    Default: "cron(0 4 * * ? *)"
+    Description: Daily incremental sync. Default = 09:30 IST (04:00 UTC).
+
+# ---------------------------------------------------------------------------
+Resources:
+
+  MfNavSyncTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: amfi-mf-nav-sync-worker
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: "1024"
+      Memory: "2048"
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      TaskRoleArn: !Ref TaskRoleArn
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      ContainerDefinitions:
+        - Name: mf-nav-sync
+          Image: !Ref EcrImage
+          Essential: true
+          # Default command = incremental sync (last N days). The one-time
+          # full historical backfill overrides this command at run-task time.
+          Command:
+            - python
+            - -c
+            - !Sub |
+              import sys; sys.path.insert(0, "src")
+              from datetime import date, timedelta
+              from financial_pipeline.config import settings
+              from financial_pipeline.mf_ingestion.sync import run_sync
+              result = run_sync(
+                  postgres_url=settings.postgres_url,
+                  s3_bucket=settings.s3_bucket,
+                  s3_prefix=settings.mf_scheme_master_s3_prefix,
+                  aws_region=settings.aws_region,
+                  start_date=(date.today() - timedelta(days=${IncrementalLookbackDays})).isoformat(),
+                  request_delay_seconds=settings.mfapi_request_delay_seconds,
+              )
+              print(result)
+          Environment:
+            - Name: POSTGRES_URL
+              Value: !Ref PostgresUrl
+            - Name: S3_BUCKET
+              Value: !Ref S3Bucket
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/amfi-doc-processor
+              awslogs-create-group: "true"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: mf-nav-sync-worker
+
+  SchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-scheduler-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: RunMfNavSyncTask
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource: !Ref MfNavSyncTaskDefinition
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !Ref TaskRoleArn
+                  - !Ref ExecutionRoleArn
+
+  MfNavSyncDailySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-daily-incremental"
+      Description: "Daily incremental mfapi.in NAV sync (last N days) → Postgres."
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Asia/Kolkata
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsClusterName}"
+        RoleArn: !GetAtt SchedulerExecutionRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 1
+          MaximumEventAgeInSeconds: 3600
+        EcsParameters:
+          TaskDefinitionArn: !Ref MfNavSyncTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              Subnets: [!Ref Subnet]
+              SecurityGroups: [!Ref SecurityGroup]
+              AssignPublicIp: ENABLED
+
+# ---------------------------------------------------------------------------
+Outputs:
+
+  TaskDefinitionArn:
+    Value: !Ref MfNavSyncTaskDefinition
+    Export:
+      Name: !Sub "${AWS::StackName}-taskdef"
+
+  ScheduleName:
+    Value: !Ref MfNavSyncDailySchedule
+
+  ClusterName:
+    Value: !Ref EcsClusterName

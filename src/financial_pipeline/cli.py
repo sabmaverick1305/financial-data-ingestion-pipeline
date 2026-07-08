@@ -31,3 +31,26 @@ def run(source: str, run_date: str | None) -> None:
 def sources() -> None:
     """List all registered ingestion sources."""
     click.echo("No sources registered yet.")
+
+
+@main.command("mf-nav-sync")
+@click.option("--s3-key", default=None, help="Scheme-master JSON key in S3 (defaults to settings.mf_scheme_master_s3_key)")
+@click.option("--start-date", default=None, help="NAV history start date, YYYY-MM-DD (default: settings.mfapi_default_start_date)")
+@click.option("--end-date", default=None, help="NAV history end date, YYYY-MM-DD (default: today)")
+def mf_nav_sync(s3_key: str | None, start_date: str | None, end_date: str | None) -> None:
+    """Sync mutual fund scheme master + NAV history from mfapi.in into Postgres."""
+    from financial_pipeline.mf_ingestion.sync import run_sync
+
+    result = run_sync(
+        postgres_url=settings.postgres_url,
+        s3_bucket=settings.s3_bucket,
+        s3_key=s3_key,
+        s3_prefix=settings.mf_scheme_master_s3_prefix,
+        aws_region=settings.aws_region,
+        aws_access_key_id=settings.aws_access_key_id or None,
+        aws_secret_access_key=settings.aws_secret_access_key or None,
+        start_date=start_date or settings.mfapi_default_start_date,
+        end_date=end_date,
+        request_delay_seconds=settings.mfapi_request_delay_seconds,
+    )
+    click.echo(result)

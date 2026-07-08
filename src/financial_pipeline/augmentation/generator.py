@@ -51,9 +51,24 @@ class AnswerGenerator:
 
     MAX_RETRIES = 2
 
-    def __init__(self, model: str | None = None) -> None:
-        self._model = model or settings.active_llm_model
+    def __init__(self, model: str | None = None, provider: str | None = None) -> None:
+        """provider: force "openai" or "anthropic" for this instance, bypassing
+        settings.llm_provider auto-detection. None (default) preserves the
+        existing global-settings behavior exactly."""
+        self._provider_override = provider
+        if model:
+            self._model = model
+        elif provider == "openai":
+            self._model = settings.openai_model
+        elif provider == "anthropic":
+            self._model = settings.anthropic_model
+        else:
+            self._model = settings.active_llm_model
         self._client = None
+
+    @property
+    def _provider(self) -> str:
+        return self._provider_override or settings.llm_provider
 
     def generate(
         self,
@@ -63,23 +78,28 @@ class AnswerGenerator:
         max_tokens: int = 1024,
     ) -> GenerationResult:
         t0 = time.perf_counter()
-        model = model or self._model
         temperature = INTENT_TEMPERATURE.get(intent_type, 0.10)
-        provider = settings.llm_provider
 
-        for attempt in range(self.MAX_RETRIES + 1):
-            try:
-                if provider == "anthropic":
-                    answer, usage = self._call_anthropic(messages, model, temperature, max_tokens)
-                else:
-                    answer, usage = self._call_openai(messages, model, temperature, max_tokens)
-                break
-            except Exception as exc:
-                if attempt == self.MAX_RETRIES:
-                    raise
-                wait = 2**attempt
-                log.warning("generator.retry", attempt=attempt + 1, wait=wait, error=str(exc))
-                time.sleep(wait)
+        if settings.use_bedrock and self._provider_override is None:
+            model    = model or settings.bedrock_model_id
+            provider = "bedrock"
+            answer, usage = self._call_anthropic(messages, model, temperature, max_tokens)
+        else:
+            model    = model or self._model
+            provider = self._provider
+            for attempt in range(self.MAX_RETRIES + 1):
+                try:
+                    if provider == "anthropic":
+                        answer, usage = self._call_anthropic(messages, model, temperature, max_tokens)
+                    else:
+                        answer, usage = self._call_openai(messages, model, temperature, max_tokens)
+                    break
+                except Exception as exc:
+                    if attempt == self.MAX_RETRIES:
+                        raise
+                    wait = 2**attempt
+                    log.warning("generator.retry", attempt=attempt + 1, wait=wait, error=str(exc))
+                    time.sleep(wait)
 
         latency = int((time.perf_counter() - t0) * 1000)
         log.info(
@@ -101,25 +121,41 @@ class AnswerGenerator:
         )
 
     def is_configured(self) -> bool:
-        return bool(settings.openai_api_key)
+        return bool(settings.openai_api_key) or settings.use_bedrock
 
     # ------------------------------------------------------------------
 
     def _get_client(self):
         if self._client is None:
-            if not settings.openai_api_key:
-                raise ValueError(
-                    "No LLM API key configured. Set OPENAI_API_KEY (OpenAI) or an Anthropic key (sk-ant-...) in .env"
+            if settings.use_bedrock and self._provider_override is None:
+                from anthropic import AnthropicBedrock
+                self._client = AnthropicBedrock(
+                    aws_region=settings.bedrock_region,
+                    # Pass explicit credentials only when set; otherwise falls back
+                    # to boto3 credential chain (IAM role, env vars, ~/.aws/credentials)
+                    aws_access_key=settings.aws_access_key_id or None,
+                    aws_secret_key=settings.aws_secret_access_key or None,
                 )
-            if settings.llm_provider == "anthropic":
+                log.info("generator.bedrock_client_ready",
+                         region=settings.bedrock_region,
+                         model=settings.bedrock_model_id)
+            elif self._provider == "anthropic":
                 from anthropic import Anthropic
-
                 self._client = Anthropic(api_key=settings.openai_api_key)
             else:
+                # The routed "openai" tier uses its own dedicated key, since
+                # openai_api_key is frequently actually an Anthropic key here.
+                api_key = settings.openai_api_key
+                if self._provider_override == "openai":
+                    api_key = settings.openai_mini_api_key or settings.openai_api_key
+                if not api_key:
+                    raise ValueError(
+                        "No LLM API key configured. Set OPENAI_API_KEY "
+                        "(or OPENAI_MINI_API_KEY for the routed tier) or USE_BEDROCK=true in .env"
+                    )
                 from openai import OpenAI
-
                 self._client = OpenAI(
-                    api_key=settings.openai_api_key,
+                    api_key=api_key,
                     base_url=settings.openai_base_url,
                 )
         return self._client

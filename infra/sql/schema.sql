@@ -152,6 +152,133 @@ CREATE INDEX IF NOT EXISTS idx_table_assets_document_id
 CREATE INDEX IF NOT EXISTS idx_table_assets_page
   ON document_table_assets (document_id, page_number);
 
+-- ── /api/ask request/answer log — keyed by query_id, for feedback and eval
+-- linkage. Managed by src/financial_pipeline/storage/query_log.py, created
+-- at API startup, not part of the ingestion pipeline's tables above.
+-- Separate from LangGraph's own checkpoint_* tables (created by
+-- PostgresSaver.setup() — see storage/checkpointer.py), which persist
+-- node-by-node graph STATE keyed by thread_id, not this flat summary.
+CREATE TABLE IF NOT EXISTS query_log (
+  query_id          UUID PRIMARY KEY,
+  thread_id         UUID NOT NULL,
+  question          TEXT NOT NULL,
+  answer            TEXT,
+  intent_type       TEXT,
+  route             TEXT,
+  citations_count   INT,
+  latency_ms        INT,
+  blocked           BOOLEAN DEFAULT FALSE,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  feedback_rating   INT,
+  feedback_comment  TEXT,
+  feedback_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_query_log_thread_id
+  ON query_log (thread_id);
+
+CREATE INDEX IF NOT EXISTS idx_query_log_created_at
+  ON query_log (created_at);
+
+-- ── mf_scheme_master / mf_nav_history / mf_scheme_sync_status ─────────────────
+-- Per-scheme master data, daily NAV time series, and per-scheme sync/backfill
+-- tracking, sourced from mfapi.in. Separate from document_metadata/
+-- document_chunks (AMFI monthly/quarterly PDF ingestion) — this is a distinct
+-- scheme-level dataset keyed by scheme_code (mfapi's TEXT scheme code, not the
+-- AMFI PDF pipeline's document_id).
+CREATE TABLE IF NOT EXISTS mf_scheme_master (
+  scheme_code   TEXT PRIMARY KEY,
+  scheme_name   TEXT NOT NULL,
+  amc_name      TEXT,
+  category      TEXT,
+  scheme_type   TEXT,
+  is_active     BOOLEAN DEFAULT TRUE,
+  source        TEXT DEFAULT 'mfapi',
+  raw_s3_key    TEXT,
+  created_at    TIMESTAMP DEFAULT NOW(),
+  updated_at    TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS mf_nav_history (
+  scheme_code  TEXT REFERENCES mf_scheme_master(scheme_code),
+  nav_date     DATE NOT NULL,
+  nav          NUMERIC NOT NULL,
+  source       TEXT DEFAULT 'mfapi',
+  raw_s3_key   TEXT,
+  created_at   TIMESTAMP DEFAULT NOW(),
+  updated_at   TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (scheme_code, nav_date)
+);
+
+-- Per-scheme sync/backfill bookkeeping — one row per scheme, updated on every
+-- fetch attempt so a resumable ingestion job can pick up where it left off.
+CREATE TABLE IF NOT EXISTS mf_scheme_sync_status (
+  scheme_code  TEXT PRIMARY KEY REFERENCES mf_scheme_master(scheme_code),
+
+  sync_status  TEXT NOT NULL DEFAULT 'pending',
+  -- pending | in_progress | success | failed | rate_limited | no_data | inactive
+
+  requested_start_date  DATE,
+  requested_end_date    DATE,
+
+  last_success_at  TIMESTAMP,
+  last_failed_at   TIMESTAMP,
+  last_attempt_at  TIMESTAMP,
+
+  latest_nav_date   DATE,
+  latest_nav_value  NUMERIC,
+
+  records_fetched   INT DEFAULT 0,
+  records_inserted  INT DEFAULT 0,
+  records_updated   INT DEFAULT 0,
+
+  retry_count    INT DEFAULT 0,
+  next_retry_at  TIMESTAMP,
+
+  http_status    INT,
+  error_message  TEXT,
+
+  raw_s3_key  TEXT,
+
+  created_at  TIMESTAMP DEFAULT NOW(),
+  updated_at  TIMESTAMP DEFAULT NOW()
+);
+
+-- One row per mf-nav-sync job run — overall summary, separate from the
+-- per-scheme detail in mf_scheme_sync_status above.
+CREATE TABLE IF NOT EXISTS mf_ingestion_log (
+  run_id  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  source_s3_key  TEXT NOT NULL,
+
+  requested_start_date  DATE,
+  requested_end_date    DATE,
+
+  total_schemes    INT DEFAULT 0,
+  valid_schemes    INT DEFAULT 0,
+  invalid_schemes  INT DEFAULT 0,
+
+  success_count       INT DEFAULT 0,
+  failed_count        INT DEFAULT 0,
+  rate_limited_count  INT DEFAULT 0,
+  no_data_count       INT DEFAULT 0,
+  inactive_marked     INT DEFAULT 0,
+
+  nav_rows_inserted  INT DEFAULT 0,
+  nav_rows_updated   INT DEFAULT 0,
+
+  status  TEXT NOT NULL DEFAULT 'running',
+  -- running | completed | completed_with_errors
+
+  error_summary  TEXT,
+
+  started_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at  TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_mf_ingestion_log_started_at
+  ON mf_ingestion_log (started_at);
+
 -- ── Idempotent migrations (for existing databases) ────────────────────────────
 -- Safe to run against a database that was created with the v1 schema.
 ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS has_text_layer   BOOLEAN;

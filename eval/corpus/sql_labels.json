@@ -1,0 +1,1390 @@
+{
+  "_meta": {
+    "description": "Ground truth for Vanna SQL generation. Covers all query_sql-path queries (Q001-Q040).",
+    "fields": {
+      "expected_table": "Primary table the SQL must query",
+      "expected_columns": "Columns / expressions that must appear in SELECT",
+      "expected_filters": "WHERE conditions that must be present",
+      "expected_aggregation": "Aggregation function if required (SUM/AVG/COUNT/null)",
+      "expected_group_by": "GROUP BY fields if required",
+      "policy_checks": "Expected _validate_and_prepare outcomes",
+      "reference_sql": "Canonical correct SQL for result comparison"
+    }
+  },
+  "Q001": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "period_year": 2024,
+      "period_month": 12
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(aum) AS total_aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2024 AND period_month = 12"
+  },
+  "Q002": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2023,
+      "period_month": 3
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2023 AND period_month = 3"
+  },
+  "Q003": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year": 2025,
+      "period_month": 1
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(funds_mobilized) AS total_mobilized FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2025 AND period_month = 1"
+  },
+  "Q004": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_folios"
+    ],
+    "expected_filters": {
+      "fund_category": "Small Cap Fund",
+      "period_year": 2024,
+      "period_month": 6
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 AND period_month = 6"
+  },
+  "Q005": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Liquid Fund",
+      "period_year": 2022,
+      "period_month": 8
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2022 AND period_month = 8"
+  },
+  "Q006": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_schemes"
+    ],
+    "expected_filters": {
+      "fund_category": "Index Funds",
+      "period_year": 2023
+    },
+    "expected_aggregation": "AVG",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT AVG(no_of_schemes) AS avg_schemes FROM amfi_fund_stats WHERE fund_category = 'Index Funds' AND period_year = 2023"
+  },
+  "Q007": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Flexi Cap Fund",
+      "period_year": 2024
+    },
+    "expected_aggregation": "AVG",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT AVG(aum) AS avg_aum FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2024"
+  },
+  "Q008": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "fund_category",
+      "aum"
+    ],
+    "expected_filters": {
+      "period_year": 2024,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT fund_category, aum FROM amfi_fund_stats WHERE period_year = 2024 AND period_month = 12 ORDER BY aum DESC LIMIT 5"
+  },
+  "Q009": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "net_inflow",
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "GOLD ETF",
+      "period_year": 2023
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, net_inflow, redemption FROM amfi_fund_stats WHERE fund_category = 'GOLD ETF' AND period_year = 2023 ORDER BY period_month"
+  },
+  "Q010": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "Sectoral/Thematic Funds",
+      "period_year": 2024,
+      "period_month_in": [
+        4,
+        5,
+        6
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(funds_mobilized) AS q2_mobilized FROM amfi_fund_stats WHERE fund_category = 'Sectoral/Thematic Funds' AND period_year = 2024 AND period_month IN (4, 5, 6)"
+  },
+  "Q011": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "period_month",
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "year_between": [
+        2020,
+        2026
+      ]
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_year",
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, period_month, aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year BETWEEN 2020 AND 2026 ORDER BY period_year, period_month"
+  },
+  "Q012": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "year_between": [
+        2021,
+        2024
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(net_inflow) AS total_net_inflow FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2021 AND 2024 GROUP BY period_year ORDER BY period_year"
+  },
+  "Q013": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "year_between": [
+        2020,
+        2026
+      ]
+    },
+    "expected_aggregation": "AVG",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, AVG(aum) AS avg_aum FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year BETWEEN 2020 AND 2026 GROUP BY period_year ORDER BY period_year"
+  },
+  "Q014": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "fund_category",
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category_in": [
+        "Large Cap Fund",
+        "Mid Cap Fund"
+      ],
+      "year_between": [
+        2022,
+        2024
+      ]
+    },
+    "expected_aggregation": "AVG",
+    "expected_group_by": [
+      "fund_category",
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT fund_category, period_year, AVG(aum) AS avg_aum FROM amfi_fund_stats WHERE fund_category IN ('Large Cap Fund', 'Mid Cap Fund') AND period_year BETWEEN 2022 AND 2024 GROUP BY fund_category, period_year ORDER BY fund_category, period_year"
+  },
+  "Q015": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "year_between": [
+        2020,
+        2026
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(aum) AS industry_aum FROM amfi_fund_stats WHERE period_year BETWEEN 2020 AND 2026 GROUP BY period_year ORDER BY period_year"
+  },
+  "Q021": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "period_year": 2015,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year = 2015 AND period_month = 12"
+  },
+  "Q022": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "period_month",
+      "aum"
+    ],
+    "expected_filters": {
+      "scheme_type": "Equity",
+      "period_year": 2014
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, aum FROM amfi_amc_stats WHERE scheme_type = 'Equity' AND period_year = 2014 ORDER BY period_month"
+  },
+  "Q024": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "total_mobilized"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "period_year": 2013
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(total_mobilized) AS annual_mobilized FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year = 2013"
+  },
+  "Q028": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "period_year",
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "year_between": [
+        2009,
+        2019
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(net_inflow) AS annual_net_inflow FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year BETWEEN 2009 AND 2019 GROUP BY period_year ORDER BY period_year"
+  },
+  "Q029": {
+    "expected_table": "both",
+    "expected_columns": [
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "year_between": [
+        2015,
+        2024
+      ]
+    },
+    "expected_aggregation": "AVG",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, AVG(aum) AS avg_aum FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year BETWEEN 2015 AND 2019 GROUP BY period_year UNION ALL SELECT period_year, SUM(aum) AS avg_aum FROM amfi_fund_stats WHERE period_year BETWEEN 2020 AND 2024 GROUP BY period_year ORDER BY period_year"
+  },
+  "Q034": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "period_year": 2023
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(funds_mobilized) AS amount_invested FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2023",
+    "notes": "vocab_alias: 'amount invested' must resolve to funds_mobilized"
+  },
+  "Q035": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2024
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 ORDER BY period_month",
+    "notes": "vocab_alias: 'money came in' must resolve to funds_mobilized"
+  },
+  "Q036": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Small Cap Fund",
+      "period_year": 2022
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(net_inflow) AS total_inflow FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2022",
+    "notes": "vocab_alias: 'inflow' must resolve to net_inflow not funds_mobilized"
+  },
+  "Q037": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Index Funds",
+      "period_year": 2024,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum AS corpus FROM amfi_fund_stats WHERE fund_category = 'Index Funds' AND period_year = 2024 AND period_month = 12",
+    "notes": "vocab_alias: 'corpus' must resolve to aum"
+  },
+  "Q038": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year": 2021
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(funds_mobilized) AS total_subscriptions FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2021",
+    "notes": "vocab_alias: 'subscriptions' and 'tax saving funds' must both resolve correctly"
+  },
+  "Q039": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Liquid Fund",
+      "period_year": 2023
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(redemption) AS total_redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2023",
+    "notes": "vocab_alias: 'went out' must resolve to redemption"
+  },
+  "Q040": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "year_between": [
+        2020,
+        2026
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(net_inflow) AS net_capital FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2020 AND 2026 GROUP BY period_year ORDER BY period_year",
+    "notes": "vocab_alias: 'net capital' must resolve to net_inflow"
+  },
+  "Q061": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2023,
+      "period_month": 6
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2023 AND period_month = 6"
+  },
+  "Q062": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Small Cap Fund",
+      "period_year": 2024,
+      "period_month": 3
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 AND period_month = 3"
+  },
+  "Q063": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_folios"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year": 2023,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2023 AND period_month = 12"
+  },
+  "Q064": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "Liquid Fund",
+      "period_year": 2022,
+      "period_month": 8
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2022 AND period_month = 8"
+  },
+  "Q065": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Flexi Cap Fund",
+      "period_year": 2024,
+      "period_month": 9
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2024 AND period_month = 9"
+  },
+  "Q066": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "period_year": 2025,
+      "period_month": 1
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2025 AND period_month = 1"
+  },
+  "Q067": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_schemes"
+    ],
+    "expected_filters": {
+      "fund_category": "Multi Asset Allocation Fund",
+      "period_year": 2025,
+      "period_month": 3
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT no_of_schemes FROM amfi_fund_stats WHERE fund_category = 'Multi Asset Allocation Fund' AND period_year = 2025 AND period_month = 3"
+  },
+  "Q068": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "avg_aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "period_year": 2024,
+      "period_month": 6
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT avg_aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2024 AND period_month = 6"
+  },
+  "Q069": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Overnight Fund",
+      "period_year": 2023,
+      "period_month": 4
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Overnight Fund' AND period_year = 2023 AND period_month = 4"
+  },
+  "Q070": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_folios"
+    ],
+    "expected_filters": {
+      "fund_category": "Small Cap Fund",
+      "period_year": 2024,
+      "period_month": 6
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 AND period_month = 6"
+  },
+  "Q071": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year": 2024,
+      "period_month": 3
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2024 AND period_month = 3"
+  },
+  "Q072": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Flexi Cap Fund",
+      "period_year": 2023,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2023 AND period_month = 12"
+  },
+  "Q073": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2024
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 ORDER BY period_month"
+  },
+  "Q074": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "period_month",
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "year_between": [
+        2022,
+        2024
+      ]
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_year",
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, period_month, aum FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2022 AND 2024 ORDER BY period_year, period_month"
+  },
+  "Q075": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Liquid Fund",
+      "period_year": 2023
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2023 ORDER BY period_month"
+  },
+  "Q076": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "Flexi Cap Fund",
+      "period_year": 2023
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2023 ORDER BY period_month"
+  },
+  "Q077": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Small Cap Fund",
+      "period_year": 2023
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, aum FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2023 ORDER BY period_month"
+  },
+  "Q078": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year": 2022
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, net_inflow FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2022 ORDER BY period_month"
+  },
+  "Q079": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_month",
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2022
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_month, redemption FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2022 ORDER BY period_month"
+  },
+  "Q080": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "period_month",
+      "no_of_schemes"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "year_between": [
+        2021,
+        2023
+      ]
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_year",
+      "period_month"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, period_month, no_of_schemes FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year BETWEEN 2021 AND 2023 ORDER BY period_year, period_month"
+  },
+  "Q081": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_folios"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2024,
+      "period_month": 3
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 AND period_month = 3"
+  },
+  "Q082": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year": 2023
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(redemption) AS total_redemption FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2023"
+  },
+  "Q083": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "funds_mobilized"
+    ],
+    "expected_filters": {
+      "fund_category": "Small Cap Fund",
+      "period_year": 2024
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(funds_mobilized) AS total_funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024"
+  },
+  "Q084": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "no_of_schemes"
+    ],
+    "expected_filters": {
+      "fund_category": "Short Duration Fund",
+      "period_year": 2022
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT SUM(no_of_schemes) FROM amfi_fund_stats WHERE fund_category = 'Short Duration Fund' AND period_year = 2022"
+  },
+  "Q085": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2023,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2023 AND period_month = 12"
+  },
+  "Q086": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "redemption"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "period_year": 2024,
+      "period_month": 9
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2024 AND period_month = 9"
+  },
+  "Q087": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "Mid Cap Fund",
+      "period_year": 2024,
+      "period_month": 9
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 AND period_month = 9"
+  },
+  "Q088": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "scheme_type": "Equity",
+      "period_year": 2018,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum FROM amfi_amc_stats WHERE scheme_type = 'Equity' AND period_year = 2018 AND period_month = 12"
+  },
+  "Q089": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "total_mobilized"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "period_year": 2016,
+      "period_month": 6
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT total_mobilized FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year = 2016 AND period_month = 6"
+  },
+  "Q090": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "period_year": 2015,
+      "period_month": 3
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT net_inflow FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year = 2015 AND period_month = 3"
+  },
+  "Q091": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "scheme_type": "Gilt",
+      "period_year": 2019,
+      "period_month": 9
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum FROM amfi_amc_stats WHERE scheme_type = 'Gilt' AND period_year = 2019 AND period_month = 9"
+  },
+  "Q092": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "aum"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "period_year": 2017,
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT aum FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year = 2017 AND period_month = 12"
+  },
+  "Q093": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "fund_category": "Large Cap Fund",
+      "period_year_in": [
+        2020,
+        2024
+      ],
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year IN (2020, 2024) AND period_month = 12"
+  },
+  "Q094": {
+    "expected_table": "amfi_amc_stats",
+    "expected_columns": [
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "scheme_type": "Total",
+      "year_between": [
+        2015,
+        2019
+      ]
+    },
+    "expected_aggregation": null,
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(aum) AS total_aum FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year BETWEEN 2015 AND 2019 GROUP BY period_year ORDER BY period_year"
+  },
+  "Q095": {
+    "expected_table": "amfi_fund_stats",
+    "expected_columns": [
+      "period_year",
+      "net_inflow"
+    ],
+    "expected_filters": {
+      "fund_category": "ELSS",
+      "period_year_in": [
+        2021,
+        2023
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(net_inflow) AS annual_net_inflow FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year IN (2021, 2023) GROUP BY period_year ORDER BY period_year"
+  },
+  "Q096": {
+    "expected_table": "both",
+    "expected_columns": [
+      "period_year",
+      "redemption"
+    ],
+    "expected_filters": {
+      "period_year_in": [
+        2018,
+        2023
+      ]
+    },
+    "expected_aggregation": "SUM",
+    "expected_group_by": [
+      "period_year"
+    ],
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT period_year, SUM(redemption) AS total_redemption FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year = 2018 UNION ALL SELECT period_year, SUM(redemption) AS total_redemption FROM amfi_fund_stats WHERE period_year = 2023"
+  },
+  "Q097": {
+    "expected_table": "both",
+    "expected_columns": [
+      "period_year",
+      "aum"
+    ],
+    "expected_filters": {
+      "period_year_in": [
+        2018,
+        2023
+      ],
+      "period_month": 12
+    },
+    "expected_aggregation": null,
+    "expected_group_by": null,
+    "policy_checks": {
+      "is_select": true,
+      "approved_tables": true,
+      "has_limit": true,
+      "has_date_filter": true
+    },
+    "reference_sql": "SELECT 2018 AS period_year, aum FROM amfi_amc_stats WHERE scheme_type = 'Equity' AND period_year = 2018 AND period_month = 12 UNION ALL SELECT 2023, SUM(aum) FROM amfi_fund_stats WHERE period_year = 2023 AND period_month = 12"
+  }
+}

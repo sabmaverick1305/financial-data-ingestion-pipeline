@@ -1,0 +1,30 @@
+{
+  "generated_at": "2026-07-08T09:15:22.050155+00:00",
+  "seed": 42,
+  "per_template": 10,
+  "total_queries": 122,
+  "total_templates": 14,
+  "skipped_templates": [
+    "T_REASON_001"
+  ],
+  "source_files": {
+    "capabilities.yaml": "6fb8c5575d20",
+    "entities.yaml": "b0ef414177f1",
+    "metrics.yaml": "0250c19897ed",
+    "templates.yaml": "87a1f25e9f10",
+    "execution_labels.yaml": "3c3d580a639b",
+    "financial_ontology.yaml": "574bff173a86"
+  },
+  "ontology_metric_filtering": {
+    "T_AGG_001.metric": [
+      "aum",
+      "folios",
+      "schemes"
+    ]
+  },
+  "not_generated": [
+    "sql_labels.json \u2014 requires real DB row counts/values",
+    "retrieval_labels.json \u2014 requires real retrieved chunk IDs",
+    "expected_answers.json \u2014 requires real expected facts/citations"
+  ]
+}

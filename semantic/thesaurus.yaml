@@ -1,0 +1,254 @@
+version: "1.0"
+name: FIES Semantic Thesaurus
+layer: 3
+description: >
+  Synonym resolution for every term registered in vocabulary.yaml (metrics)
+  and taxonomy.yaml (scheme_types, amcs). Every synonym list here must
+  resolve to a term_id/entity_id that actually exists in those two files —
+  enforced by semantic_engine.py's cross-validation. Negative synonyms and
+  disambiguation rules exist because financial terminology genuinely
+  overlaps ("inflow" alone is ambiguous between gross funds_mobilized and
+  net_inflow) — see disambiguation_rules below.
+
+metric_synonyms:
+  aum:
+    synonyms:
+      - aum
+      - assets under management
+      - asset under management
+      - corpus
+      - asset base
+      - managed assets
+      - fund corpus
+      - assets managed
+      - total assets
+      - fund size
+    negative_synonyms: []
+  avg_aum:
+    synonyms:
+      - aaum
+      - avg aum
+      - average assets
+      - average corpus
+      - average asset base
+      - monthly average aum
+      - average assets under management
+    negative_synonyms: []
+  funds_mobilized:
+    synonyms:
+      - funds mobilized
+      - amount invested
+      - money invested
+      - capital invested
+      - gross inflow
+      - gross subscriptions
+      - subscriptions
+      - money came in
+      - capital mobilized
+      - funds collected
+      - investment received
+      - mobilization
+      - mobilised amount
+      - funds mobilised
+    negative_synonyms:
+      - net inflow
+      - aum
+      - redemption
+      - withdrawal
+  redemption:
+    synonyms:
+      - redemption
+      - withdrawal
+      - outflow
+      - redeemed amount
+      - money withdrawn
+      - capital withdrawn
+      - redemptions
+      - funds redeemed
+      - investor withdrawals
+    negative_synonyms:
+      - funds mobilized
+      - net inflow
+      - aum
+  net_inflow:
+    synonyms:
+      - net inflow
+      - net investment
+      - net subscription
+      - net money came in
+      - net flow
+      - net inflows
+      - net capital inflow
+      - net addition
+    negative_synonyms: []
+    ambiguous_terms:
+      - inflow
+  folios:
+    synonyms:
+      - number of folios
+      - no of folios
+      - folios
+      - investors
+      - investor count
+      - accounts
+      - folio count
+      - number of investors
+      - investor accounts
+    negative_synonyms: []
+    semantic_warning: Folios are not identical to unique investors; phrase answer carefully.
+  schemes:
+    synonyms:
+      - number of schemes
+      - no of schemes
+      - schemes
+      - fund schemes
+      - products
+      - fund products
+      - mutual fund products
+    negative_synonyms: []
+
+# Disambiguation between metrics whose synonym sets can overlap on a bare word.
+disambiguation_rules:
+  - condition: query contains gross, total invested, mobilized, or subscriptions
+    prefer: funds_mobilized
+  - condition: query contains net, after redemption, or net flow
+    prefer: net_inflow
+
+scheme_type_synonyms:
+  large_cap:
+    - large cap
+    - large-cap
+    - largecap
+    - large cap funds
+    - large cap schemes
+    - large cap category
+  mid_cap:
+    - mid cap
+    - mid-cap
+    - midcap
+    - mid cap funds
+    - mid cap category
+  small_cap:
+    - small cap
+    - small-cap
+    - smallcap
+    - small cap funds
+    - small cap category
+  multi_cap:
+    - multi cap
+    - multi-cap
+    - multicap
+  flexi_cap:
+    - flexi cap
+    - flexi-cap
+    - flexicap
+  elss:
+    - elss
+    - tax saving funds
+    - tax saver funds
+    - equity linked savings scheme
+  sectoral_thematic:
+    - sectoral
+    - thematic
+    - sector funds
+    - thematic funds
+  index_funds:
+    - index fund
+    - index funds
+    - passive index funds
+  etf:
+    - etf
+    - exchange traded fund
+    - exchange traded funds
+  hybrid:
+    - hybrid
+    - hybrid funds
+    - hybrid schemes
+  debt:
+    - debt
+    - debt funds
+    - income funds
+    - fixed income
+  liquid:
+    - liquid
+    - liquid funds
+    - liquid schemes
+  overnight:
+    - overnight
+    - overnight funds
+  gilt:
+    - gilt
+    - gilt funds
+    - government securities funds
+  gold:
+    - gold
+    - gold fund
+    - gold funds
+    - gold etf
+  international:
+    - international
+    - global funds
+    - overseas funds
+    - foreign funds
+  equity:
+    - equity
+    - equity funds
+    - growth oriented schemes
+  all_categories:
+    - all categories
+    - all fund categories
+    - mutual fund industry
+    - overall mutual funds
+    - industry total
+
+# Display-token overrides: some taxonomy entities don't map 1:1 onto a single
+# surface token when producing intent.scheme_types-style output. Reverse-
+# engineered from the hand-authored eval corpus's actual conventions.
+scheme_type_display_overrides:
+  sectoral_thematic: [sectoral, thematic]
+  all_categories: []
+
+amc_synonyms:
+  sbi_mf:
+    - sbi
+    - sbi mf
+    - sbi mutual fund
+    - sbi amc
+  hdfc_mf:
+    - hdfc
+    - hdfc mf
+    - hdfc mutual fund
+    - hdfc amc
+  icici_pru_mf:
+    - icici
+    - icici pru
+    - icici prudential
+    - icici mutual fund
+    - icici prudential mutual fund
+  axis_mf:
+    - axis
+    - axis mf
+    - axis mutual fund
+  nippon_india_mf:
+    - nippon
+    - nippon india
+    - nippon india mutual fund
+    - reliance mutual fund
+  kotak_mf:
+    - kotak
+    - kotak mf
+    - kotak mutual fund
+  aditya_birla_sun_life_mf:
+    - aditya birla
+    - absl
+    - birla sun life
+    - aditya birla sun life
+  quant_mf:
+    - quant
+    - quant mf
+    - quant mutual fund
+  ppfas_mf:
+    - ppfas
+    - parag parikh
+    - parag parikh mutual fund
+    - ppfas mutual fund

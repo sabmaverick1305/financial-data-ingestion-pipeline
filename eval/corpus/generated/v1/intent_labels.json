@@ -1,0 +1,1541 @@
+{
+  "G0001": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0002": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "query_sql"
+  },
+  "G0003": {
+    "intent_type": "tabular",
+    "metric": "avg_aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "index funds"
+    ],
+    "routing": "query_sql"
+  },
+  "G0004": {
+    "intent_type": "tabular",
+    "metric": "avg_aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0005": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0006": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gilt"
+    ],
+    "routing": "query_sql"
+  },
+  "G0007": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0008": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "query_sql"
+  },
+  "G0009": {
+    "intent_type": "tabular",
+    "metric": "avg_aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "equity"
+    ],
+    "routing": "query_sql"
+  },
+  "G0010": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0011": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2023,
+    "month": "April",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0012": {
+    "intent_type": "tabular",
+    "metric": "avg_aum",
+    "year": 2026,
+    "month": "August",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "query_sql"
+  },
+  "G0013": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2025,
+    "month": "January",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "elss"
+    ],
+    "routing": "query_sql"
+  },
+  "G0014": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2021,
+    "month": "June",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "query_sql"
+  },
+  "G0015": {
+    "intent_type": "tabular",
+    "metric": "avg_aum",
+    "year": 2020,
+    "month": "June",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0016": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2026,
+    "month": "February",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0017": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2026,
+    "month": "October",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "query_sql"
+  },
+  "G0018": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2024,
+    "month": "December",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gold"
+    ],
+    "routing": "query_sql"
+  },
+  "G0019": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2024,
+    "month": "July",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "small cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0020": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2024,
+    "month": "November",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0021": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0022": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2026,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0023": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": null,
+    "month": null,
+    "year_from": 2023,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [
+      "elss"
+    ],
+    "routing": "query_sql"
+  },
+  "G0024": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [
+      "small cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0025": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2024,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0026": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2023,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "query_sql"
+  },
+  "G0027": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2026,
+    "needs_analytical": false,
+    "scheme_types": [
+      "debt"
+    ],
+    "routing": "query_sql"
+  },
+  "G0028": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2021,
+    "needs_analytical": false,
+    "scheme_types": [
+      "debt"
+    ],
+    "routing": "query_sql"
+  },
+  "G0029": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [
+      "overnight"
+    ],
+    "routing": "query_sql"
+  },
+  "G0030": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2022,
+    "needs_analytical": false,
+    "scheme_types": [
+      "index funds"
+    ],
+    "routing": "query_sql"
+  },
+  "G0031": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0032": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gilt"
+    ],
+    "routing": "query_sql"
+  },
+  "G0033": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2021,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0034": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2023,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "equity"
+    ],
+    "routing": "query_sql"
+  },
+  "G0035": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2026,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0036": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2025,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "flexi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0037": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gilt"
+    ],
+    "routing": "query_sql"
+  },
+  "G0038": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2023,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "overnight"
+    ],
+    "routing": "query_sql"
+  },
+  "G0039": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gold"
+    ],
+    "routing": "query_sql"
+  },
+  "G0040": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2026,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0041": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "large cap",
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0042": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2022,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf",
+      "debt"
+    ],
+    "routing": "query_sql"
+  },
+  "G0043": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2020,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gilt",
+      "elss"
+    ],
+    "routing": "query_sql"
+  },
+  "G0044": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf",
+      "equity"
+    ],
+    "routing": "query_sql"
+  },
+  "G0045": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap",
+      "hybrid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0046": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2026,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic",
+      "flexi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0047": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": 2020,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "elss"
+    ],
+    "routing": "query_sql"
+  },
+  "G0048": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2020,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "debt",
+      "international"
+    ],
+    "routing": "query_sql"
+  },
+  "G0049": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2020,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid",
+      "hybrid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0050": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2025,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "index funds",
+      "small cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0051": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": 2023,
+    "year_to": 2026,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0052": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2026,
+    "needs_analytical": false,
+    "scheme_types": [
+      "international"
+    ],
+    "routing": "query_sql"
+  },
+  "G0053": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2024,
+    "needs_analytical": false,
+    "scheme_types": [
+      "equity"
+    ],
+    "routing": "query_sql"
+  },
+  "G0054": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": 2024,
+    "year_to": 2026,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "query_sql"
+  },
+  "G0055": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": null,
+    "month": null,
+    "year_from": 2024,
+    "year_to": 2026,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "query_sql"
+  },
+  "G0056": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": 2022,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0057": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": 2023,
+    "year_to": 2024,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0058": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2022,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0059": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2024,
+    "needs_analytical": false,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0060": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2025,
+    "needs_analytical": false,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0061": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2020,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0062": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0063": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2025,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0064": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0065": {
+    "intent_type": "tabular",
+    "metric": "funds_mobilized",
+    "year": 2024,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0066": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": 2021,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0067": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2021,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0068": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2025,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0069": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2023,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0070": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2026,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0071": {
+    "intent_type": "trend",
+    "metric": "schemes",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2023,
+    "needs_analytical": true,
+    "scheme_types": [
+      "debt"
+    ],
+    "routing": "plan_years"
+  },
+  "G0072": {
+    "intent_type": "trend",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2021,
+    "needs_analytical": true,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "plan_years"
+  },
+  "G0073": {
+    "intent_type": "trend",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2023,
+    "needs_analytical": true,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "plan_years"
+  },
+  "G0074": {
+    "intent_type": "trend",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": 2023,
+    "year_to": 2026,
+    "needs_analytical": true,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "plan_years"
+  },
+  "G0075": {
+    "intent_type": "trend",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2025,
+    "needs_analytical": true,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "plan_years"
+  },
+  "G0076": {
+    "intent_type": "trend",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2026,
+    "needs_analytical": true,
+    "scheme_types": [
+      "elss"
+    ],
+    "routing": "plan_years"
+  },
+  "G0077": {
+    "intent_type": "trend",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": 2020,
+    "year_to": 2021,
+    "needs_analytical": true,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "plan_years"
+  },
+  "G0078": {
+    "intent_type": "trend",
+    "metric": "schemes",
+    "year": null,
+    "month": null,
+    "year_from": 2023,
+    "year_to": 2025,
+    "needs_analytical": true,
+    "scheme_types": [],
+    "routing": "plan_years"
+  },
+  "G0079": {
+    "intent_type": "trend",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": 2021,
+    "year_to": 2022,
+    "needs_analytical": true,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "plan_years"
+  },
+  "G0080": {
+    "intent_type": "trend",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": 2024,
+    "year_to": 2025,
+    "needs_analytical": true,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "plan_years"
+  },
+  "G0081": {
+    "intent_type": "trend",
+    "metric": "schemes",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0082": {
+    "intent_type": "trend",
+    "metric": "net_inflow",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0083": {
+    "intent_type": "trend",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0084": {
+    "intent_type": "trend",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0085": {
+    "intent_type": "trend",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0086": {
+    "intent_type": "trend",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "query_sql"
+  },
+  "G0087": {
+    "intent_type": "definition",
+    "metric": "folios",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0088": {
+    "intent_type": "definition",
+    "metric": "aum",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0089": {
+    "intent_type": "definition",
+    "metric": "redemption",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0090": {
+    "intent_type": "definition",
+    "metric": "funds_mobilized",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0091": {
+    "intent_type": "definition",
+    "metric": "net_inflow",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0092": {
+    "intent_type": "definition",
+    "metric": "schemes",
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0093": {
+    "intent_type": "lookup",
+    "metric": "schemes",
+    "year": 2026,
+    "month": "July",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "elss"
+    ],
+    "routing": "route"
+  },
+  "G0094": {
+    "intent_type": "lookup",
+    "metric": "redemption",
+    "year": 2020,
+    "month": "March",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0095": {
+    "intent_type": "lookup",
+    "metric": "redemption",
+    "year": 2020,
+    "month": "October",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "route"
+  },
+  "G0096": {
+    "intent_type": "lookup",
+    "metric": "schemes",
+    "year": 2026,
+    "month": "July",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "flexi cap"
+    ],
+    "routing": "route"
+  },
+  "G0097": {
+    "intent_type": "lookup",
+    "metric": "redemption",
+    "year": 2022,
+    "month": "March",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "route"
+  },
+  "G0098": {
+    "intent_type": "lookup",
+    "metric": "redemption",
+    "year": 2023,
+    "month": "June",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "route"
+  },
+  "G0099": {
+    "intent_type": "lookup",
+    "metric": "net_inflow",
+    "year": 2022,
+    "month": "June",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "overnight"
+    ],
+    "routing": "route"
+  },
+  "G0100": {
+    "intent_type": "lookup",
+    "metric": "redemption",
+    "year": 2023,
+    "month": "May",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "small cap"
+    ],
+    "routing": "route"
+  },
+  "G0101": {
+    "intent_type": "lookup",
+    "metric": "aum",
+    "year": 2020,
+    "month": "December",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [],
+    "routing": "route"
+  },
+  "G0102": {
+    "intent_type": "lookup",
+    "metric": "net_inflow",
+    "year": 2026,
+    "month": "April",
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "small cap"
+    ],
+    "routing": "route"
+  },
+  "G0103": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "mid cap"
+    ],
+    "routing": "route"
+  },
+  "G0104": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "large cap"
+    ],
+    "routing": "route"
+  },
+  "G0105": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "index funds"
+    ],
+    "routing": "route"
+  },
+  "G0106": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "route"
+  },
+  "G0107": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "flexi cap"
+    ],
+    "routing": "route"
+  },
+  "G0108": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "international"
+    ],
+    "routing": "route"
+  },
+  "G0109": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "route"
+  },
+  "G0110": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "gold"
+    ],
+    "routing": "route"
+  },
+  "G0111": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "etf"
+    ],
+    "routing": "route"
+  },
+  "G0112": {
+    "intent_type": "factual",
+    "metric": null,
+    "year": null,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "route"
+  },
+  "G0113": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": 2030,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0114": {
+    "intent_type": "tabular",
+    "metric": "net_inflow",
+    "year": 2030,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0115": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2050,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "hybrid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0116": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2050,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "overnight"
+    ],
+    "routing": "query_sql"
+  },
+  "G0117": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2035,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "sectoral",
+      "thematic"
+    ],
+    "routing": "query_sql"
+  },
+  "G0118": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": 2030,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "index funds"
+    ],
+    "routing": "query_sql"
+  },
+  "G0119": {
+    "intent_type": "tabular",
+    "metric": "schemes",
+    "year": 2030,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "hybrid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0120": {
+    "intent_type": "tabular",
+    "metric": "folios",
+    "year": 2050,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "multi cap"
+    ],
+    "routing": "query_sql"
+  },
+  "G0121": {
+    "intent_type": "tabular",
+    "metric": "aum",
+    "year": 2050,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "query_sql"
+  },
+  "G0122": {
+    "intent_type": "tabular",
+    "metric": "redemption",
+    "year": 2050,
+    "month": null,
+    "year_from": null,
+    "year_to": null,
+    "needs_analytical": false,
+    "scheme_types": [
+      "liquid"
+    ],
+    "routing": "query_sql"
+  }
+}

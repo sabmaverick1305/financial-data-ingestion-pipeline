@@ -1,0 +1,139 @@
+version: "1.0"
+name: FIES Reasoning Rules
+layer: 6
+description: >
+  IF/THEN causal-explanation rules, evaluated by
+  src/financial_pipeline/reasoning/reasoning_engine.py against real computed
+  metric directions from SQL trend data (not against the query text). This
+  is the top of the semantic/ stack: vocabulary defines what a metric is,
+  taxonomy/thesaurus resolve mentions of it, financial_ontology types it,
+  financial_relationships explains how metrics causally relate, and this
+  file turns that into a matchable IF/THEN rule the engine can fire against
+  two real numbers (e.g. AUM at period start vs period end).
+
+# How the engine turns a raw % change into a categorical direction before
+# matching any rule's `conditions`. Applied per metric, per requested period.
+# `direction` (increase/decrease/stable) and `spike` are independent: a 30%
+# jump is direction=increase AND spike=true at once. A rule condition sets
+# either `direction: <value>` or `spike: true`, never both on one condition.
+direction_thresholds:
+  stable_band_pct: 2.0     # |pct_change| below this -> direction "stable"
+  spike_band_pct: 25.0     # |pct_change| at/above this -> spike flag, regardless of direction
+  directions: [increase, decrease, stable]
+
+rules:
+  - rule_id: RULE_AUM_UP_NET_INFLOW_DOWN
+    name: AUM increase despite declining net inflow
+    conditions:
+      - metric: net_inflow
+        direction: decrease
+      - metric: aum
+        direction: increase
+    supporting_relationship: aum_movement
+    supporting_pattern: aum_up_net_inflow_down
+    requires_evidence: [aum, net_inflow, funds_mobilized, redemption]
+    conclusion:
+      explanation_template: >
+        AUM grew by {aum_pct_change}% even though net inflow fell by
+        {net_inflow_pct_change_abs}% over the same period. AUM is influenced
+        by more than fund flows — market appreciation, dividend payouts, and
+        valuation changes on the existing portfolio can outweigh a decline in
+        fresh net inflows. The implied non-flow contribution to AUM growth
+        over this period is approximately {implied_market_contribution}
+        crore.
+      confidence: medium
+
+  - rule_id: RULE_AUM_DOWN_NET_INFLOW_UP
+    name: AUM decline despite positive net inflow
+    conditions:
+      - metric: net_inflow
+        direction: increase
+      - metric: aum
+        direction: decrease
+    supporting_relationship: aum_movement
+    requires_evidence: [aum, net_inflow]
+    conclusion:
+      explanation_template: >
+        AUM fell by {aum_pct_change_abs}% despite net inflow rising by
+        {net_inflow_pct_change}%. This pattern typically means market
+        depreciation or valuation losses on the existing portfolio outweighed
+        the fresh net inflows during the period.
+      confidence: medium
+
+  - rule_id: RULE_FOLIOS_UP_AUM_DOWN
+    name: Folio growth despite falling AUM
+    conditions:
+      - metric: folios
+        direction: increase
+      - metric: aum
+        direction: decrease
+    supporting_relationship: folio_growth_interpretation
+    supporting_pattern: folios_up_aum_down
+    requires_evidence: [folios, aum]
+    conclusion:
+      explanation_template: >
+        The number of folios grew by {folios_pct_change}% while AUM fell by
+        {aum_pct_change_abs}%. This usually indicates more investor accounts
+        entering with smaller ticket sizes, or that market value declined
+        despite continued investor participation growth.
+      confidence: medium
+
+  - rule_id: RULE_REDEMPTION_SPIKE
+    name: Sharp redemption increase
+    conditions:
+      - metric: redemption
+        spike: true
+    supporting_relationship: redemption_pressure
+    supporting_pattern: redemption_spike
+    requires_evidence: [redemption]
+    conclusion:
+      explanation_template: >
+        Redemption rose sharply by {redemption_pct_change}% over the period.
+        Common drivers include profit booking after a market rally, investor
+        liquidity needs, or volatility-driven exits — higher redemption does
+        not by itself indicate poor fund performance.
+      confidence: low
+
+  - rule_id: RULE_FUNDS_MOBILIZED_SURGE
+    name: Sharp funds mobilized increase
+    conditions:
+      - metric: funds_mobilized
+        spike: true
+    supporting_relationship: mobilization_strength
+    supporting_pattern: funds_mobilized_surge
+    requires_evidence: [funds_mobilized]
+    conclusion:
+      explanation_template: >
+        Funds mobilized rose sharply by {funds_mobilized_pct_change}% over
+        the period. This is commonly driven by a new fund offer (NFO)
+        launch, rising category popularity, or favorable market sentiment
+        attracting new subscriptions.
+      confidence: low
+
+  - rule_id: RULE_ALIGNED_GROWTH
+    name: Flows and AUM moving together
+    conditions:
+      - metric: funds_mobilized
+        direction: increase
+      - metric: net_inflow
+        direction: increase
+      - metric: aum
+        direction: increase
+    requires_evidence: [funds_mobilized, net_inflow, aum]
+    conclusion:
+      explanation_template: >
+        Funds mobilized, net inflow, and AUM all increased together over the
+        period — a straightforward growth pattern with no divergence between
+        flows and asset value that needs a separate explanation.
+      confidence: high
+
+# Returned by the reasoning engine when no rule's conditions match the
+# computed directions — an honest "no pattern found" rather than a forced
+# explanation, matching how PreGenerationGuardrails/abstention already work
+# elsewhere in the pipeline.
+no_match_response:
+  explanation_template: >
+    {metric_a} {direction_a} and {metric_b} {direction_b} over this period,
+    but this doesn't match a known causal pattern in reasoning_rules.yaml.
+    Showing the underlying numbers instead of a possibly-wrong explanation.
+  confidence: none

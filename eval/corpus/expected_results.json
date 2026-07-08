@@ -1,0 +1,1205 @@
+{
+  "_meta": {
+    "description": "Expected DB result ranges for SQL-path queries. Run scripts/seed_expected_results.py to populate exact values from the live DB.",
+    "tolerance_pct": 2.0,
+    "unit": "crore INR unless noted"
+  },
+  "Q001": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "aum",
+        "min": 351498.44,
+        "max": 365845.32,
+        "actual": 358671.88
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2024 AND period_month = 12 LIMIT 500"
+  },
+  "Q002": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "net_inflow",
+        "min": 2086.35,
+        "max": 2171.51,
+        "actual": 2128.93
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2023 AND period_month = 3 LIMIT 500"
+  },
+  "Q003": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "funds_mobilized",
+        "min": 2227.86,
+        "max": 2318.8,
+        "actual": 2273.33
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2025 AND period_month = 1 LIMIT 500"
+  },
+  "Q004": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "no_of_folios",
+        "min": 19890566.08,
+        "max": 20702425.92,
+        "actual": 20296496.0
+      }
+    ],
+    "seeded": true,
+    "unit": "count",
+    "row_count_actual": 1,
+    "sql_used": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 AND period_month = 6 LIMIT 500"
+  },
+  "Q005": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "redemption",
+        "min": 277686.72,
+        "max": 289020.88,
+        "actual": 283353.8
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2022 AND period_month = 8 LIMIT 500"
+  },
+  "Q006": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "no_of_schemes",
+        "min": 148.96,
+        "max": 155.04,
+        "actual": 152.0
+      }
+    ],
+    "seeded": true,
+    "unit": "count",
+    "row_count_actual": 10,
+    "sql_used": "SELECT period_month, no_of_schemes FROM amfi_fund_stats WHERE fund_category = 'Index Funds' AND period_year = 2023 ORDER BY period_month LIMIT 500"
+  },
+  "Q007": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "avg_aum",
+        "min": 388940.28,
+        "max": 404815.4,
+        "actual": 396877.84
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT AVG(aum) AS avg_aum FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2024 LIMIT 500"
+  },
+  "Q008": {
+    "row_count": 5,
+    "key_values": [
+      {
+        "col": "aum",
+        "min": 750067.69,
+        "max": 780682.69,
+        "actual": 765375.19
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 5,
+    "sql_used": "SELECT fund_category, aum FROM amfi_fund_stats WHERE period_year = 2024 AND period_month = 12 ORDER BY aum DESC LIMIT 5;"
+  },
+  "Q009": {
+    "row_count": 12,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 0,
+    "sql_used": "SELECT period_month, net_inflow, redemption FROM amfi_amc_stats WHERE scheme_type = 'Gold ETF' AND period_year = 2023 ORDER BY period_month LIMIT 500"
+  },
+  "Q010": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "q2_mobilized",
+        "min": 67137.74,
+        "max": 69878.06,
+        "actual": 68507.9
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(funds_mobilized) AS q2_mobilized FROM amfi_fund_stats WHERE fund_category = 'Sectoral/Thematic Funds' AND period_year = 2024 AND period_month IN (4, 5, 6) LIMIT 500"
+  },
+  "Q011": {
+    "row_count_min": 70,
+    "row_count_max": 85,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "aum",
+        "min": 151052.42,
+        "max": 157217.82,
+        "actual": 154135.12
+      }
+    ],
+    "seeded": true,
+    "notes": "12 months x 7 years",
+    "row_count_actual": 68,
+    "sql_used": "SELECT period_year, period_month, aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year BETWEEN 2020 AND 2026 ORDER BY period_year, period_month LIMIT 500"
+  },
+  "Q012": {
+    "row_count": 4,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1980.58,
+        "max": 2061.42,
+        "actual": 2021.0
+      },
+      {
+        "col": "annual_net_inflow",
+        "min": -3886.49,
+        "max": -3734.07,
+        "actual": -3810.28
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 4,
+    "sql_used": "SELECT period_year, SUM(net_inflow) AS annual_net_inflow FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2021 AND 2024 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q013": {
+    "row_count": 7,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "annual_avg_aum",
+        "min": 84237.84,
+        "max": 87676.12,
+        "actual": 85956.98
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 7,
+    "sql_used": "SELECT period_year, AVG(aum) AS annual_avg_aum FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year BETWEEN 2020 AND 2026 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q014": {
+    "row_count": 6,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1981.56,
+        "max": 2062.44,
+        "actual": 2022.0
+      },
+      {
+        "col": "annual_aum",
+        "min": 2491136.89,
+        "max": 2592815.95,
+        "actual": 2541976.42
+      }
+    ],
+    "seeded": true,
+    "notes": "2 categories x 3 years",
+    "row_count_actual": 6,
+    "sql_used": "SELECT period_year, fund_category, SUM(aum) AS annual_aum FROM amfi_fund_stats WHERE fund_category IN ('Large Cap Fund', 'Mid Cap Fund') AND period_year BETWEEN 2022 AND 2024 GROUP BY period_year, fund_category ORDER BY period_year, fund_category LIMIT 500"
+  },
+  "Q015": {
+    "row_count": 7,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "total_industry_aum",
+        "min": 28313589.73,
+        "max": 29469246.45,
+        "actual": 28891418.09
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 7,
+    "sql_used": "SELECT period_year, SUM(aum) AS total_industry_aum FROM amfi_fund_stats WHERE period_year BETWEEN 2020 AND 2026 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q016": {
+    "row_count_min": 30,
+    "row_count_max": 40,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1980.58,
+        "max": 2061.42,
+        "actual": 2021.0
+      },
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "net_inflow",
+        "min": -1603.81,
+        "max": -1540.91,
+        "actual": -1572.36
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 32,
+    "sql_used": "SELECT period_year, period_month, net_inflow FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year BETWEEN 2021 AND 2023 ORDER BY period_year, period_month LIMIT 500"
+  },
+  "Q017": {
+    "row_count": 6,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "annual_total_redemption",
+        "min": 4048716.93,
+        "max": 4213970.69,
+        "actual": 4131343.81
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 6,
+    "sql_used": "SELECT period_year, SUM(redemption) AS annual_total_redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year BETWEEN 2020 AND 2025 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q018": {
+    "row_count_min": 70,
+    "row_count_max": 85,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "no_of_folios",
+        "min": 11833353.0,
+        "max": 12316347.0,
+        "actual": 12074850.0
+      }
+    ],
+    "seeded": true,
+    "unit": "count",
+    "row_count_actual": 73,
+    "sql_used": "SELECT period_year, period_month, no_of_folios FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2020 AND 2026 ORDER BY period_year, period_month LIMIT 500"
+  },
+  "Q019": {
+    "row_count": 3,
+    "key_values": [
+      {
+        "col": "total_mobilized",
+        "min": 16243644.96,
+        "max": 16906650.88,
+        "actual": 16575147.92
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 3,
+    "sql_used": "SELECT fund_category, SUM(funds_mobilized) AS total_mobilized FROM amfi_fund_stats WHERE period_year IN (2023, 2024, 2025) GROUP BY fund_category ORDER BY total_mobilized DESC LIMIT 3;"
+  },
+  "Q020": {
+    "row_count": 6,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1980.58,
+        "max": 2061.42,
+        "actual": 2021.0
+      },
+      {
+        "col": "annual_net_inflow",
+        "min": 15163.99,
+        "max": 15782.93,
+        "actual": 15473.46
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 6,
+    "sql_used": "SELECT period_year, SUM(net_inflow) AS annual_net_inflow FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year BETWEEN 2021 AND 2026 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q021": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "aum",
+        "min": 1249338.3,
+        "max": 1300331.7,
+        "actual": 1274835.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT aum FROM amfi_amc_stats WHERE period_year = 2015 AND period_month = 12 AND scheme_type = 'Total' LIMIT 500"
+  },
+  "Q022": {
+    "row_count": 12,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "aum",
+        "min": 149161.88,
+        "max": 155250.12,
+        "actual": 152206.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 11,
+    "sql_used": "SELECT period_month, aum FROM amfi_amc_stats WHERE scheme_type = 'Equity' AND period_year = 2014 ORDER BY period_month LIMIT 500"
+  },
+  "Q023": {
+    "row_count": 6,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1969.8,
+        "max": 2050.2,
+        "actual": 2010.0
+      },
+      {
+        "col": "avg_aum",
+        "min": 84263.01,
+        "max": 87702.32,
+        "actual": 85982.67
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 6,
+    "sql_used": "SELECT period_year, AVG(aum) AS avg_aum FROM amfi_amc_stats WHERE scheme_type = 'Liquid/Money Market' AND period_year BETWEEN 2010 AND 2015 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q024": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "total_mobilized",
+        "min": 8960275.24,
+        "max": 9326000.76,
+        "actual": 9143138.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(total_mobilized) AS total_mobilized FROM amfi_amc_stats WHERE period_year = 2013 AND scheme_type = 'Total' LIMIT 500"
+  },
+  "Q025": {
+    "row_count": 7,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1971.76,
+        "max": 2052.24,
+        "actual": 2012.0
+      },
+      {
+        "col": "annual_avg_aum",
+        "min": 1599.44,
+        "max": 1664.72,
+        "actual": 1632.08
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 7,
+    "sql_used": "SELECT period_year, AVG(aum) AS annual_avg_aum FROM amfi_amc_stats WHERE scheme_type = 'Gold ETF' AND period_year BETWEEN 2012 AND 2018 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q026": {
+    "row_count_min": 1,
+    "row_count_max": 12,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(net_inflow) AS total_net_inflow FROM amfi_amc_stats WHERE scheme_type = 'Income' AND period_year = 2016 LIMIT 500"
+  },
+  "Q027": {
+    "row_count": 2,
+    "key_values": [
+      {
+        "col": "avg_aum",
+        "min": 793754.27,
+        "max": 826152.4,
+        "actual": 809953.33
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 2,
+    "sql_used": "SELECT scheme_type, AVG(aum) AS avg_aum FROM amfi_amc_stats WHERE scheme_type IN ('Equity', 'Income') AND period_year = 2017 GROUP BY scheme_type LIMIT 500"
+  },
+  "Q028": {
+    "row_count": 11,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1968.82,
+        "max": 2049.18,
+        "actual": 2009.0
+      },
+      {
+        "col": "annual_net_inflow",
+        "min": 78360.8,
+        "max": 81559.2,
+        "actual": 79960.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 11,
+    "sql_used": "SELECT period_year, SUM(net_inflow) AS annual_net_inflow FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year BETWEEN 2009 AND 2019 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q029": {
+    "row_count": 10,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "total_industry_aum",
+        "min": 28313589.73,
+        "max": 29469246.45,
+        "actual": 28891418.09
+      }
+    ],
+    "seeded": true,
+    "notes": "5 pre-2020 + 5 post-2020 years",
+    "row_count_actual": 5,
+    "sql_used": "SELECT period_year, SUM(aum) AS total_industry_aum FROM amfi_fund_stats WHERE period_year BETWEEN 2015 AND 2024 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q034": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "amount_invested",
+        "min": 33907.57,
+        "max": 35291.55,
+        "actual": 34599.56
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(funds_mobilized) AS amount_invested FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2023 LIMIT 500"
+  },
+  "Q035": {
+    "row_count": 12,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "money_came_in",
+        "min": 5535.45,
+        "max": 5761.39,
+        "actual": 5648.42
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 12,
+    "sql_used": "SELECT period_month, funds_mobilized AS money_came_in FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 ORDER BY period_month LIMIT 500"
+  },
+  "Q036": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "total_inflow",
+        "min": 17930.94,
+        "max": 18662.82,
+        "actual": 18296.88
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(net_inflow) AS total_inflow FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2022 LIMIT 500"
+  },
+  "Q037": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "corpus",
+        "min": 269575.66,
+        "max": 280578.74,
+        "actual": 275077.2
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT aum AS corpus FROM amfi_fund_stats WHERE fund_category = 'Index Funds' AND period_year = 2024 AND period_month = 12 LIMIT 500"
+  },
+  "Q038": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "total_subscriptions",
+        "min": 16949.02,
+        "max": 17640.82,
+        "actual": 17294.92
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(funds_mobilized) AS total_subscriptions FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2021 LIMIT 500"
+  },
+  "Q039": {
+    "row_count": 1,
+    "key_values": [
+      {
+        "col": "total_redemption",
+        "min": 3178765.34,
+        "max": 3308510.86,
+        "actual": 3243638.1
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(redemption) AS total_redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2023 LIMIT 500"
+  },
+  "Q040": {
+    "row_count": 7,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "annual_net_inflow",
+        "min": 3254.9,
+        "max": 3387.76,
+        "actual": 3321.33
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 7,
+    "sql_used": "SELECT period_year, SUM(net_inflow) AS annual_net_inflow FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2020 AND 2026 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q061": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "net_inflow",
+        "min": 1713.54,
+        "max": 1783.48,
+        "actual": 1748.51
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2023 AND period_month = 6 LIMIT 500"
+  },
+  "Q062": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "redemption",
+        "min": 5699.84,
+        "max": 5932.48,
+        "actual": 5816.16
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 AND period_month = 3 LIMIT 500"
+  },
+  "Q063": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "no_of_folios",
+        "min": 15252350.54,
+        "max": 15874895.46,
+        "actual": 15563623.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2023 AND period_month = 12 LIMIT 500"
+  },
+  "Q064": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "funds_mobilized",
+        "min": 326780.63,
+        "max": 340118.61,
+        "actual": 333449.62
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2022 AND period_month = 8 LIMIT 500"
+  },
+  "Q065": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "aum",
+        "min": 435487.92,
+        "max": 453262.94,
+        "actual": 444375.43
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT aum FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2024 AND period_month = 9 LIMIT 500"
+  },
+  "Q066": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "net_inflow",
+        "min": 3002.06,
+        "max": 3124.6,
+        "actual": 3063.33
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2025 AND period_month = 1 LIMIT 500"
+  },
+  "Q067": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "no_of_schemes",
+        "min": 27.44,
+        "max": 28.56,
+        "actual": 28.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT no_of_schemes FROM amfi_fund_stats WHERE fund_category = 'Multi Asset Allocation Fund' AND period_year = 2025 AND period_month = 3 LIMIT 500"
+  },
+  "Q068": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "avg_aum",
+        "min": 338454.42,
+        "max": 352268.88,
+        "actual": 345361.65
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT AVG(aum) AS avg_aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2024 AND period_month = 6 LIMIT 500"
+  },
+  "Q069": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "redemption",
+        "min": 363651.55,
+        "max": 378494.47,
+        "actual": 371073.01
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Overnight Fund' AND period_year = 2023 AND period_month = 4 LIMIT 500"
+  },
+  "Q070": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "no_of_folios",
+        "min": 19890566.08,
+        "max": 20702425.92,
+        "actual": 20296496.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 AND period_month = 6 LIMIT 500"
+  },
+  "Q071": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "funds_mobilized",
+        "min": 3798.61,
+        "max": 3953.65,
+        "actual": 3876.13
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2024 AND period_month = 3 LIMIT 500"
+  },
+  "Q072": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "net_inflow",
+        "min": 1065.7,
+        "max": 1109.2,
+        "actual": 1087.45
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2023 AND period_month = 12 LIMIT 500"
+  },
+  "Q073": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "net_inflow",
+        "min": 2019.96,
+        "max": 2102.4,
+        "actual": 2061.18
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 12,
+    "sql_used": "SELECT period_month, net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 ORDER BY period_month LIMIT 500"
+  },
+  "Q074": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1981.56,
+        "max": 2062.44,
+        "actual": 2022.0
+      },
+      {
+        "col": "period_month",
+        "min": 1.96,
+        "max": 2.04,
+        "actual": 2.0
+      },
+      {
+        "col": "aum",
+        "min": 138214.88,
+        "max": 143856.3,
+        "actual": 141035.59
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 33,
+    "sql_used": "SELECT period_year, period_month, aum FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year BETWEEN 2022 AND 2024 ORDER BY period_year, period_month LIMIT 500"
+  },
+  "Q075": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "redemption",
+        "min": 336252.81,
+        "max": 349977.41,
+        "actual": 343115.11
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 10,
+    "sql_used": "SELECT period_month, redemption FROM amfi_fund_stats WHERE fund_category = 'Liquid Fund' AND period_year = 2023 ORDER BY period_month LIMIT 500"
+  },
+  "Q076": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "funds_mobilized",
+        "min": 3496.53,
+        "max": 3639.25,
+        "actual": 3567.89
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 10,
+    "sql_used": "SELECT period_month, funds_mobilized FROM amfi_fund_stats WHERE fund_category = 'Flexi Cap Fund' AND period_year = 2023 ORDER BY period_month LIMIT 500"
+  },
+  "Q077": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "aum",
+        "min": 128272.32,
+        "max": 133507.92,
+        "actual": 130890.12
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 10,
+    "sql_used": "SELECT period_month, aum FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2023 ORDER BY period_month LIMIT 500"
+  },
+  "Q078": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 1.96,
+        "max": 2.04,
+        "actual": 2.0
+      },
+      {
+        "col": "net_inflow",
+        "min": 1076.15,
+        "max": 1120.07,
+        "actual": 1098.11
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 11,
+    "sql_used": "SELECT period_month, net_inflow FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2022 ORDER BY period_month LIMIT 500"
+  },
+  "Q079": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 1.96,
+        "max": 2.04,
+        "actual": 2.0
+      },
+      {
+        "col": "redemption",
+        "min": 1443.67,
+        "max": 1502.59,
+        "actual": 1473.13
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 11,
+    "sql_used": "SELECT period_month, redemption FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2022 ORDER BY period_month LIMIT 500"
+  },
+  "Q080": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1980.58,
+        "max": 2061.42,
+        "actual": 2021.0
+      },
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "no_of_schemes",
+        "min": 31.36,
+        "max": 32.64,
+        "actual": 32.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 32,
+    "sql_used": "SELECT period_year, period_month, no_of_schemes FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year BETWEEN 2021 AND 2023 ORDER BY period_year, period_month LIMIT 500"
+  },
+  "Q081": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "no_of_folios",
+        "min": 13735117.48,
+        "max": 14295734.52,
+        "actual": 14015426.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT no_of_folios FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 AND period_month = 3 LIMIT 500"
+  },
+  "Q082": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "total_outflows",
+        "min": 16188.11,
+        "max": 16848.85,
+        "actual": 16518.48
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(redemption) AS total_outflows FROM amfi_fund_stats WHERE fund_category = 'ELSS' AND period_year = 2023 LIMIT 500"
+  },
+  "Q083": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_month",
+        "min": 0.98,
+        "max": 1.02,
+        "actual": 1.0
+      },
+      {
+        "col": "fresh_inflow",
+        "min": 6893.04,
+        "max": 7174.38,
+        "actual": 7033.71
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 12,
+    "sql_used": "SELECT period_month, funds_mobilized AS fresh_inflow FROM amfi_fund_stats WHERE fund_category = 'Small Cap Fund' AND period_year = 2024 ORDER BY period_month LIMIT 500"
+  },
+  "Q084": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "total_schemes",
+        "min": 273.42,
+        "max": 284.58,
+        "actual": 279.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(no_of_schemes) AS total_schemes FROM amfi_fund_stats WHERE fund_category = 'Short Duration Fund' AND period_year = 2022 LIMIT 500"
+  },
+  "Q085": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "corpus_crore",
+        "min": 275726.22,
+        "max": 286980.36,
+        "actual": 281353.29
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT aum AS corpus_crore FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2023 AND period_month = 12 LIMIT 500"
+  },
+  "Q086": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "redemption",
+        "min": 4014.51,
+        "max": 4178.37,
+        "actual": 4096.44
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT redemption FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_year = 2024 AND period_month = 9 LIMIT 500"
+  },
+  "Q087": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "net_inflow",
+        "min": 3067.81,
+        "max": 3193.03,
+        "actual": 3130.42
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT net_inflow FROM amfi_fund_stats WHERE fund_category = 'Mid Cap Fund' AND period_year = 2024 AND period_month = 9 LIMIT 500"
+  },
+  "Q088": {
+    "row_count": null,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(aum) AS total_equity_aum FROM amfi_amc_stats WHERE scheme_type = 'Equity' AND period_year = 2018 AND period_month = 12 LIMIT 500"
+  },
+  "Q089": {
+    "row_count": null,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(funds_mobilized) AS total_mobilized FROM amfi_fund_stats WHERE period_year = 2016 AND period_month = 6 LIMIT 500"
+  },
+  "Q090": {
+    "row_count": null,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(net_inflow) AS net_inflow FROM amfi_fund_stats WHERE period_year = 2015 AND period_month = 3 LIMIT 500"
+  },
+  "Q091": {
+    "row_count": null,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 0,
+    "sql_used": "SELECT aum FROM amfi_fund_stats WHERE fund_category = 'Gilt' AND period_year = 2019 AND period_month = 9 LIMIT 500"
+  },
+  "Q092": {
+    "row_count": null,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT SUM(aum) AS total_industry_aum FROM amfi_fund_stats WHERE period_year = 2017 AND period_month = 12 LIMIT 500"
+  },
+  "Q093": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1979.6,
+        "max": 2060.4,
+        "actual": 2020.0
+      },
+      {
+        "col": "aum",
+        "min": 168397.34,
+        "max": 175270.7,
+        "actual": 171834.02
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 2,
+    "sql_used": "SELECT period_year, aum FROM amfi_fund_stats WHERE fund_category = 'Large Cap Fund' AND period_month = 12 AND period_year IN (2020, 2024) ORDER BY period_year LIMIT 500"
+  },
+  "Q094": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1974.7,
+        "max": 2055.3,
+        "actual": 2015.0
+      },
+      {
+        "col": "total_industry_aum",
+        "min": 14390056.38,
+        "max": 14977405.62,
+        "actual": 14683731.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 5,
+    "sql_used": "SELECT period_year, SUM(aum) AS total_industry_aum FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year BETWEEN 2015 AND 2019 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q095": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "year",
+        "min": 1980.58,
+        "max": 2061.42,
+        "actual": 2021.0
+      },
+      {
+        "col": "net_inflow_2021",
+        "min": -3886.49,
+        "max": -3734.07,
+        "actual": -3810.28
+      },
+      {
+        "col": "year_2",
+        "min": 1982.54,
+        "max": 2063.46,
+        "actual": 2023.0
+      },
+      {
+        "col": "net_inflow_2023",
+        "min": 3996.95,
+        "max": 4160.09,
+        "actual": 4078.52
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT \n  2021 AS year,\n  SUM(CASE WHEN period_year = 2021 THEN net_inflow ELSE 0 END) AS net_inflow_2021,\n  2023 AS year_2,\n  SUM(CASE WHEN period_year = 2023 THEN net_inflow ELSE 0 END) AS net_inflow_2023\nFROM amfi_fund_stats \nWHERE fund_category = 'ELSS' AND period_year IN (2021, 2023) LIMIT 500"
+  },
+  "Q096": {
+    "row_count": null,
+    "key_values": [
+      {
+        "col": "period_year",
+        "min": 1977.64,
+        "max": 2058.36,
+        "actual": 2018.0
+      },
+      {
+        "col": "total_redemption",
+        "min": 21345668.12,
+        "max": 22216919.88,
+        "actual": 21781294.0
+      }
+    ],
+    "seeded": true,
+    "row_count_actual": 1,
+    "sql_used": "SELECT period_year, SUM(redemption) AS total_redemption FROM amfi_amc_stats WHERE scheme_type = 'Total' AND period_year IN (2018, 2023) GROUP BY period_year ORDER BY period_year LIMIT 500"
+  },
+  "Q097": {
+    "row_count": null,
+    "key_values": [],
+    "seeded": true,
+    "row_count_actual": 0,
+    "sql_used": "SELECT period_year, SUM(aum) AS equity_aum FROM amfi_amc_stats WHERE scheme_type = 'Equity' AND period_year IN (2018, 2023) AND period_month = 12 GROUP BY period_year ORDER BY period_year LIMIT 500"
+  }
+}

@@ -1,10 +1,38 @@
+# Virtual environment
 .venv
+
+# Git
 .git
+.gitignore
+.gitattributes
+
+# Python cache
 __pycache__
 *.pyc
-.env
-pipeline.db
+*.pyo
 .pytest_cache
 .mypy_cache
 .ruff_cache
 *.egg-info
+dist/
+build/
+
+# Secrets — NEVER bake into image
+.env
+.env.*
+
+# Local state
+pipeline.db
+*.sqlite
+*.log
+logs/
+
+# macOS
+.DS_Store
+
+# Eval output
+eval_results_*.json
+
+# IDE
+.vscode/
+.idea/

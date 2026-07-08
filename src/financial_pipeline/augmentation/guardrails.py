@@ -58,14 +58,37 @@ MIN_SOURCES_BY_INTENT: dict[str, int] = {
 # Check 1 — Investment advice patterns (SEBI prohibits robo-advice without
 # licence; our system answers factual questions, not personal finance advice)
 _ADVICE_PATTERNS = [
-    r"\bshould (i|we|you)\s+(invest|buy|sell|put money|allocate)\b",
+    r"\bshould (i|we|you)\s+(invest|buy|sell|exit|switch|move|transfer|withdraw|redeem|put money|allocate)\b",
     r"\b(recommend|suggest|advise)\b.{0,30}\b(fund|scheme|stock|invest)\b",
     r"\bwhich fund (is best|to buy|should i|would you)\b",
+    r"\bwhich\b.{0,50}\bfunds?\b.{0,50}\b(should|buy|invest|pick|choose|go for)\b",
+    r"\bbest\s+(performing\s+)?funds?\b.{0,80}\b(cagr|return|returns|performance|invest)\b",
+    r"\b(top|best)\s+\d*\s*funds?\b.{0,80}\b(cagr|return|returns|performance|invest)\b",
+    r"\bfunds?\b.{0,50}\b(good|strong|high)\s+cagr\b",
+    r"\b(good|strong|high)\s+cagr\b.{0,50}\bfunds?\b",
     r"\bguaranteed\s+(return|profit|gain|growth)\b",
     r"\b(safe|risk.free)\s+(bet|investment|option)\b",
     r"\bwill\s+.{0,20}\b(definitely|certainly)\s+(grow|increase|give|earn)\b",
     r"\bbest fund(s)?\s+to\s+(invest|buy)\b",
     r"\b(pick|choose|select)\s+.{0,15}\bfund\b.{0,30}\bfor me\b",
+    r"\bis it (a good idea|advisable|wise|smart)\b.{0,40}\b(invest|put|allocate|park|buy)\b",
+    r"\bhow should (i|we)\s+(invest|allocate|diversify|park)\b",
+    # Additional patterns for advice queries that imply personal recommendations
+    r"\bwhich\b.{0,60}\bfund\b.{0,40}\b(pick|choose|go for)\b",
+    r"\bwould you (recommend|suggest)\b",
+]
+
+# Check 2b — Out-of-scope queries: topics outside AMFI mutual fund data
+# (stock prices, index levels, bank products, individual fund NAV, crypto markets)
+_OUT_OF_SCOPE_PATTERNS = [
+    r"\b(current\s+)?(stock|share|equity)\s+price\b",
+    # No trailing \b — matches "performed", "performance", "returned", etc.
+    r"\b(nifty|sensex)\b.{0,30}(perform|return|level|point|rose|fell|gain|loss|today)",
+    r"\b(fd|fixed deposit)\s+rates?\b",
+    r"\bcurrent\s+nav\b",
+    r"\bnav\b.{0,40}\btoday\b",
+    # No leading \b on second group — matches "investment", "trending", etc.
+    r"\bcryptocurren(cy|cies)\b.{0,30}(invest|trend|market|perform)",
 ]
 
 # Check 2 — Unsupported claim indicators in the question itself
@@ -82,6 +105,7 @@ class PreGuardrailResult:
     should_proceed: bool  # False = block, do not call LLM
     block_reason: str | None  # human-readable reason if blocked
     is_investment_advice: bool
+    is_out_of_scope: bool
     is_assertion_query: bool
     min_sources_met: bool
     source_count: int
@@ -128,11 +152,33 @@ class PreGenerationGuardrails:
                     "only and cannot recommend specific investments."
                 ),
                 is_investment_advice=True,
+                is_out_of_scope=False,
                 is_assertion_query=False,
                 min_sources_met=False,
                 source_count=len(citations),
                 context_quality=0.0,
                 warnings=["investment_advice_query"],
+            )
+
+        # ── Check 2b: Out-of-scope detection ──────────────────────────
+        is_oos = any(re.search(p, q) for p in _OUT_OF_SCOPE_PATTERNS)
+        if is_oos:
+            log.warning("pre_guardrail.out_of_scope_detected", q=question[:80])
+            return PreGuardrailResult(
+                should_proceed=False,
+                block_reason=(
+                    "This question is outside the scope of AMFI mutual fund data. "
+                    "This system only covers Indian mutual fund statistics from AMFI reports "
+                    "and cannot answer questions about stock prices, bank products, "
+                    "index levels, or individual fund NAVs."
+                ),
+                is_investment_advice=False,
+                is_out_of_scope=True,
+                is_assertion_query=False,
+                min_sources_met=False,
+                source_count=len(citations),
+                context_quality=0.0,
+                warnings=["out_of_scope_query"],
             )
 
         # ── Check 2: Assertion-style query ────────────────────────────
@@ -184,6 +230,7 @@ class PreGenerationGuardrails:
             should_proceed=True,  # proceed; warnings surfaced to caller
             block_reason=None,
             is_investment_advice=False,
+            is_out_of_scope=False,
             is_assertion_query=is_assertion,
             min_sources_met=min_met,
             source_count=source_count,

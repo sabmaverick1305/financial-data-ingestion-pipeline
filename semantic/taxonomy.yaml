@@ -1,0 +1,128 @@
+version: "1.0"
+name: FIES Semantic Taxonomy
+layer: 2
+description: >
+  Classification hierarchies over financial entities — fund scheme types,
+  AMCs, document types, and named time periods. Pure structure (id, label,
+  parent) — synonyms live in thesaurus.yaml, formal typed definitions live in
+  financial_ontology.yaml. Consolidated from fies/ontology/entities.yaml's
+  scheme_type parent pointers, which were the live, eval-verified hierarchy
+  (a separate, redundant scheme_types tree in the old financial_ontology.yaml
+  was never actually consumed by any code and is not carried forward).
+
+# Fund scheme category hierarchy. `parent: all` marks a top-of-tree asset
+# class; `parent: null` marks a standalone category that isn't nested under
+# one of the four asset classes below.
+scheme_types:
+  - entity_id: equity
+    label: Equity
+    parent: all
+  - entity_id: large_cap
+    label: Large Cap
+    parent: equity
+  - entity_id: mid_cap
+    label: Mid Cap
+    parent: equity
+  - entity_id: small_cap
+    label: Small Cap
+    parent: equity
+  - entity_id: multi_cap
+    label: Multi Cap
+    parent: equity
+  - entity_id: flexi_cap
+    label: Flexi Cap
+    parent: equity
+  - entity_id: elss
+    label: ELSS
+    parent: equity
+  - entity_id: sectoral_thematic
+    label: Sectoral/Thematic
+    parent: equity
+
+  - entity_id: debt
+    label: Debt
+    parent: all
+  - entity_id: liquid
+    label: Liquid
+    parent: debt
+  - entity_id: overnight
+    label: Overnight
+    parent: debt
+  - entity_id: gilt
+    label: Gilt
+    parent: debt
+
+  - entity_id: hybrid
+    label: Hybrid
+    parent: all
+
+  - entity_id: index_funds
+    label: Index Funds
+    parent: null
+  - entity_id: etf
+    label: ETF
+    parent: null
+  - entity_id: gold
+    label: Gold
+    parent: null
+  - entity_id: international
+    label: International
+    parent: null
+
+  - entity_id: all_categories
+    label: All Categories
+    parent: all
+
+# AMCs — flat, no hierarchy.
+amcs:
+  - entity_id: sbi_mf
+    label: SBI Mutual Fund
+  - entity_id: hdfc_mf
+    label: HDFC Mutual Fund
+  - entity_id: icici_pru_mf
+    label: ICICI Prudential Mutual Fund
+  - entity_id: axis_mf
+    label: Axis Mutual Fund
+  - entity_id: nippon_india_mf
+    label: Nippon India Mutual Fund
+  - entity_id: kotak_mf
+    label: Kotak Mutual Fund
+  - entity_id: aditya_birla_sun_life_mf
+    label: Aditya Birla Sun Life Mutual Fund
+  - entity_id: quant_mf
+    label: Quant Mutual Fund
+  - entity_id: ppfas_mf
+    label: PPFAS Mutual Fund
+
+# Source document types — flat, no hierarchy.
+document_types:
+  - entity_id: amfi_monthly_report
+    label: AMFI Monthly Report
+  - entity_id: amfi_quarterly_report
+    label: AMFI Quarterly Report
+  - entity_id: sebi_circular
+    label: SEBI Circular
+  - entity_id: rbi_circular
+    label: RBI Circular
+
+# Named/relative time periods — flat, dated where known.
+temporal_periods:
+  - entity_id: covid_period
+    label: COVID Period
+    start: "2020-03"
+    end: "2021-12"
+  - entity_id: post_covid
+    label: Post COVID Period
+    start: "2022-01"
+    end: null
+  - entity_id: pre_covid
+    label: Pre COVID Period
+    start: null
+    end: "2020-02"
+  - entity_id: fy2024
+    label: FY2024
+    start: "2023-04"
+    end: "2024-03"
+  - entity_id: last_five_years
+    label: Last Five Years
+    relative_period: P5Y

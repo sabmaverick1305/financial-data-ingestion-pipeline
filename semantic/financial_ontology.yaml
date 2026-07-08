@@ -1,0 +1,346 @@
+version: "1.0"
+name: FIES Financial Ontology
+layer: 4
+description: >
+  Formal typed definitions over vocabulary.yaml and taxonomy.yaml concepts.
+  Every concept gets a `type` (FinancialMetric, FundCategory,
+  AssetManagementCompany, DocumentType) and a prose `definition` usable
+  directly as a RAG answer for "What is X?" queries — plus the structural
+  metadata (sql_column, aggregation rules, template-family constraints) the
+  retrieval/generation/eval-generation code actually consumes. This is the
+  layer that turns "these ids exist" (vocabulary/taxonomy) and "these ids
+  mean the same thing" (thesaurus) into "here is what this id IS."
+
+# ─────────────────────────────────────────────────────────────────────────
+# FinancialMetric concepts
+# ─────────────────────────────────────────────────────────────────────────
+concepts:
+  aum:
+    type: FinancialMetric
+    canonical_name: Assets Under Management
+    definition: >
+      Assets Under Management — the total market value of assets a fund,
+      category, or AMC manages at a specific point in time.
+    semantic_type: stock
+    unit: crore_inr
+    sql_column: aum
+    preferred_tables: [amfi_fund_stats, amfi_amc_stats]
+    default_aggregation: latest
+    valid_aggregations: [latest, avg, max, min, trend, yoy_change, mom_change]
+    disallowed_template_families: [sum_over_range]
+    temporal_rule: >
+      AUM is a point-in-time stock metric. Use latest/snapshot unless the
+      user explicitly asks for average, growth, trend, max, min, or a
+      time-series.
+
+  avg_aum:
+    type: FinancialMetric
+    canonical_name: Average AUM
+    definition: >
+      Average Assets Under Management — the average AUM for a stated
+      reporting period, usually a month or quarter, as a distinct reported
+      column rather than an average computed over multiple periods.
+    semantic_type: period_average
+    unit: crore_inr
+    sql_column: avg_aum
+    preferred_tables: [amfi_fund_stats, amfi_amc_stats]
+    default_aggregation: avg
+    valid_aggregations: [latest, snapshot, avg, trend]
+    disallowed_template_families: [sum_over_range, cumulative_range]
+    note: >
+      Do not substitute avg_aum into range-sum templates. "Average AUM from
+      2020 to 2025" means AVG(aum) over periods, not the avg_aum column,
+      unless the query is about a single stated period.
+
+  funds_mobilized:
+    type: FinancialMetric
+    canonical_name: Funds Mobilized
+    definition: >
+      Funds Mobilized — the gross amount invested or subscribed into
+      mutual fund schemes during a period, before any redemptions are
+      subtracted.
+    semantic_type: flow
+    unit: crore_inr
+    sql_column: funds_mobilized
+    preferred_tables: [amfi_fund_stats, amfi_monthly_category_stats]
+    default_aggregation: sum
+    valid_aggregations: [sum, avg, max, min, trend, yoy_change, mom_change]
+    disallowed_template_families: []
+
+  redemption:
+    type: FinancialMetric
+    canonical_name: Redemption
+    definition: >
+      Redemption — the gross amount withdrawn or redeemed from mutual fund
+      schemes during a period.
+    semantic_type: flow
+    unit: crore_inr
+    sql_column: redemption
+    preferred_tables: [amfi_fund_stats, amfi_monthly_category_stats]
+    default_aggregation: sum
+    valid_aggregations: [sum, avg, max, min, trend, yoy_change, mom_change]
+    disallowed_template_families: []
+
+  net_inflow:
+    type: FinancialMetric
+    canonical_name: Net Inflow
+    definition: >
+      Net Inflow — the net flow into a scheme or category after subtracting
+      redemption from funds mobilized during the same period.
+    semantic_type: derived_flow
+    unit: crore_inr
+    sql_column: net_inflow
+    preferred_tables: [amfi_fund_stats, amfi_monthly_category_stats]
+    default_aggregation: sum
+    valid_aggregations: [sum, avg, max, min, trend, yoy_change, mom_change]
+    disallowed_template_families: []
+    formula: funds_mobilized - redemption
+    component_metrics: [funds_mobilized, redemption]
+
+  folios:
+    type: FinancialMetric
+    canonical_name: Number of Folios
+    definition: >
+      Number of Folios — the count of investor folio/account records for a
+      scheme, category, or AMC. A proxy for investor participation, not a
+      count of unique investors.
+    semantic_type: stock_count
+    unit: count
+    sql_column: no_of_folios
+    preferred_tables: [amfi_fund_stats]
+    default_aggregation: latest
+    valid_aggregations: [latest, avg, max, min, trend, yoy_change, mom_change]
+    disallowed_template_families: [sum_over_range]
+    semantic_warning: Folios are not identical to unique investors; phrase answers carefully.
+
+  schemes:
+    type: FinancialMetric
+    canonical_name: Number of Schemes
+    definition: >
+      Number of Schemes — the count of active mutual fund schemes in a
+      category, AMC, or reporting period.
+    semantic_type: stock_count
+    unit: count
+    sql_column: no_of_schemes
+    preferred_tables: [amfi_fund_stats]
+    default_aggregation: latest
+    valid_aggregations: [latest, count, max, min, trend]
+    disallowed_template_families: [sum_over_range, cumulative_range]
+
+  # ───────────────────────────────────────────────────────────────────────
+  # FundCategory concepts — brief defining prose per scheme type. Hierarchy
+  # (parent/children) lives in taxonomy.yaml; this only adds the definition.
+  # ───────────────────────────────────────────────────────────────────────
+  equity:
+    type: FundCategory
+    definition: Mutual fund schemes that invest predominantly in listed equity shares, targeting capital growth.
+  large_cap:
+    type: FundCategory
+    definition: Equity funds investing predominantly in the largest listed companies by market capitalization.
+  mid_cap:
+    type: FundCategory
+    definition: Equity funds investing predominantly in mid-sized listed companies by market capitalization.
+  small_cap:
+    type: FundCategory
+    definition: Equity funds investing predominantly in smaller listed companies by market capitalization.
+  multi_cap:
+    type: FundCategory
+    definition: Equity funds investing across large-cap, mid-cap, and small-cap companies without a fixed allocation bias.
+  flexi_cap:
+    type: FundCategory
+    definition: Equity funds with full flexibility to invest across market capitalizations based on the fund manager's view.
+  elss:
+    type: FundCategory
+    definition: >
+      Equity Linked Savings Scheme — an equity fund category offering tax
+      deduction under Section 80C, subject to a mandatory 3-year lock-in.
+  sectoral_thematic:
+    type: FundCategory
+    definition: Equity funds concentrated in a specific sector (e.g. banking, IT) or investment theme.
+  debt:
+    type: FundCategory
+    definition: Mutual fund schemes investing predominantly in fixed-income instruments such as bonds and money market securities.
+  liquid:
+    type: FundCategory
+    definition: Debt funds investing in short-maturity money market instruments, typically up to 91 days.
+  overnight:
+    type: FundCategory
+    definition: Debt funds investing in securities maturing in exactly one day, the lowest-duration-risk debt category.
+  gilt:
+    type: FundCategory
+    definition: Debt funds investing predominantly in government securities.
+  hybrid:
+    type: FundCategory
+    definition: Mutual fund schemes investing in a mix of equity and debt instruments to balance growth and stability.
+  index_funds:
+    type: FundCategory
+    definition: Passively managed funds that replicate the composition of a specified market index.
+  etf:
+    type: FundCategory
+    definition: Exchange Traded Fund — a passively managed, index-tracking fund that trades on a stock exchange like a share.
+  gold:
+    type: FundCategory
+    definition: Funds investing in gold or gold-related instruments, including Gold ETFs, as a store-of-value / hedge allocation.
+  international:
+    type: FundCategory
+    definition: Funds investing predominantly in securities listed outside India.
+  all_categories:
+    type: FundCategory
+    definition: Represents the entire mutual fund industry across all scheme categories combined — used when a query has no category filter.
+
+  # ───────────────────────────────────────────────────────────────────────
+  # AssetManagementCompany concepts
+  # ───────────────────────────────────────────────────────────────────────
+  sbi_mf:
+    type: AssetManagementCompany
+    definition: SBI Mutual Fund, a joint venture between State Bank of India and AMUNDI.
+  hdfc_mf:
+    type: AssetManagementCompany
+    definition: HDFC Mutual Fund, one of India's largest asset management companies.
+  icici_pru_mf:
+    type: AssetManagementCompany
+    definition: ICICI Prudential Mutual Fund, a joint venture between ICICI Bank and Prudential plc.
+  axis_mf:
+    type: AssetManagementCompany
+    definition: Axis Mutual Fund, the asset management arm of Axis Bank.
+  nippon_india_mf:
+    type: AssetManagementCompany
+    definition: Nippon India Mutual Fund, formerly Reliance Mutual Fund.
+  kotak_mf:
+    type: AssetManagementCompany
+    definition: Kotak Mahindra Mutual Fund.
+  aditya_birla_sun_life_mf:
+    type: AssetManagementCompany
+    definition: Aditya Birla Sun Life Mutual Fund.
+  quant_mf:
+    type: AssetManagementCompany
+    definition: Quant Mutual Fund, known for quantitative model-driven investing.
+  ppfas_mf:
+    type: AssetManagementCompany
+    definition: Parag Parikh Financial Advisory Services Mutual Fund.
+
+  # ───────────────────────────────────────────────────────────────────────
+  # DocumentType concepts
+  # ───────────────────────────────────────────────────────────────────────
+  amfi_monthly_report:
+    type: DocumentType
+    definition: AMFI's monthly mutual fund industry data report.
+  amfi_quarterly_report:
+    type: DocumentType
+    definition: AMFI's quarterly mutual fund industry data report.
+  sebi_circular:
+    type: DocumentType
+    definition: A regulatory circular issued by the Securities and Exchange Board of India.
+  rbi_circular:
+    type: DocumentType
+    definition: A regulatory circular issued by the Reserve Bank of India.
+
+# ─────────────────────────────────────────────────────────────────────────
+# Query-generation constraint layer: which template families a metric may
+# legally be used with. Only disallowed_ is authoritative (see each
+# concept's disallowed_template_families above) — this section is kept as a
+# flat index for tooling that wants a single lookup rather than walking
+# every concept.
+# ─────────────────────────────────────────────────────────────────────────
+metric_resolution_rules:
+  - rule_id: MR001
+    condition: query contains total|sum|cumulative|overall AND invested|mobilized|mobilised|subscriptions
+    metric: funds_mobilized
+    aggregation: sum
+  - rule_id: MR002
+    condition: query contains net inflow|net flow|net subscription
+    metric: net_inflow
+    aggregation: sum_or_latest_based_on_time_mode
+  - rule_id: MR003
+    condition: query contains corpus|asset base|managed assets
+    metric: aum
+  - rule_id: MR004
+    condition: query contains investors|accounts|folio count
+    metric: folios
+  - rule_id: MR005
+    condition: query contains products|fund schemes|number of schemes
+    metric: schemes
+  - rule_id: MR006
+    condition: query contains withdrawal|redeemed|redemption|outflow
+    metric: redemption
+
+# Query-phrasing rules that set aggregation/time_mode/routing/guardrail hints
+# rather than resolving a metric identity (that's metric_resolution_rules
+# above). Carried forward from the pre-semantic/ financial_ontology.yaml —
+# currently attached to CanonicalQuery.matched_rules for observability by
+# ontology_resolver.py, not yet authoritative for routing decisions.
+query_interpretation_rules:
+  - rule_id: R_TOTAL_RANGE_SUM
+    description: Total over a range should become SUM over all periods, not year-end snapshots.
+    triggers:
+      required_terms_any: [total, overall, cumulative, aggregate, sum]
+      time_mode_any: [range]
+    actions:
+      aggregation: sum
+      snapshot_mode: false
+      preferred_route: query_sql
+  - rule_id: R_LATEST_SNAPSHOT
+    description: Latest/current/as-of questions should use the latest or specific snapshot.
+    triggers:
+      required_terms_any: [latest, current, most recent, as of]
+    actions:
+      aggregation: latest
+      snapshot_mode: true
+      preferred_route: query_sql
+  - rule_id: R_TREND_TIME_SERIES
+    description: Trend/growth/decline queries need time-series output.
+    triggers:
+      required_terms_any: [trend, growth, decline, changed, movement, over time]
+    actions:
+      intent_type: trend
+      output_shape: time_series
+      preferred_route: plan_years
+  - rule_id: R_COMPARE_GROUP_BY
+    description: Compare queries should produce grouped results or paired comparisons.
+    triggers:
+      required_terms_any: [compare, vs, versus, against, difference between]
+    actions:
+      operation: comparison
+      requires_grouping: true
+      preferred_route: query_sql
+  - rule_id: R_INVESTMENT_ADVICE_GUARDRAIL
+    description: Direct buy/sell/recommendation phrasing should trigger investment-advice guardrail.
+    triggers:
+      required_terms_any:
+        - should i buy
+        - which fund should i buy
+        - which scheme should i buy
+        - should i invest
+        - recommend a fund
+        - suggest a fund
+        - where should i invest
+        - pick a fund
+        - best fund for me
+    actions:
+      guardrail: investment_advice
+      block_type: hard_block
+  - rule_id: R_INVESTORS_TO_FOLIOS
+    description: Investor-count style phrasing maps to folios unless unique investor data exists.
+    triggers:
+      required_terms_any: [investors, investor count, accounts, participation]
+    actions:
+      metric: folios
+      caveat: folios_not_unique_investors
+  - rule_id: R_CORPUS_TO_AUM
+    description: Corpus and asset-base phrasing map to AUM.
+    triggers:
+      required_terms_any: [corpus, asset base, fund size, managed assets]
+    actions:
+      metric: aum
+  - rule_id: R_MONEY_CAME_IN_TO_MOBILIZED
+    description: Gross investment phrasing maps to funds mobilized unless net is explicitly stated.
+    triggers:
+      required_terms_any: [money came in, amount invested, capital mobilized, gross inflow, subscriptions]
+    actions:
+      metric: funds_mobilized
+  - rule_id: R_NET_TO_NET_INFLOW
+    description: Net phrasing maps to net_inflow.
+    triggers:
+      required_terms_any: [net inflow, net flow, net investment, net subscription]
+    actions:
+      metric: net_inflow

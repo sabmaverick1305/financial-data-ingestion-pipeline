@@ -1,0 +1,134 @@
+# ── Dockerfile.api — AMFI Financial Agent (API server only) ──────────────────
+#
+# Three-stage build:
+#   1. builder        — installs API Python deps into /install
+#   2. model-downloader — downloads sentence-transformers models into /models
+#   3. runtime        — lean final image (~900 MB); no build tools, non-root
+#
+# Build:
+#   docker build -f Dockerfile.api -t amfi-api:latest .
+#
+# Run locally (inject secrets via --env-file):
+#   docker run --rm -p 8080:8080 --env-file .env.docker amfi-api:latest
+#
+# Required env vars at runtime (never bake into image):
+#   POSTGRES_URL          postgresql+psycopg2://user:pass@host:5432/db
+#   OPENAI_API_KEY        sk-ant-...  (Anthropic key — despite the name; see config.py)
+#   OPENAI_MINI_API_KEY   sk-...  (real OpenAI key — routes intent extraction +
+#                                  analytical per-month/year JSON extraction to
+#                                  gpt-4o-mini; without it those calls fail closed
+#                                  and fall back to existing rule-based/DB-first paths)
+#   LANGSMITH_API_KEY     lsv2_pt_...
+#   LANGCHAIN_TRACING_V2  true
+#   LANGCHAIN_PROJECT     amfi-pipeline
+#   AWS_ACCESS_KEY_ID     (for CloudWatch metrics — optional)
+#   AWS_SECRET_ACCESS_KEY (for CloudWatch metrics — optional)
+
+
+# ── Stage 1: install Python dependencies ─────────────────────────────────────
+FROM python:3.13-slim-bookworm AS builder
+
+# gcc + libpq-dev: only needed at compile time for any C-extension wheels
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gcc libpq-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY requirements-api.txt .
+COPY pyproject.toml .
+COPY src/ src/
+
+# CPU-only torch first — prevents pip from pulling CUDA wheels (~2 GB) when
+# sentence-transformers resolves its torch dependency later.
+# --extra-index-url on the second pass ensures the CPU index is consulted for
+# any torch upgrade sentence-transformers might try to trigger.
+RUN pip install --no-cache-dir --upgrade pip \
+ && pip install --no-cache-dir --prefix=/install \
+        torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install all API-server deps; pass the CPU torch index so pip doesn't
+# accidentally pull a CUDA torch as a transitive dep of sentence-transformers.
+RUN pip install --no-cache-dir --prefix=/install \
+        --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r requirements-api.txt
+
+# Strip top-level CUDA packages (nvidia-*, triton, cuda-python) that sneak in
+# as transitive deps — useless on CPU and cost ~3.5 GB.
+# IMPORTANT: use -path "*/site-packages/<name>" NOT -name "<name>" — the latter
+# would also match torch/cuda/ which torch needs even in CPU mode.
+RUN find /install -maxdepth 6 -type d \( \
+        -path "*/site-packages/nvidia" \
+        -o -path "*/site-packages/triton" \
+        -o -path "*/site-packages/cuda" \
+    \) -exec rm -rf {} + 2>/dev/null; \
+    find /install -maxdepth 6 -name "*.dist-info" \( \
+        -path "*/nvidia_*" -o -path "*/triton-*" \
+    \) -exec rm -rf {} + 2>/dev/null; \
+    true
+
+# Install the financial_pipeline package without reinstalling transitive deps
+# (they are already in /install from the two steps above)
+RUN pip install --no-cache-dir --no-deps --prefix=/install .
+
+
+# ── Stage 2: pre-download ML models ──────────────────────────────────────────
+# Runs from the builder's installed packages so torch/sentence-transformers
+# are not downloaded a second time.
+FROM python:3.13-slim-bookworm AS model-downloader
+
+COPY --from=builder /install /usr/local
+
+ENV SENTENCE_TRANSFORMERS_HOME=/models \
+    HF_HOME=/models
+
+# Download and cache both models used at startup:
+#   all-MiniLM-L6-v2            — 90 MB  — dense retrieval encoder
+#   ms-marco-MiniLM-L-6-v2      — 67 MB  — cross-encoder reranker
+RUN python -c "\
+from sentence_transformers import SentenceTransformer, CrossEncoder; \
+SentenceTransformer('all-MiniLM-L6-v2'); \
+CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
+print('models cached')"
+
+
+# ── Stage 3: runtime image ────────────────────────────────────────────────────
+FROM python:3.13-slim-bookworm AS runtime
+
+# libpq5: runtime-only dep for psycopg2-binary (libpq-dev not needed at runtime)
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq5 \
+ && rm -rf /var/lib/apt/lists/*
+
+# All installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Pre-downloaded models (baked into image layer — no HF downloads at startup)
+ENV SENTENCE_TRANSFORMERS_HOME=/models \
+    HF_HOME=/models \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TOKENIZERS_PARALLELISM=false \
+    OMP_NUM_THREADS=1
+
+COPY --from=model-downloader /models /models
+
+# Non-root user — required for ECS/EC2 security groups and ECR scanning
+RUN groupadd -r appgroup \
+ && useradd -r -u 1001 -g appgroup -m -d /home/appuser appuser
+
+WORKDIR /app
+USER appuser
+
+EXPOSE 8080
+
+# /healthz is instant; start-period covers sentence-transformers model loading
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz').read()"
+
+# --workers 1: each worker loads both ML models (~350 MB); t3.micro has 1 GB RAM.
+# Scale horizontally (more tasks) rather than vertically (more workers per task).
+CMD ["uvicorn", "financial_pipeline.api.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8080", \
+     "--workers", "1", \
+     "--log-level", "warning"]

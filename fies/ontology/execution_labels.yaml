@@ -1,0 +1,232 @@
+version: '1.0'
+name: FIES Execution Labels
+description: Canonical execution plan labels used by FIES to validate query understanding, routing, SQL planning, retrieval
+  planning, and guardrail behavior.
+routes:
+- route_id: query_sql
+  description: Question should be answered primarily through structured SQL/Text-to-SQL over tabular data.
+  expected_nodes:
+  - analyze_query
+  - retrieval_supervisor
+  - sql_retriever_node
+  - augment
+  - generate
+  - post_guardrail
+- route_id: plan_years
+  description: Question requires a year/month/quarter trend plan, usually SQL time-series plus answer formatting.
+  expected_nodes:
+  - analyze_query
+  - temporal_planner
+  - sql_retriever_node
+  - augment
+  - generate
+- route_id: route
+  description: Question requires routing to document RAG, metadata, guardrail, or hybrid execution.
+  expected_nodes:
+  - analyze_query
+  - retrieval_supervisor
+  - dense_retriever_node
+  - sparse_retriever_node
+  - rerank
+  - augment
+  - generate
+- route_id: metadata
+  description: Question should be answered from metadata catalog without heavy RAG or SQL analytics.
+  expected_nodes:
+  - analyze_query
+  - metadata_retriever_node
+  - format_response
+execution_plans:
+- plan_id: latest_snapshot
+  description: Retrieve latest available row for a metric/entity.
+  route: query_sql
+  required_slots:
+  - metric
+  - entity
+  sql_shape:
+    aggregation: latest
+    order_by: period_date desc
+    limit: 1
+- plan_id: point_in_time_lookup
+  description: Retrieve value for exact month/quarter/year.
+  route: query_sql
+  required_slots:
+  - metric
+  - entity
+  - date_or_period
+  sql_shape:
+    where:
+    - metric_column
+    - entity
+    - period
+- plan_id: range_sum
+  description: Sum metric over all available periods in a date range.
+  route: query_sql
+  required_slots:
+  - metric
+  - entity
+  - start_period
+  - end_period
+  sql_shape:
+    aggregation: sum
+    where:
+    - period between start and end
+    group_by: null
+  anti_patterns:
+  - year_end_snapshot
+  - latest_per_year
+- plan_id: range_average
+  description: Average metric over all available periods in a date range.
+  route: query_sql
+  required_slots:
+  - metric
+  - entity
+  - start_period
+  - end_period
+  sql_shape:
+    aggregation: avg
+    where:
+    - period between start and end
+- plan_id: entity_comparison
+  description: Compare the same metric across two or more entities.
+  route: query_sql
+  required_slots:
+  - metric
+  - entities
+  sql_shape:
+    group_by: entity
+- plan_id: time_comparison
+  description: Compare metric across two or more periods.
+  route: query_sql
+  required_slots:
+  - metric
+  - entity
+  - periods
+  sql_shape:
+    group_by: period
+- plan_id: ranking_top_n
+  description: Rank entities by metric and return top N.
+  route: query_sql
+  required_slots:
+  - metric
+  - limit
+  sql_shape:
+    order_by: metric desc
+    limit: N
+- plan_id: ranking_bottom_n
+  description: Rank entities by metric and return bottom N.
+  route: query_sql
+  required_slots:
+  - metric
+  - limit
+  sql_shape:
+    order_by: metric asc
+    limit: N
+- plan_id: time_series_trend
+  description: Return time-series points for a metric/entity across a range.
+  route: plan_years
+  required_slots:
+  - metric
+  - entity
+  - start_period
+  - end_period
+  sql_shape:
+    group_by: period
+    order_by: period asc
+- plan_id: derived_growth_ranking
+  description: Calculate growth/change over time and rank entities.
+  route: query_sql
+  required_slots:
+  - metric
+  - start_period
+  - end_period
+  requires:
+  - start_value
+  - end_value
+  - growth_formula
+  - ranking
+- plan_id: hybrid_sql_plus_rag_explanation
+  description: Use structured SQL evidence plus document context to generate an explanatory answer.
+  route: route
+  required_slots:
+  - metric_or_metrics
+  - entity_or_entities
+  requires:
+  - sql_results
+  - retrieved_context
+  - citations
+- plan_id: rag_definition
+  description: Use document retrieval to define or explain a financial term.
+  route: route
+  required_slots:
+  - term
+  requires:
+  - retrieved_context
+  - citation
+- plan_id: metadata_lookup
+  description: Use document metadata to identify source, report, period, or publication details.
+  route: metadata
+  required_slots:
+  - document_type_or_period_or_metric
+- plan_id: clarification_required
+  description: Query is ambiguous and should ask a clarification before execution.
+  route: route
+  required_slots:
+  - ambiguity_reason
+- plan_id: hard_block_investment_advice
+  description: Reject direct investment advice, buy/sell recommendations, or personalized advice.
+  route: route
+  guardrail: investment_advice
+- plan_id: hard_block_sql_policy
+  description: Reject non-SELECT SQL, unapproved tables, or SQL injection attempts.
+  route: query_sql
+  guardrail: sql_policy
+- plan_id: empty_result_future_or_out_of_range
+  description: Return empty result or data unavailable message for future/out-of-range data, not necessarily a hard block.
+  route: query_sql
+validation_rules:
+- rule_id: EV001
+  name: Range total must not become snapshot
+  condition: query contains total|sum|cumulative AND from|between|since
+  must_have:
+    aggregation: sum
+    time_mode: range
+  must_not_have:
+    snapshot_mode: true
+- rule_id: EV002
+  name: Latest means snapshot
+  condition: query contains latest|current|most recent
+  must_have:
+    time_mode: latest_snapshot
+- rule_id: EV003
+  name: Trend requires time-series
+  condition: query contains trend|growth|decline|over time
+  must_have:
+    execution_plan: time_series_trend
+- rule_id: EV004
+  name: Compare requires grouped output
+  condition: query contains compare|versus|vs
+  must_have:
+    grouping_required: true
+- rule_id: EV005
+  name: Investment advice is blocked
+  condition: query asks should I buy|recommend|best fund to invest
+  must_have:
+    guardrail: investment_advice
+    response_type: hard_block
+- rule_id: EV006
+  name: Folios answer caveat
+  condition: metric is folios and query uses investors
+  must_include_answer_note: Folios may not represent unique investors.
+scoring_dimensions:
+- route_accuracy
+- intent_accuracy
+- metric_accuracy
+- entity_accuracy
+- temporal_accuracy
+- aggregation_accuracy
+- sql_shape_accuracy
+- execution_accuracy
+- retrieval_accuracy
+- citation_accuracy
+- guardrail_accuracy

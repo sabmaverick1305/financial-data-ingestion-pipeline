@@ -192,11 +192,63 @@ EVAL_DATASET: list[EvalCase] = [
         expected_keywords=["equity", "debt"],
         difficulty="hard",
     ),
+    # ── Analytical — year-range aggregation (needs_analytical=True path) ────────
+    EvalCase(
+        id="ana_001",
+        question="What was the total funds mobilized from 2020 to 2023?",
+        intent="trend",
+        relevant_files=[],   # analytical agent pulls from DB, not doc chunks
+        expected_keywords=["funds mobilized", "crore"],
+        expected_numbers=["30,021", "30021"],   # 2023 ≈ ₹30,021 crore (post anomaly fix)
+        difficulty="hard",
+        notes="Exercises the analytical agent outer loop over 4 years. "
+              "needs_analytical must be True; year_from=2020, year_to=2023.",
+    ),
+    EvalCase(
+        id="ana_002",
+        question="Show me the AUM trend from 2021 to 2024",
+        intent="trend",
+        relevant_files=[],
+        expected_keywords=["AUM", "crore"],
+        difficulty="hard",
+        notes="Year-range AUM aggregation — 4 outer years × 12 inner months.",
+    ),
+    EvalCase(
+        id="ana_003",
+        question="What were the total folios from 2022 to 2025?",
+        intent="trend",
+        relevant_files=[],
+        expected_keywords=["folios", "crore"],
+        difficulty="hard",
+        notes="Folios metric path through analytical agent; no sanity check needed "
+              "(folios are counts, not crore figures).",
+    ),
+    EvalCase(
+        id="ana_004",
+        question="How did SIP contributions change between 2019 and 2022?",
+        intent="trend",
+        relevant_files=[],
+        expected_keywords=["SIP", "crore"],
+        difficulty="hard",
+        notes="SIP metric — distinct from funds_mobilized; tests metric routing.",
+    ),
+    EvalCase(
+        id="ana_005",
+        question="What is the funds mobilized trend for 2023?",
+        intent="trend",
+        relevant_files=[],
+        expected_keywords=["funds mobilized", "crore"],
+        expected_numbers=["30,021", "30021"],
+        difficulty="medium",
+        notes="Single-year analytical query (year_from == year_to == 2023). "
+              "Exercises the 2023 anomaly fix (MAX_MONTHLY_CRORE sanity check).",
+    ),
 ]
 
 # Convenience groupings
-REGULATORY_CASES = [c for c in EVAL_DATASET if c.intent == "regulatory" or c.id.startswith("reg_")]
-ABSTENTION_CASES = [c for c in EVAL_DATASET if c.expected_abstain and not c.is_investment_advice]
-ADVICE_CASES     = [c for c in EVAL_DATASET if c.is_investment_advice]
-NUMERIC_CASES    = [c for c in EVAL_DATASET if c.expected_numbers]
-ALL_CASES        = EVAL_DATASET
+REGULATORY_CASES  = [c for c in EVAL_DATASET if c.intent == "regulatory" or c.id.startswith("reg_")]
+ABSTENTION_CASES  = [c for c in EVAL_DATASET if c.expected_abstain and not c.is_investment_advice]
+ADVICE_CASES      = [c for c in EVAL_DATASET if c.is_investment_advice]
+NUMERIC_CASES     = [c for c in EVAL_DATASET if c.expected_numbers]
+ANALYTICAL_CASES  = [c for c in EVAL_DATASET if c.id.startswith("ana_")]
+ALL_CASES         = EVAL_DATASET

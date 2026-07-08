@@ -5,17 +5,18 @@ Usage (from api/main.py):
     from financial_pipeline.graph.nodes import NodeFactory
 
     factory = NodeFactory(repo=repo, retriever=retriever)
-    graph   = build_graph(factory)
+    graph   = build_graph(factory, checkpointer=checkpointer)
 
-    result  = graph.invoke({
-        "query":        "What is the total number of folios in large cap funds?",
-        "retry_count":  0,
-        "repair_count": 0,
-    })
+    result  = graph.invoke(
+        {"query": "What is the total number of folios in large cap funds?",
+         "retry_count": 0, "repair_count": 0},
+        config={"configurable": {"thread_id": thread_id}},
+    )
     response = result["response"]   # serialisable AskResponse dict
 """
 from __future__ import annotations
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 
 from financial_pipeline.graph.edges import (
@@ -25,15 +26,26 @@ from financial_pipeline.graph.edges import (
     after_pre_guardrail,
     after_route,
 )
-from financial_pipeline.graph.edges_analytical import after_extract, is_range_query
+from financial_pipeline.graph.edges_analytical import (
+    after_aggregate_year,
+    after_extract,
+    after_extract_month,
+    after_plan_years,
+    is_range_query,
+)
 from financial_pipeline.graph.nodes import NodeFactory
 from financial_pipeline.graph.nodes_analytical import AnalyticalNodeFactory
+from financial_pipeline.graph.nodes_reasoning import ReasoningNodeFactory
+from financial_pipeline.graph.nodes_sql import SQLNodeFactory
 from financial_pipeline.graph.state import RAGState
 
 
 def build_graph(
     factory: NodeFactory,
     analytical: AnalyticalNodeFactory | None = None,
+    sql: SQLNodeFactory | None = None,
+    reasoning: ReasoningNodeFactory | None = None,
+    checkpointer: BaseCheckpointSaver | None = None,
 ):
     """Build and compile the RAG graph with injected dependencies.
 
@@ -45,6 +57,21 @@ def build_graph(
     analytical:
         AnalyticalNodeFactory for year-range aggregation queries.
         If None, a default instance is created using factory's repo.
+    sql:
+        SQLNodeFactory wrapping the Vanna text-to-SQL agent.
+        If None, the query_sql node is skipped (tabular queries fall through to route).
+    reasoning:
+        ReasoningNodeFactory answering causal "why did X change" queries by
+        matching real computed metric directions against
+        semantic/reasoning_rules.yaml. If None, a default instance is
+        created using factory's repo (same DB, no extra dependency to wire).
+    checkpointer:
+        A LangGraph BaseCheckpointSaver (e.g. storage/checkpointer.py's
+        Postgres-backed PostgresSaver). When set, every node's state is
+        persisted per thread_id (pass config={"configurable": {"thread_id": ...}}
+        to .invoke()/.stream()), enabling replay and crash resumability.
+        If None (default), the graph compiles with no persistence at all —
+        exactly the pre-checkpointer behavior.
 
     Returns
     -------
@@ -53,7 +80,10 @@ def build_graph(
     """
     if analytical is None:
         analytical = AnalyticalNodeFactory(repo=factory._repo)
+    if reasoning is None:
+        reasoning = ReasoningNodeFactory(repo=factory._repo)
     g = StateGraph(RAGState)
+    _has_sql = sql is not None
 
     # ── Nodes ──────────────────────────────────────────────────────────────
     g.add_node("analyze_query",     factory.analyze_query)
@@ -76,10 +106,28 @@ def build_graph(
     g.add_node("format_response",   factory.format_response)
 
     # ── Analytical agent nodes ──────────────────────────────────────────────
-    g.add_node("plan_years",     analytical.plan_years)
-    g.add_node("retrieve_year",  analytical.retrieve_year)
-    g.add_node("extract_metric", analytical.extract_metric)
-    g.add_node("synthesize",     analytical.synthesize)
+    g.add_node("plan_years",           analytical.plan_years)
+    g.add_node("query_db_stats",       analytical.query_db_stats)
+    g.add_node("plan_months",          analytical.plan_months)
+    g.add_node("retrieve_month",       analytical.retrieve_month)
+    g.add_node("extract_month_metric", analytical.extract_month_metric)
+    g.add_node("aggregate_year",       analytical.aggregate_year)
+    g.add_node("synthesize",           analytical.synthesize)
+    # Legacy single-snapshot nodes (kept so graph compiles; not in active path)
+    g.add_node("retrieve_year",        analytical.retrieve_year)
+    g.add_node("extract_metric",       analytical.extract_metric)
+
+    # ── SQL (Vanna text-to-SQL) node ───────────────────────────────────────
+    # If no SQLNodeFactory is provided, tabular intent falls through to route.
+    if _has_sql:
+        g.add_node("query_sql", sql.query_sql)
+    else:
+        def _sql_noop(state: RAGState) -> dict:  # noqa: E306
+            return {}
+        g.add_node("query_sql", _sql_noop)
+
+    # ── Reasoning (causal "why" queries) node ───────────────────────────────
+    g.add_node("reasoning", reasoning.reasoning_node)
 
     # ── Entry point ────────────────────────────────────────────────────────
     g.set_entry_point("analyze_query")
@@ -96,21 +144,65 @@ def build_graph(
     g.add_edge("repair",            "post_guardrail")   # bounded repair loop
     g.add_edge("format_response",   END)
 
-    # ── Analytical agent edges ─────────────────────────────────────────────
-    # Entry branch: range query → plan_years, all others → route
+    # ── Analytical agent edges (Option A — full month aggregation) ────────────
+    # Entry branch: tabular → query_sql, range → plan_years, else → route
     g.add_conditional_edges(
         "analyze_query",
         is_range_query,
-        {"plan_years": "plan_years", "route": "route"},
+        {
+            "query_sql": "query_sql", "plan_years": "plan_years", "route": "route",
+            "format_response": "format_response", "reasoning": "reasoning",
+        },
     )
-    g.add_edge("plan_years",    "retrieve_year")
-    g.add_edge("retrieve_year", "extract_metric")
+
+    # SQL path: feeds the full guardrail + LLM pipeline via pre_guardrail.
+    # query_sql sets citations (SQL table as passage [1]), is_analytical=True,
+    # and sql_context=True so generate uses the "sql" system prompt.
+    if _has_sql:
+        g.add_edge("query_sql", "pre_guardrail")
+    else:
+        g.add_edge("query_sql", "route")  # fallback: treat as normal query
+
+    # Reasoning path: same pre_guardrail feed as query_sql. reasoning_node
+    # sets structured_answer directly (the explanation is already rendered
+    # from reasoning_rules.yaml), so generate() short-circuits without an
+    # LLM call — same deterministic-answer pattern query_sql uses.
+    g.add_edge("reasoning", "pre_guardrail")
+
+    # Outer loop: plan_years → (DB-first or chunk loop) → aggregate_year → synthesize
+    # DB-first: plan_years → query_db_stats → synthesize (single SQL, no LLM loop)
+    # Chunk loop: plan_years → plan_months → retrieve_month → ... → aggregate_year
+    g.add_conditional_edges(
+        "plan_years",
+        after_plan_years,
+        {"query_db_stats": "query_db_stats", "plan_months": "plan_months", "route": "route"},
+    )
+    g.add_edge("query_db_stats", "synthesize")
+    g.add_edge("plan_months", "retrieve_month")
+
+    # Inner loop: retrieve_month → extract_month_metric → [next month | aggregate_year]
+    g.add_edge("retrieve_month", "extract_month_metric")
+    g.add_conditional_edges(
+        "extract_month_metric",
+        after_extract_month,
+        {"retrieve_month": "retrieve_month", "aggregate_year": "aggregate_year"},
+    )
+
+    # After year is aggregated: next year → plan_months | all done → synthesize
+    g.add_conditional_edges(
+        "aggregate_year",
+        after_aggregate_year,
+        {"plan_months": "plan_months", "synthesize": "synthesize"},
+    )
+
+    g.add_edge("synthesize", "post_guardrail")   # reuses existing guardrail path
+
+    # Legacy snapshot path edges (kept so graph validates; not activated)
     g.add_conditional_edges(
         "extract_metric",
         after_extract,
         {"retrieve_year": "retrieve_year", "synthesize": "synthesize"},
     )
-    g.add_edge("synthesize", "post_guardrail")   # reuses existing guardrail path
 
     # ── Routing from route node ────────────────────────────────────────────
     # lookup intent  → retrieve_metadata_first (sequential: find doc first)
@@ -156,4 +248,4 @@ def build_graph(
         },
     )
 
-    return g.compile()
+    return g.compile(checkpointer=checkpointer)

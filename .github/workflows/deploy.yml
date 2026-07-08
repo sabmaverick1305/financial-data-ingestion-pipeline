@@ -38,6 +38,7 @@ env:
     amfi-ocr-worker
     amfi-chunk-worker
     amfi-embed-worker
+    amfi-mf-nav-sync-worker
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 1 — Build ARM64 Docker image and push to ECR
@@ -232,6 +233,8 @@ jobs:
             description: "Text chunking · 1 vCPU / 2 GB"
           - name: amfi-embed-worker
             description: "Embedding generation · 1 vCPU / 2 GB"
+          - name: amfi-mf-nav-sync-worker
+            description: "mfapi.in scheme/NAV sync (incremental, EventBridge-scheduled) · 1 vCPU / 2 GB"
 
     steps:
       - name: Configure AWS credentials
@@ -312,7 +315,7 @@ jobs:
 
       - name: Verify all task definition revisions updated
         run: |
-          for worker in amfi-text-worker amfi-table-worker amfi-ocr-worker amfi-chunk-worker amfi-embed-worker; do
+          for worker in amfi-text-worker amfi-table-worker amfi-ocr-worker amfi-chunk-worker amfi-embed-worker amfi-mf-nav-sync-worker; do
             REVISION=$(aws ecs describe-task-definition \
               --task-definition "$worker" \
               --query 'taskDefinition.revision' --output text)
@@ -330,7 +333,7 @@ jobs:
           | Commit | \`${{ github.sha }}\` |
           | Image  | \`${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO }}:${SHA_SHORT}\` |
           | Cluster | \`${{ env.ECS_CLUSTER }}\` |
-          | Workers updated | 5 (text · table · ocr · chunk · embed) |
+          | Workers updated | 6 (text · table · ocr · chunk · embed · mf-nav-sync) |
           | DB migrated | ${{ !inputs.skip_migrate }} |
           | Status | ✅ Deployed |
           EOF

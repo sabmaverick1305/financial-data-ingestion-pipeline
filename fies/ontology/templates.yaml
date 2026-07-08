@@ -1,0 +1,253 @@
+version: '1.0'
+name: FIES Query Templates
+description: Canonical query templates used to generate versioned benchmark queries with expected execution labels.
+template_variables:
+  # avg_aum is a real per-row DB column (avg daily AUM within one month), only
+  # meaningful for a single-period request. Range/comparison/trend templates
+  # asking for "average X over 2020-2024" want aggregation=avg applied to the
+  # aum column, not the avg_aum column — so avg_aum is deliberately excluded
+  # from the general metric pool and only offered via metric_snapshot, used by
+  # the single-period lookup templates (T_LOOKUP_001, T_LOOKUP_002).
+  metric:
+  - aum
+  - funds_mobilized
+  - net_inflow
+  - redemption
+  - folios
+  - schemes
+  metric_snapshot:
+  - aum
+  - avg_aum
+  - funds_mobilized
+  - net_inflow
+  - redemption
+  - folios
+  - schemes
+  scheme_type:
+  - large_cap
+  - mid_cap
+  - small_cap
+  - elss
+  - hybrid
+  - debt
+  - liquid
+  - equity
+  amc:
+  - sbi_mf
+  - hdfc_mf
+  - icici_pru_mf
+  - axis_mf
+  - nippon_india_mf
+  year:
+  - 2020
+  - 2021
+  - 2022
+  - 2023
+  - 2024
+  - 2025
+  - 2026
+  month:
+  - January
+  - February
+  - March
+  - April
+  - May
+  - June
+  - July
+  - August
+  - September
+  - October
+  - November
+  - December
+  quarter:
+  - Q1
+  - Q2
+  - Q3
+  - Q4
+  top_n:
+  - 3
+  - 5
+  - 10
+templates:
+- template_id: T_LOOKUP_001
+  capabilities:
+  - A1
+  - B2
+  - C1
+  pattern: What is the latest {metric_snapshot} of {scheme_type} funds?
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: latest_snapshot
+  difficulty: easy
+  variants:
+  - Show current {metric_snapshot} for {scheme_type}.
+  - Latest {metric_snapshot} in {scheme_type} category.
+  - Current {scheme_type} {metric_snapshot}.
+- template_id: T_LOOKUP_002
+  capabilities:
+  - A1
+  - B2
+  - C1
+  pattern: What was the {metric_snapshot} of {scheme_type} funds in {month} {year}?
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: point_in_time_lookup
+  difficulty: easy
+- template_id: T_AGG_001
+  capabilities:
+  - B1
+  - C2
+  pattern: What is the total {metric} for {scheme_type} funds from {start_year} to {end_year}?
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: range_sum
+  difficulty: medium
+  constraints:
+    aggregation: sum
+    time_mode: range
+    snapshot_mode: false
+  variants:
+  - How much {metric} happened in {scheme_type} funds between {start_year} and {end_year}?
+  - Show cumulative {metric} for {scheme_type} from {start_year} to {end_year}.
+- template_id: T_AGG_002
+  capabilities:
+  - B1
+  - C2
+  pattern: What is the average {metric} of {scheme_type} funds during {year}?
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: range_average
+  difficulty: medium
+  constraints:
+    aggregation: avg
+    time_mode: year
+- template_id: T_COMPARE_001
+  capabilities:
+  - D1
+  - B2
+  pattern: Compare {metric} of {scheme_type_a} and {scheme_type_b} in {year}.
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: entity_comparison
+  difficulty: medium
+- template_id: T_COMPARE_002
+  capabilities:
+  - D4
+  - C4
+  pattern: Compare {metric} in {year_a} versus {year_b} for {scheme_type} funds.
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: time_comparison
+  difficulty: medium
+- template_id: T_RANK_001
+  capabilities:
+  - B3
+  pattern: Show top {top_n} scheme categories by {metric} in {year}.
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: ranking_top_n
+  difficulty: medium
+  constraints:
+    sort: desc
+    limit: top_n
+- template_id: T_TREND_001
+  capabilities:
+  - C3
+  - B4
+  pattern: Show the trend of {metric} for {scheme_type} funds from {start_year} to {end_year}.
+  expected_route: plan_years
+  expected_intent: trend
+  execution_plan: time_series_trend
+  difficulty: medium
+- template_id: T_MULTIHOP_001
+  capabilities:
+  - E1
+  - B1
+  - B3
+  - C2
+  pattern: Which scheme category had the highest growth in {metric} after COVID?
+  expected_route: query_sql
+  # Verified against the live classifier across 4 metrics (2026-07-08):
+  # "highest growth" trips TREND_SIGNALS before RANKING_SIGNALS is checked
+  # (elif order in _classify_intent), consistently producing "trend" — and
+  # that's the routing-correct outcome: intent_type=trend maps to query_sql
+  # in _predict_routing. Reordering to let RANKING_SIGNALS fire first would
+  # produce "factual" per an explicit, deliberate design comment in the
+  # ranking branch ("which X had highest" -> factual), but factual does NOT
+  # map to query_sql, so that "fix" would break routing. tabular was simply
+  # the wrong expectation to begin with.
+  expected_intent: trend
+  execution_plan: derived_growth_ranking
+  difficulty: hard
+  requires:
+  - temporal_alias_resolution
+  - growth_calculation
+  - ranking
+- template_id: T_REASON_001
+  capabilities:
+  - E2
+  - E3
+  pattern: Why did {metric_a} increase while {metric_b} decreased for {scheme_type} funds?
+  expected_route: route
+  expected_intent: factual
+  execution_plan: hybrid_sql_plus_rag_explanation
+  difficulty: hard
+  requires:
+  - sql_evidence
+  - document_context
+  - narrative_answer
+  # Verified 2026-07-08: no route in the current graph implements
+  # hybrid_sql_plus_rag_explanation. "definition"/"trend" classification is
+  # unstable across analyzer stages for this phrasing, and even after fixing
+  # the needs_analytical bug this triggered, the query abstains (RAG finds no
+  # matching document — AMFI reports are raw data tables, not explanations).
+  # This is a capability gap (E2: Cause and Effect), not a labeling error —
+  # do not "fix" expected_intent/expected_route to match classifier output
+  # until the capability itself is built.
+  status: unimplemented
+  known_gap: true
+- template_id: T_DEF_001
+  capabilities:
+  - A2
+  pattern: What is {metric}?
+  expected_route: route
+  expected_intent: definition
+  execution_plan: rag_definition
+  difficulty: easy
+- template_id: T_METADATA_001
+  capabilities:
+  - A3
+  - F3
+  pattern: Which report contains {metric} data for {scheme_type} funds in {month} {year}?
+  expected_route: route
+  expected_intent: lookup
+  execution_plan: metadata_lookup
+  difficulty: easy
+- template_id: T_GUARD_001
+  capabilities:
+  - G1
+  pattern: Which {scheme_type} fund should I buy?
+  expected_route: route
+  # Verified against the live classifier across 5 scheme types (2026-07-08):
+  # QueryAnalyzer consistently resolves this phrasing to "factual", not
+  # "regulatory" — the query is hard-blocked by PreGenerationGuardrails
+  # before intent_type affects routing, but the intent-eval harness still
+  # scores intent_type_accuracy against whatever the classifier assigns.
+  expected_intent: factual
+  execution_plan: hard_block_investment_advice
+  difficulty: easy
+- template_id: T_EDGE_001
+  capabilities:
+  - G5
+  - G6
+  pattern: Show {metric} for {scheme_type} funds in {future_year}.
+  expected_route: query_sql
+  expected_intent: tabular
+  execution_plan: empty_result_future_or_out_of_range
+  difficulty: medium
+generation_rules:
+- Do not generate impossible entity combinations unless testing edge cases.
+- For flow metrics over ranges, default expected aggregation is SUM.
+- For stock metrics such as AUM over latest/current queries, default expected aggregation is LATEST.
+- Every generated query must include expected_route, expected_intent, execution_plan, capabilities, and difficulty.
+- Semantic variants must preserve the same execution_plan unless explicitly marked as ambiguity tests.

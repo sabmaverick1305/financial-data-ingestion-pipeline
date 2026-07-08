@@ -108,6 +108,19 @@ class ContextRanker:
             chunk["_rank_method"] = "cross_encoder"
             result.append(chunk)
 
+        # Safety net: if every chunk scored below min_score (common for
+        # financial table chunks scored by an English-QA cross-encoder),
+        # return the top-3 anyway so downstream nodes always have context.
+        if not result and ranked:
+            for score, chunk in ranked[: min(3, self._top_k)]:
+                chunk["_ce_score"] = round(float(score), 4)
+                chunk["_rank_method"] = "cross_encoder"
+                result.append(chunk)
+            log.debug("ranker.cross_encoder_fallback",
+                      reason="all_below_min_score",
+                      min_score=self._min_score,
+                      top_score=round(ranked[0][0], 4))
+
         log.debug(
             "ranker.cross_encoder_done",
             input=len(chunks),

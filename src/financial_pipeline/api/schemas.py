@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -87,6 +88,24 @@ class AskResponse(BaseModel):
     completion_tokens: int
     retrieval_count: int
     guardrail: GuardrailReport | None = None
+    thread_id: str  # LangGraph checkpoint thread — one per request today (see graph/graph.py)
+    query_id: str   # Stable id for this specific query/answer — pass to POST /api/feedback
+
+
+# ── Feedback ──────────────────────────────────────────────────────────────────
+
+
+class FeedbackRequest(BaseModel):
+    # UUID, not str: rejects malformed ids at request validation (422) instead
+    # of letting them reach the query_log UPDATE and fail as a raw DB error.
+    query_id: UUID = Field(..., description="The query_id returned in AskResponse")
+    rating: int = Field(..., ge=1, le=5, description="1 (bad) to 5 (excellent)")
+    comment: str | None = Field(default=None, max_length=2000)
+
+
+class FeedbackResponse(BaseModel):
+    query_id: str
+    recorded: bool
 
 
 # ── Documents ─────────────────────────────────────────────────────────────────

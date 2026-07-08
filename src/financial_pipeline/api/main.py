@@ -22,12 +22,22 @@ Start locally:
 
 from __future__ import annotations
 
+import os
+import time
+import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Histogram,
+    generate_latest,
+)
 from sqlalchemy import text
 
 from financial_pipeline.api.schemas import (
@@ -36,20 +46,58 @@ from financial_pipeline.api.schemas import (
     ChunkResult,
     DocumentListResponse,
     DocumentSummary,
+    FeedbackRequest,
+    FeedbackResponse,
     GuardrailReport,
     PipelineStats,
     SearchRequest,
     SearchResponse,
     Source,
 )
-from financial_pipeline.graph import build_graph, NodeFactory
+from financial_pipeline.graph import build_graph, NodeFactory, AnalyticalNodeFactory
 from financial_pipeline.config import settings
 from financial_pipeline.retrieval.pipeline import RetrievalPipeline
 from financial_pipeline.retrieval.rag import RAGPipeline
 from financial_pipeline.retrieval.retriever import Retriever
+from financial_pipeline.storage.checkpointer import build_checkpointer
 from financial_pipeline.storage.document_repo import DocumentRepository
+from financial_pipeline.storage.query_log import QueryLogRepository
 
 log = structlog.get_logger()
+
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+
+_LATENCY_BUCKETS = (100, 250, 500, 1000, 2000, 4000, 8000, 15000, 30000)
+
+QUERY_LATENCY = Histogram(
+    "amfi_query_latency_ms",
+    "End-to-end /api/ask latency in milliseconds",
+    ["intent_type"],
+    buckets=_LATENCY_BUCKETS,
+)
+QUERIES_TOTAL = Counter(
+    "amfi_queries_total",
+    "Total /api/ask requests",
+    ["intent_type"],
+)
+INTENT_STAGE = Counter(
+    "amfi_intent_stage_total",
+    "Intent classification stage that resolved the query",
+    ["stage"],          # rule | embedding | llm
+)
+LLM_TOKENS = Counter(
+    "amfi_llm_tokens_total",
+    "LLM tokens consumed",
+    ["token_type"],     # prompt | completion
+)
+GUARDRAIL_BLOCKS = Counter(
+    "amfi_guardrail_blocks_total",
+    "Pre-guardrail hard blocks (investment advice / unsafe)",
+)
+ANALYTICAL_QUERIES = Counter(
+    "amfi_analytical_queries_total",
+    "Year-range analytical agent invocations",
+)
 
 # ── Application state (initialised once at startup) ───────────────────────────
 
@@ -60,6 +108,8 @@ class _AppState:
     pipeline: RetrievalPipeline | None = None
     rag: RAGPipeline | None = None
     graph = None  # compiled LangGraph — set in lifespan
+    checkpointer = None  # Postgres-backed BaseCheckpointSaver — set in lifespan, None if disabled
+    query_log: QueryLogRepository | None = None
 
 
 _state = _AppState()
@@ -68,19 +118,84 @@ _state = _AppState()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("api.startup")
+
+    # ── LangSmith tracing — must be set before build_graph() ──────────────
+    if settings.langsmith_api_key:
+        os.environ.setdefault("LANGSMITH_API_KEY",      settings.langsmith_api_key)
+        os.environ.setdefault("LANGCHAIN_API_KEY",      settings.langsmith_api_key)
+        os.environ.setdefault("LANGCHAIN_PROJECT",      settings.langchain_project)
+        os.environ.setdefault("LANGCHAIN_TRACING_V2",   "true" if settings.langchain_tracing_v2 else "false")
+        log.info("langsmith.configured", project=settings.langchain_project,
+                 tracing=settings.langchain_tracing_v2)
+
     _state.repo = DocumentRepository(settings.postgres_url)
     _state.retriever = Retriever(_state.repo, settings.embed_model)
     _state.pipeline = RetrievalPipeline(_state.repo, _state.retriever)
     _state.rag = RAGPipeline(_state.retriever)
     factory      = NodeFactory(repo=_state.repo, retriever=_state.retriever)
-    _state.graph = build_graph(factory)
+    analytical   = AnalyticalNodeFactory(repo=_state.repo)
+
+    sql_factory = None
+    if settings.llm_provider == "anthropic" and settings.openai_api_key:
+        try:
+            from financial_pipeline.graph.nodes_sql import SQLNodeFactory
+            from financial_pipeline.text_to_sql.vanna_agent import build_vanna_agent
+
+            vanna = build_vanna_agent(
+                anthropic_api_key=settings.openai_api_key,
+                postgres_url=settings.postgres_url,
+            )
+            sql_factory = SQLNodeFactory(vanna=vanna)
+            log.info("api.sql_agent_ready")
+        except ModuleNotFoundError as exc:
+            log.info("api.sql_agent_unavailable", error=str(exc))
+        except Exception as exc:
+            log.warning("api.sql_agent_failed", error=str(exc))
+
+    # ── Postgres checkpointer — every node's state persisted per thread_id ──
+    if settings.enable_checkpointing:
+        try:
+            _state.checkpointer = build_checkpointer(settings.postgres_url)
+        except Exception as exc:
+            log.warning("api.checkpointer_failed", error=str(exc))
+            _state.checkpointer = None
+    else:
+        log.info("api.checkpointer_disabled")
+
+    # ── query_log — flat request/answer record, keyed by query_id, for
+    # feedback (POST /api/feedback) and eval linkage. Shares repo's engine —
+    # this table lives in the same Postgres instance, no reason for a
+    # second connection pool.
+    try:
+        _state.query_log = QueryLogRepository(_state.repo._engine)
+        _state.query_log.create_tables()
+    except Exception as exc:
+        log.warning("api.query_log_unavailable", error=str(exc))
+        _state.query_log = None
+
+    _state.graph = build_graph(
+        factory, analytical=analytical, sql=sql_factory, checkpointer=_state.checkpointer,
+    )
     log.info(
         "api.ready",
         embed_model=settings.embed_model,
         llm=f"{settings.llm_provider}/{settings.active_llm_model}",
         graph="langgraph",
+        sql_agent=sql_factory is not None,
+        checkpointing=_state.checkpointer is not None,
+        query_log=_state.query_log is not None,
     )
     yield
+
+    if _state.checkpointer is not None:
+        # PostgresSaver.conn is the ConnectionPool build_checkpointer() created —
+        # close it explicitly so its worker threads shut down cleanly instead
+        # of racing the process exit.
+        try:
+            _state.checkpointer.conn.close()
+        except Exception as exc:
+            log.warning("api.checkpointer_close_failed", error=str(exc))
+
     log.info("api.shutdown")
 
 
@@ -133,6 +248,12 @@ def _get_rag() -> RAGPipeline:
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+
+@app.get("/metrics", tags=["ops"], include_in_schema=False)
+def metrics() -> Response:
+    """Prometheus metrics endpoint — scrape with Prometheus or view in browser."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/healthz", tags=["ops"])
@@ -225,23 +346,82 @@ def ask(req: AskRequest) -> AskResponse:
     if _state.graph is None:
         raise HTTPException(503, "LangGraph not initialised.")
 
+    # thread_id — the LangGraph checkpoint thread this invocation's node-by-node
+    # state is persisted under (single-turn today: fresh thread per request; see
+    # graph/graph.py's build_graph docstring for the multi-turn follow-up path).
+    # query_id — stable id for this specific answer, independent of thread_id,
+    # returned to the client for POST /api/feedback and eval linkage.
+    thread_id = str(uuid.uuid4())
+    query_id  = str(uuid.uuid4())
+    t0 = time.time()
+
     try:
-        result = _state.graph.invoke({
-            "query":        req.question,
-            "retry_count":  0,
-            "repair_count": 0,
-        })
+        result = _state.graph.invoke(
+            {"query": req.question, "retry_count": 0, "repair_count": 0},
+            config={"configurable": {"thread_id": thread_id}},
+        )
     except Exception as exc:
-        log.exception("api.ask_error", error=str(exc))
+        log.exception("api.ask_error", error=str(exc), thread_id=thread_id, query_id=query_id)
         raise HTTPException(500, str(exc))
 
     resp_dict = result.get("response", {})
     g         = resp_dict.get("guardrail", {})
+    intent    = result.get("intent")
+    intent_type = getattr(intent, "intent_type", "unknown") or "unknown"
+    stage_used  = getattr(intent, "stage_used",  "rule")    or "rule"
+
+    # ── Prometheus metrics ─────────────────────────────────────────────
+    latency = resp_dict.get("latency_ms", 0) or 0
+    QUERIES_TOTAL.labels(intent_type=intent_type).inc()
+    QUERY_LATENCY.labels(intent_type=intent_type).observe(latency)
+    INTENT_STAGE.labels(stage=stage_used).inc()
+    if resp_dict.get("prompt_tokens"):
+        LLM_TOKENS.labels(token_type="prompt").inc(resp_dict["prompt_tokens"])
+    if resp_dict.get("completion_tokens"):
+        LLM_TOKENS.labels(token_type="completion").inc(resp_dict["completion_tokens"])
+    if g.get("blocked"):
+        GUARDRAIL_BLOCKS.inc()
+    if getattr(intent, "needs_analytical", False):
+        ANALYTICAL_QUERIES.inc()
 
     log.info("api.ask_done",
              grade=result.get("grade"),
              retry_count=result.get("retry_count"),
-             citations=resp_dict.get("retrieval_count", 0))
+             citations=resp_dict.get("retrieval_count", 0),
+             intent=intent_type,
+             stage=stage_used,
+             latency_ms=latency,
+             thread_id=thread_id,
+             query_id=query_id)
+
+    # ── query_log — best-effort; a logging failure must never fail the
+    # request that already has a good answer for the user.
+    if _state.query_log is not None:
+        # Mirrors is_range_query's branch priority (edges_analytical.py) —
+        # not read from graph state, since routing is a conditional-edge
+        # decision, not a stored field.
+        if getattr(intent, "needs_reasoning", False):
+            route = "reasoning"
+        elif getattr(intent, "needs_analytical", False):
+            route = "plan_years"
+        elif intent_type == "tabular":
+            route = "query_sql"
+        else:
+            route = "route"
+        try:
+            _state.query_log.log_query(
+                query_id=query_id,
+                thread_id=thread_id,
+                question=req.question,
+                answer=resp_dict.get("answer", ""),
+                intent_type=intent_type,
+                route=route,
+                citations_count=resp_dict.get("retrieval_count", 0),
+                latency_ms=latency or int((time.time() - t0) * 1000),
+                blocked=bool(g.get("blocked", False)),
+            )
+        except Exception as exc:
+            log.warning("api.query_log_write_failed", error=str(exc), query_id=query_id)
 
     return AskResponse(
         question=req.question,
@@ -270,13 +450,37 @@ def ask(req: AskRequest) -> AskResponse:
             is_investment_advice=g.get("is_investment_advice", False),
             answer_safe=g.get("answer_safe", True),
             hallucination_risk=g.get("hallucination_risk", "unknown"),
-            faithfulness_score=g.get("faithfulness_score", -1.0),
+            # post_guardrail sets this key to None (not absent) for extractive/
+            # deterministic answers where faithfulness scoring doesn't apply —
+            # .get()'s default only fires on a *missing* key, so None must be
+            # coalesced explicitly or pydantic's float validation rejects it.
+            faithfulness_score=(fs if (fs := g.get("faithfulness_score")) is not None else -1.0),
             citation_valid=g.get("citation_valid", True),
             number_consistent=g.get("number_consistent", True),
             abstention_detected=g.get("abstention_detected", False),
             warnings=g.get("warnings", []),
         ),
+        thread_id=thread_id,
+        query_id=query_id,
     )
+
+
+@app.post("/api/feedback", response_model=FeedbackResponse, tags=["rag"])
+def feedback(req: FeedbackRequest) -> FeedbackResponse:
+    """Attach a rating (1-5) and optional comment to a prior /api/ask answer,
+    keyed by the query_id that endpoint returned."""
+    if _state.query_log is None:
+        raise HTTPException(503, "Query log not initialised.")
+
+    query_id = str(req.query_id)
+    recorded = _state.query_log.record_feedback(
+        query_id=query_id, rating=req.rating, comment=req.comment,
+    )
+    if not recorded:
+        raise HTTPException(404, f"query_id {query_id!r} not found.")
+
+    log.info("api.feedback_recorded", query_id=query_id, rating=req.rating)
+    return FeedbackResponse(query_id=query_id, recorded=True)
 
 
 @app.get("/api/documents", response_model=DocumentListResponse, tags=["documents"])

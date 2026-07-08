@@ -1,0 +1,59 @@
+version: "1.0"
+name: FIES Semantic Vocabulary
+layer: 1
+description: >
+  Base registry of every concept id used anywhere in semantic/. This is the
+  root layer — taxonomy.yaml, thesaurus.yaml, financial_ontology.yaml,
+  financial_relationships.yaml, and reasoning_rules.yaml all reference these
+  ids, and semantic_engine.py cross-validates that nothing downstream
+  references an id that isn't registered here. A term must exist in this
+  file before it can be typed, related, or reasoned about anywhere else.
+
+# Directly measurable financial metrics — each has a real SQL column and can
+# be computed from amfi_fund_stats / amfi_amc_stats. Full definitions live in
+# financial_ontology.yaml; this file only registers that the id exists.
+metric_terms:
+  - term_id: aum
+    label: AUM
+  - term_id: avg_aum
+    label: Average AUM
+  - term_id: funds_mobilized
+    label: Funds Mobilized
+  - term_id: redemption
+    label: Redemption
+  - term_id: net_inflow
+    label: Net Inflow
+  - term_id: folios
+    label: Folios
+  - term_id: schemes
+    label: Schemes
+
+# Concepts referenced only by financial_relationships.yaml / reasoning_rules.yaml
+# as causal factors — not backed by a SQL column, not directly queryable.
+# Registered here anyway so cross-referencing them from a relationship or a
+# reasoning rule is still validated, not a silent typo.
+derived_concepts:
+  - term_id: market_appreciation
+    label: Market Appreciation
+  - term_id: dividend_payouts
+    label: Dividend Payouts
+  - term_id: valuation_change
+    label: Valuation Change
+  - term_id: investor_participation
+    label: Investor Participation
+  - term_id: account_growth
+    label: Account Growth
+  - term_id: investor_exit
+    label: Investor Exit
+  - term_id: profit_booking
+    label: Profit Booking
+  - term_id: liquidity_needs
+    label: Liquidity Needs
+  - term_id: market_volatility
+    label: Market Volatility
+  - term_id: investor_interest
+    label: Investor Interest
+  - term_id: new_subscriptions
+    label: New Subscriptions
+  - term_id: category_popularity
+    label: Category Popularity

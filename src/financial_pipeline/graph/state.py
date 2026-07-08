@@ -27,9 +27,17 @@ class RAGState(TypedDict, total=False):
     # ── analytical agent (year-range aggregation loop) ────
     pending_years:     list[int]    # years left to process: [2020, 2021, …]
     current_year:      int | None   # year being processed in this iteration
-    year_results:      dict         # {2020: {"value":"832","month":10}, …}
+    year_results:      dict         # {2020: {"value":"41234","months_found":12}, …}
     extraction_metric: str          # "funds_mobilized"|"folios"|"aum"|"nav"
+    target_scheme:     str | None   # e.g. "mid cap" — scheme to filter/extract
+    quarter_months:    list[int] | None  # e.g. [1,2,3] for Q1; None = all months
     is_analytical:     bool         # True → post_guardrail skips number_consistent check
+    db_context_note:   str | None   # set by query_db_stats when pre-2020 scheme has no mapping
+
+    # ── month-level inner loop (nested inside year loop) ──
+    pending_months:    list[int]    # months left for current year: [1, 2, …, 12]
+    current_month:     int | None   # month being extracted this iteration
+    month_values:      list[dict]   # [{value:"3449.52", month:12}, …] for current year
 
     # ── parallel retrieval ─────────────────────────────────
     dense_results:     list[dict]
@@ -60,6 +68,8 @@ class RAGState(TypedDict, total=False):
     blocked:           bool
 
     # ── generate ───────────────────────────────────────────
+    sql_context:       bool        # True when context comes from Vanna SQL (not doc chunks)
+    structured_answer: str | None  # deterministic answer for SQL / analytical paths
     answer:            str
     generation_meta:   dict        # model, provider, prompt_tokens,
                                    # completion_tokens, latency_ms

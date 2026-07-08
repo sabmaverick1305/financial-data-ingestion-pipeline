@@ -1,0 +1,292 @@
+{
+  "_meta": {
+    "description": "Retrieval ground truth for route-path (RAG) queries Q049-Q060."
+  },
+  "Q049": {
+    "expected_doc_years": [
+      2022
+    ],
+    "expected_doc_months": [
+      8
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AMFI",
+      "August",
+      "2022"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q050": {
+    "expected_doc_years": [
+      2025
+    ],
+    "expected_doc_months": [
+      1
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "January",
+      "2025",
+      "AMFI"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q051": {
+    "expected_doc_years": [
+      2024
+    ],
+    "expected_doc_months": [
+      6
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "scheme",
+      "fund category",
+      "June 2024"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q052": {
+    "expected_doc_years": null,
+    "expected_doc_months": null,
+    "expected_source_types": [
+      "monthly_report",
+      "circular"
+    ],
+    "expected_keywords": [
+      "SEBI",
+      "categorization",
+      "uniform"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q053": {
+    "expected_doc_years": [
+      2023
+    ],
+    "expected_doc_months": null,
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "NFO",
+      "new fund",
+      "2023"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q054": {
+    "expected_doc_years": [
+      2024
+    ],
+    "expected_doc_months": [
+      7,
+      8,
+      9
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "Q3",
+      "2024"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q055": {
+    "expected_doc_years": [
+      2024
+    ],
+    "expected_doc_months": [
+      12
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "Large Cap",
+      "folio",
+      "December 2024"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q056": {
+    "expected_doc_years": [
+      2023
+    ],
+    "expected_doc_months": [
+      3
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "March 2023",
+      "AMFI"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q057": {
+    "expected_doc_years": null,
+    "expected_doc_months": null,
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "ELSS",
+      "equity linked saving",
+      "tax"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q058": {
+    "expected_doc_years": null,
+    "expected_doc_months": null,
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AUM",
+      "average AUM",
+      "assets under management"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q059": {
+    "expected_doc_years": null,
+    "expected_doc_months": null,
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "net inflow",
+      "redemption",
+      "mobilized"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q060": {
+    "expected_doc_years": null,
+    "expected_doc_months": null,
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "SEBI",
+      "equity",
+      "Large Cap",
+      "Mid Cap",
+      "categorization"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q111": {
+    "expected_doc_years": [
+      2024
+    ],
+    "expected_doc_months": [
+      1
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AMFI",
+      "January",
+      "2024"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q112": {
+    "expected_doc_years": [
+      2023
+    ],
+    "expected_doc_months": [
+      3
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AMFI",
+      "March",
+      "2023"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q113": {
+    "expected_doc_years": [
+      2022
+    ],
+    "expected_doc_months": [
+      6
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AMFI",
+      "June",
+      "2022"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q114": {
+    "expected_doc_years": [
+      2023
+    ],
+    "expected_doc_months": [
+      10
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AMFI",
+      "October",
+      "2023"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  },
+  "Q115": {
+    "expected_doc_years": [
+      2024
+    ],
+    "expected_doc_months": [
+      9
+    ],
+    "expected_source_types": [
+      "monthly_report"
+    ],
+    "expected_keywords": [
+      "AMFI",
+      "September",
+      "2024"
+    ],
+    "min_relevant_in_top_k": 1,
+    "k": 8
+  }
+}

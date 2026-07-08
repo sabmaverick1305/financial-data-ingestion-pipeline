@@ -12,11 +12,16 @@ from dataclasses import dataclass, field
 # ── Model pricing (USD per 1 000 tokens) ──────────────────────────────────────
 # Source: official pricing pages, updated 2026-07
 PRICING: dict[str, dict[str, float]] = {
-    # Anthropic Claude
+    # Anthropic Claude (direct API)
     "claude-haiku-4-5-20251001":   {"input": 0.00025, "output": 0.00125},
     "claude-sonnet-4-5-20250929":  {"input": 0.003,   "output": 0.015},
     "claude-sonnet-4-6":           {"input": 0.003,   "output": 0.015},
     "claude-opus-4-5-20251101":    {"input": 0.015,   "output": 0.075},
+    # Bedrock Claude (same model, ~same price; AWS may add small markup)
+    "anthropic.claude-haiku-4-5-20251001-v1:0":  {"input": 0.00025, "output": 0.00125},
+    "anthropic.claude-3-5-haiku-20241022-v1:0":  {"input": 0.00025, "output": 0.00125},
+    "anthropic.claude-3-haiku-20240307-v1:0":    {"input": 0.00025, "output": 0.00125},
+    "anthropic.claude-3-5-sonnet-20241022-v2:0": {"input": 0.003,   "output": 0.015},
     # OpenAI
     "gpt-4o-mini":                 {"input": 0.00015, "output": 0.0006},
     "gpt-4o":                      {"input": 0.005,   "output": 0.015},

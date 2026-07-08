@@ -36,6 +36,10 @@ dependencies = [
     "openai>=1.30",                  # LLM client (OpenAI / any OpenAI-compatible endpoint)
     "anthropic>=0.40",               # Claude (Anthropic) LLM client
     "langgraph>=0.2",                # RAG orchestration graph
+    "langgraph-checkpoint-postgres>=2.0",  # Postgres-backed checkpointer (thread_id state persistence)
+    "psycopg[binary,pool]>=3.1",     # v3 driver + ConnectionPool, required by langgraph-checkpoint-postgres
+    "langsmith>=0.2",                # LangSmith tracing for LangGraph
+    "prometheus-client>=0.20",       # /metrics endpoint
 ]
 
 [project.optional-dependencies]
@@ -45,6 +49,12 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.4",
     "mypy>=1.10",
+]
+eval = [
+    "ragas>=0.4.3",
+    "langchain-anthropic>=1.4",
+    "langchain-google-vertexai>=3.0",  # required by ragas 0.4.x compatibility shim
+    "datasets>=3.0",
 ]
 
 [project.scripts]

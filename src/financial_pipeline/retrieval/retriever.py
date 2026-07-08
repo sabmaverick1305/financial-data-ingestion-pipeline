@@ -20,17 +20,25 @@ from financial_pipeline.storage.document_repo import DocumentRepository
 log = structlog.get_logger()
 
 _model_cache: dict[str, Any] = {}
+_model_load_errors: dict[str, str] = {}
 
 
 def _get_model(model_name: str):
+    if model_name in _model_load_errors:
+        raise RuntimeError(_model_load_errors[model_name])
     if model_name not in _model_cache:
         from sentence_transformers import SentenceTransformer
 
         log.info("retriever.model_loading", model=model_name)
-        _model_cache[model_name] = SentenceTransformer(
-            model_name,
-            token=settings.hf_token or None,
-        )
+        try:
+            _model_cache[model_name] = SentenceTransformer(
+                model_name,
+                token=settings.hf_token or None,
+            )
+        except Exception as exc:
+            _model_load_errors[model_name] = str(exc)
+            log.warning("retriever.model_load_failed", model=model_name, error=str(exc))
+            raise
         log.info("retriever.model_ready", model=model_name)
     return _model_cache[model_name]
 
@@ -78,6 +86,14 @@ class Retriever:
         self._repo = repo
         self._model_name = model_name or settings.embed_model
 
+    @property
+    def semantic_available(self) -> bool:
+        try:
+            _get_model(self._model_name)
+            return True
+        except Exception:
+            return False
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -101,20 +117,26 @@ class Retriever:
         semantic: list[dict] = []
         keyword: list[dict] = []
 
-        if mode in ("semantic", "hybrid"):
-            vec = self._encode(query)
-            semantic = self._repo.search_similar(
-                query_embedding=vec,
-                limit=limit * 2 if mode == "hybrid" else limit,
-                period_year=year,
-                period_month=month,
-                category=category,
-                min_similarity=min_sim,
-                year_from=year_from,
-                year_to=year_to,
-            )
-            for r in semantic:
-                r["search_mode"] = "semantic"
+        if mode in ("semantic", "hybrid") and self.semantic_available:
+            try:
+                vec = self._encode(query)
+                semantic = self._repo.search_similar(
+                    query_embedding=vec,
+                    limit=limit * 2 if mode == "hybrid" else limit,
+                    period_year=year,
+                    period_month=month,
+                    category=category,
+                    min_similarity=min_sim,
+                    year_from=year_from,
+                    year_to=year_to,
+                )
+                for r in semantic:
+                    r["search_mode"] = "semantic"
+            except Exception as exc:
+                log.warning("retriever.semantic_unavailable", error=str(exc), mode=mode)
+                semantic = []
+        elif mode in ("semantic", "hybrid"):
+            log.warning("retriever.semantic_unavailable", model=self._model_name, mode=mode)
 
         if mode in ("keyword", "hybrid"):
             keyword = self._repo.search_fulltext(

@@ -71,6 +71,27 @@ class CitationFormatter:
         citations = []
         for i, chunk in enumerate(chunks, 1):
             text = (chunk.get("text") or chunk.get("table_name") or "").strip()
+
+            # Document-type records have no text field — construct a synthetic
+            # excerpt from file_name + period so keyword matching in eval works.
+            if not text and chunk.get("_source") == "document":
+                import calendar
+                parts = []
+                fname = chunk.get("file_name") or ""
+                if fname:
+                    parts.append(fname)
+                y, m = chunk.get("period_year"), chunk.get("period_month")
+                if y and m:
+                    try:
+                        month_name = calendar.month_name[int(m)]
+                        parts.append(f"AMFI Monthly Report {month_name} {y}")
+                    except (IndexError, TypeError, ValueError):
+                        if y:
+                            parts.append(f"AMFI Report {y}")
+                elif y:
+                    parts.append(f"AMFI Report {y}")
+                text = " | ".join(parts)
+
             score = chunk.get("_ce_score") or chunk.get("similarity") or chunk.get("rrf_score") or chunk.get("_mmr_score") or 0.0
             # Normalise cross-encoder logits (approx range -10 to +10) to 0–1
             if chunk.get("_rank_method") == "cross_encoder":

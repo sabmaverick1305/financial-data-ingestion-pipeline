@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-07-08T12:01:26.212709+00:00",
+  "seed": 42,
+  "per_template": 10,
+  "total_queries": 122,
+  "total_templates": 14,
+  "skipped_templates": [
+    "T_REASON_001"
+  ],
+  "source_files": {
+    "fies/ontology/capabilities.yaml": "6fb8c5575d20",
+    "fies/ontology/templates.yaml": "87a1f25e9f10",
+    "fies/ontology/execution_labels.yaml": "3c3d580a639b",
+    "semantic/vocabulary.yaml": "7b2a848997cf",
+    "semantic/taxonomy.yaml": "10204ab19d4b",
+    "semantic/thesaurus.yaml": "b314d6c6510e",
+    "semantic/financial_ontology.yaml": "8234c83f4941",
+    "semantic/financial_relationships.yaml": "d43b4e0acb0a",
+    "semantic/reasoning_rules.yaml": "32ce26d55ca9"
+  },
+  "ontology_metric_filtering": {
+    "T_AGG_001.metric": [
+      "aum",
+      "folios",
+      "schemes"
+    ]
+  },
+  "not_generated": [
+    "sql_labels.json \u2014 requires real DB row counts/values",
+    "retrieval_labels.json \u2014 requires real retrieved chunk IDs",
+    "expected_answers.json \u2014 requires real expected facts/citations"
+  ]
+}

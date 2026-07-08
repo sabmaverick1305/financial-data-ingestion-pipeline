@@ -1,0 +1,90 @@
+version: "1.0"
+name: FIES Financial Relationships
+layer: 5
+description: >
+  Causal/derivational graph between concepts registered in vocabulary.yaml.
+  Every `subject` and every entry under a relationship's target list
+  (whatever key holds it — depends_on/influenced_by/related_to/indicates)
+  must resolve to a real vocabulary.yaml term_id — enforced by
+  semantic_engine.py. This is the layer reasoning_rules.yaml pulls its
+  "why" evidence from: a rule's conclusion cites the relationship that
+  grounds it via `supporting_relationship`.
+
+relationships:
+  net_inflow_formula:
+    type: formula
+    subject: net_inflow
+    expression: funds_mobilized - redemption
+    depends_on: [funds_mobilized, redemption]
+    explanation: >
+      Net inflow is the residual after redemptions are deducted from funds
+      mobilized in the same period.
+
+  aum_movement:
+    type: influence
+    subject: aum
+    influenced_by: [funds_mobilized, redemption, market_appreciation, dividend_payouts, valuation_change]
+    explanation: >
+      AUM can increase even when net inflow is weak or negative if market
+      appreciation or valuation changes offset redemptions. AUM is not a
+      pure function of flows — it also moves with the market value of the
+      underlying portfolio.
+
+  folio_growth_interpretation:
+    type: interpretation
+    subject: folios
+    indicates: [investor_participation, account_growth]
+    caveats:
+      - Not equivalent to unique investor count.
+      - Can rise even if AUM falls.
+
+  redemption_pressure:
+    type: interpretation
+    subject: redemption
+    related_to: [investor_exit, profit_booking, liquidity_needs, market_volatility]
+    caveats:
+      - Higher redemptions do not automatically imply poor performance.
+
+  mobilization_strength:
+    type: interpretation
+    subject: funds_mobilized
+    related_to: [investor_interest, new_subscriptions, category_popularity]
+    caveats:
+      - High mobilization should be compared with redemption to assess net flow.
+
+# Named multi-metric patterns — the specific configurations reasoning_rules.yaml
+# matches against. Kept here (not just inline in reasoning_rules.yaml) so the
+# same pattern can be referenced by id from multiple rules without repeating
+# the evidence/explanation text.
+reasoning_patterns:
+  aum_up_net_inflow_down:
+    pattern: aum increased while net_inflow decreased
+    required_evidence: [aum, net_inflow, funds_mobilized, redemption]
+    possible_explanations:
+      - Market appreciation increased asset values.
+      - Existing corpus grew despite weak fresh inflows.
+      - Redemptions were offset by valuation gains.
+
+  folios_up_aum_down:
+    pattern: folios increased while aum decreased
+    required_evidence: [folios, aum]
+    possible_explanations:
+      - More accounts entered with smaller ticket sizes.
+      - Market value declined despite investor participation growth.
+      - Retail participation increased while asset values corrected.
+
+  redemption_spike:
+    pattern: redemption increased sharply relative to its recent trend
+    required_evidence: [redemption, market_volatility]
+    possible_explanations:
+      - Profit booking after a market rally.
+      - Liquidity needs during a volatile period.
+      - Sector/theme-specific investor exit.
+
+  funds_mobilized_surge:
+    pattern: funds_mobilized increased sharply relative to its recent trend
+    required_evidence: [funds_mobilized, category_popularity]
+    possible_explanations:
+      - A new fund offer (NFO) launch in the category.
+      - Rising category popularity driving new subscriptions.
+      - Favorable market sentiment increasing investor interest.

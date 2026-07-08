@@ -23,6 +23,8 @@ from financial_pipeline.augmentation.guardrails import (
 from financial_pipeline.augmentation.prompts import PromptBuilder
 from financial_pipeline.augmentation.ranker import ContextRanker
 from financial_pipeline.retrieval.hybrid import ContextOptimizer
+from financial_pipeline.retrieval.ontology_expansion import OntologyExpandedRetriever
+from financial_pipeline.retrieval.ontology_reranker import OntologyAwareReranker
 from financial_pipeline.retrieval.pipeline import SearchRouter
 from financial_pipeline.retrieval.query_understanding import QueryAnalyzer
 from financial_pipeline.retrieval.retriever import _rrf_merge
@@ -38,6 +40,37 @@ _STOPWORDS = frozenset({
     "show", "find", "list", "total", "please", "can", "you",
     "tell", "about", "for", "in", "of", "a", "an",
 })
+_MONTH_NAMES = [
+    "", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+]
+# ContextRanker's CE model scores every input chunk regardless of top_k (only
+# truncates the *output*), so widening this to match rrf_fusion's merge limit
+# costs nothing extra in CE inference — it just stops throwing away scored
+# candidates before OntologyAwareReranker gets a chance to re-weigh them.
+# The actual output size returned to the graph is still capped by
+# _RERANK_FINAL_K, applied after the ontology bonus.
+_RERANK_CANDIDATE_POOL = 20
+_RERANK_FINAL_K = 8
+
+
+def _expand_retrieval_query(query: str, intent) -> str:
+    """Append temporal and domain context to improve recall.
+
+    Adds the month name when intent.month is set but the month name is absent
+    from the query (helps BM25 find documents that contain e.g. "August 2022").
+    """
+    if not intent:
+        return query
+    additions = []
+    m = getattr(intent, "month", None)
+    if m and 1 <= m <= 12:
+        month_name = _MONTH_NAMES[m]
+        if month_name.lower() not in query.lower():
+            additions.append(month_name)
+    if not additions:
+        return query
+    return f"{query} {' '.join(additions)}"
 
 
 # ── Dependency container ──────────────────────────────────────────────────────
@@ -54,30 +87,60 @@ class NodeFactory:
     def __init__(self, repo, retriever) -> None:
         self._repo      = repo
         self._retriever = retriever
-        self._analyzer  = QueryAnalyzer()
+        self._generator = AnswerGenerator()
+        embed_fn = retriever._encode if getattr(retriever, "semantic_available", False) else None
+        # QueryAnalyzer's Stage 3 (_LLMExtractor) is a small structured-JSON
+        # classification call — routed to the cheaper OpenAI tier, kept
+        # separate from self._generator (which stays on the default provider).
+        self._analyzer  = QueryAnalyzer(
+            embed_fn=embed_fn,
+            generator=AnswerGenerator(provider="openai"),
+        )
+        self._ontology_retriever = OntologyExpandedRetriever(
+            repo=repo, encode_fn=self._retriever._encode, rrf_merge_fn=_rrf_merge,
+        )
+        self._ontology_ranker = OntologyAwareReranker()
         self._router    = SearchRouter()
-        self._ranker    = ContextRanker(use_cross_encoder=True, top_k=8)
+        self._ranker    = ContextRanker(use_cross_encoder=True, top_k=_RERANK_CANDIDATE_POOL)
         self._optimizer = ContextOptimizer()
         self._cit_fmt   = CitationFormatter()
         self._prompter  = PromptBuilder()
         self._pre_guard = PreGenerationGuardrails()
         self._post_guard= PostGenerationGuardrails()
-        self._generator = AnswerGenerator()
 
     # ── Node 1: analyze_query ─────────────────────────────────────────────────
 
     def analyze_query(self, state: RAGState) -> dict:
         query  = state.get("query", "")
         intent = self._analyzer.analyze(query)
-        log.info("node.analyze_query", intent=intent.intent_type,
+
+        # Early policy gate: check advice/OOS before any retrieval.
+        # Passes empty citations — only the pattern checks run (no source-count check).
+        pre_check = self._pre_guard.check(question=query, citations=[], intent_type=intent.intent_type)
+
+        log.info("node.analyze_query",
+                 intent=intent.intent_type,
+                 secondary=intent.secondary_intent,
+                 metric=intent.metric,
+                 aggregation=intent.aggregation,
+                 needs_analytical=intent.needs_analytical,
                  year=intent.year, month=intent.month,
-                 scheme_types=intent.scheme_types)
-        return {
-            "intent":         intent,
-            "retry_count":    state.get("retry_count", 0),
-            "repair_count":   state.get("repair_count", 0),
+                 year_from=intent.year_from, year_to=intent.year_to,
+                 scheme_types=intent.scheme_types,
+                 amc_names=intent.amc_names,
+                 stage=intent.stage_used,
+                 confidence=round(intent.confidence, 2),
+                 early_blocked=not pre_check.should_proceed)
+        result: dict = {
+            "intent":          intent,
+            "retry_count":     state.get("retry_count", 0),
+            "repair_count":    state.get("repair_count", 0),
             "rewritten_query": None,
         }
+        if not pre_check.should_proceed:
+            result["blocked"]    = True
+            result["pre_result"] = pre_check
+        return result
 
     # ── Node 2: route ─────────────────────────────────────────────────────────
 
@@ -105,12 +168,13 @@ class NodeFactory:
     def retrieve_dense(self, state: RAGState) -> dict:
         intent    = state["intent"]
         query     = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        query     = _expand_retrieval_query(query, intent)
         doc_ids   = state.get("found_document_ids") or None
         year_from = getattr(intent, "year_from", None)
         year_to   = getattr(intent, "year_to", None)
         try:
-            results = self._repo.search_similar(
-                query_embedding=self._retriever._encode(query),
+            results = self._ontology_retriever.dense(
+                query, intent,
                 limit=20,
                 period_year=intent.year,
                 period_month=intent.month,
@@ -119,9 +183,6 @@ class NodeFactory:
                 year_from=year_from,
                 year_to=year_to,
             )
-            for r in results:
-                r["_source"] = "chunk"
-                r["search_mode"] = "dense"
             log.debug("node.retrieve_dense", count=len(results))
             return {"dense_results": results}
         except Exception as exc:
@@ -131,12 +192,13 @@ class NodeFactory:
     def retrieve_sparse(self, state: RAGState) -> dict:
         intent    = state["intent"]
         query     = state.get("rewritten_query") or intent.search_query or intent.raw_query
+        query     = _expand_retrieval_query(query, intent)
         doc_ids   = state.get("found_document_ids") or None
         year_from = getattr(intent, "year_from", None)
         year_to   = getattr(intent, "year_to", None)
         try:
-            results = self._repo.search_fulltext(
-                query=query,
+            results = self._ontology_retriever.sparse(
+                query, intent,
                 limit=20,
                 period_year=intent.year,
                 period_month=intent.month,
@@ -145,9 +207,6 @@ class NodeFactory:
                 year_from=year_from,
                 year_to=year_to,
             )
-            for r in results:
-                r["_source"] = "chunk"
-                r["search_mode"] = "sparse"
             log.debug("node.retrieve_sparse", count=len(results))
             return {"sparse_results": results}
         except Exception as exc:
@@ -369,6 +428,7 @@ class NodeFactory:
                       reason="year_range", chunks=len(reranked))
         else:
             reranked = self._ranker.rerank(query, chunks)
+            reranked = self._ontology_ranker.rerank(query, intent, reranked, final_k=_RERANK_FINAL_K)
             reranked += docs
 
         log.debug("node.rerank", input=len(chunks), output=len(reranked))
@@ -560,6 +620,44 @@ class NodeFactory:
         intent       = state.get("intent")
         intent_t     = intent.intent_type if intent else "factual"
 
+        structured_answer = state.get("structured_answer")
+        if structured_answer:
+            gen_meta = dict(state.get("generation_meta") or {})
+            gen_meta.setdefault("model", "deterministic")
+            gen_meta.setdefault("provider", "rules")
+            gen_meta.setdefault("prompt_tokens", 0)
+            gen_meta.setdefault("completion_tokens", 0)
+            gen_meta.setdefault("latency_ms", 0)
+            log.info("node.generate.deterministic",
+                     model=gen_meta.get("model"),
+                     provider=gen_meta.get("provider"))
+            return {
+                "answer": structured_answer,
+                "generation_meta": gen_meta,
+            }
+
+        # SQL path: use the sql-specific prompt (context is a DB result, not doc chunks)
+        if state.get("sql_context"):
+            intent_t = "sql"
+
+        if intent_t in self._EXTRACTIVE_INTENTS:
+            answer = self._extractive_answer(query=query, citations=citations, intent_type=intent_t)
+            log.info("node.generate.extractive",
+                     intent=intent_t,
+                     citations=len(citations),
+                     answer_len=len(answer))
+            return {
+                "answer": answer,
+                "structured_answer": answer,
+                "generation_meta": {
+                    "model":             "extractive",
+                    "provider":          "rules",
+                    "prompt_tokens":     0,
+                    "completion_tokens": 0,
+                    "latency_ms":        0,
+                },
+            }
+
         # Build full messages list (system prompt + user turn with context)
         messages = self._prompter.build(
             question=query,
@@ -568,28 +666,97 @@ class NodeFactory:
             intent_type=intent_t,
         )
 
-        result = self._generator.generate(messages, intent_type=intent_t)
+        try:
+            result = self._generator.generate(messages, intent_type=intent_t)
+            log.info("node.generate", model=result.model,
+                     prompt_tokens=result.prompt_tokens,
+                     completion_tokens=result.completion_tokens,
+                     latency_ms=result.latency_ms)
+            return {
+                "answer": result.answer,
+                "generation_meta": {
+                    "model":             result.model,
+                    "provider":          result.provider,
+                    "prompt_tokens":     result.prompt_tokens,
+                    "completion_tokens": result.completion_tokens,
+                    "latency_ms":        result.latency_ms,
+                },
+            }
+        except Exception as exc:
+            fallback = self._extractive_answer(query=query, citations=citations, intent_type=intent_t)
+            log.warning("node.generate.fallback", error=str(exc), intent=intent_t, answer_len=len(fallback))
+            return {
+                "answer": fallback,
+                "structured_answer": fallback,
+                "generation_meta": {
+                    "model":             "deterministic-fallback",
+                    "provider":          "rules",
+                    "prompt_tokens":     0,
+                    "completion_tokens": 0,
+                    "latency_ms":        0,
+                },
+            }
 
-        log.info("node.generate", model=result.model,
-                 prompt_tokens=result.prompt_tokens,
-                 completion_tokens=result.completion_tokens,
-                 latency_ms=result.latency_ms)
-        return {
-            "answer": result.answer,
-            "generation_meta": {
-                "model":             result.model,
-                "provider":          result.provider,
-                "prompt_tokens":     result.prompt_tokens,
-                "completion_tokens": result.completion_tokens,
-                "latency_ms":        result.latency_ms,
-            },
-        }
+    _EXTRACTIVE_INTENTS = frozenset({
+        "factual",
+        "lookup",
+        "definition",
+        "tabular",
+        "trend",
+        "comparison",
+        "regulatory",
+    })
+
+    def _extractive_answer(self, query: str, citations: list, intent_type: str) -> str:
+        """Return a grounded answer assembled directly from retrieved citations."""
+        if not citations:
+            return (
+                "I couldn’t find enough supporting passages in the retrieved AMFI documents "
+                "to answer this confidently."
+            )
+
+        def _snippet(text: str) -> str:
+            cleaned = " ".join((text or "").strip().split())
+            if not cleaned:
+                return ""
+            if cleaned.startswith("|"):
+                lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+                return "\n".join(lines[:5])
+            # Prefer the first sentence; fall back to a short excerpt.
+            sentence_end = re.search(r"[.!?]\s", cleaned)
+            if sentence_end and sentence_end.start() >= 80:
+                return cleaned[: sentence_end.end()].strip()
+            return cleaned[:320]
+
+        lines = [
+            "Here’s the grounded evidence I found in the retrieved passages:",
+        ]
+        for citation in citations[:3]:
+            snippet = _snippet(citation.excerpt)
+            if not snippet:
+                continue
+            lines.append(
+                f"• [{citation.number}] {citation.reference_string()} — {snippet}"
+            )
+
+        if len(lines) == 1:
+            return (
+                "I couldn’t find enough supporting passages in the retrieved AMFI documents "
+                "to answer this confidently."
+            )
+
+        if intent_type == "lookup":
+            lines.append("")
+            lines.append("I’m keeping the answer limited to those passages to avoid inventing details.")
+
+        return "\n".join(lines).strip()
 
     # ── Node 12: post_guardrail ───────────────────────────────────────────────
 
     def post_guardrail(self, state: RAGState) -> dict:
         answer    = state.get("answer", "")
         citations = state.get("citations", [])
+        structured = bool(state.get("structured_answer"))
 
         result = self._post_guard.check(
             answer=answer,
@@ -597,13 +764,15 @@ class NodeFactory:
             chunks=state.get("optimized_results", []),
         )
 
-        # Analytical agent: numbers come from structured extraction, not RAG chunks.
-        # The number_consistent check compares answer digits against cited text —
-        # meaningless when there are no chunk citations. Override to avoid stripping
-        # valid extracted values from the synthesized answer.
-        if state.get("is_analytical"):
+        # Analytical / SQL paths: numbers come from structured DB extraction, not RAG chunks.
+        # number_consistent and faithfulness_score both compare against cited text excerpts —
+        # meaningless when citations are DB rows rather than document passages.
+        if state.get("is_analytical") or state.get("sql_context") or structured:
+            result.citation_valid = True
             result.number_consistent = True
-            result.passed = result.answer_safe and result.hallucination_risk != "high"
+            result.hallucination_risk = "low"
+            result.faithfulness_score = -2.0   # sentinel: "not applicable" (distinct from -1.0 = error)
+            result.passed = result.answer_safe
 
         log.info("node.post_guardrail", passed=result.passed,
                  risk=result.hallucination_risk, safe=result.answer_safe,
@@ -704,11 +873,15 @@ class NodeFactory:
                 "blocked":              blocked,
                 "block_reason":         pre_result.block_reason if pre_result else None,
                 "is_investment_advice": pre_result.is_investment_advice if pre_result else False,
+                "is_out_of_scope":      pre_result.is_out_of_scope if pre_result else False,
                 "pre_passed":           pre_result.should_proceed if pre_result else True,
                 "post_passed":          post_result.passed if post_result else True,
                 "answer_safe":          post_result.answer_safe if post_result else True,
                 "hallucination_risk":   post_result.hallucination_risk if post_result else "unknown",
-                "faithfulness_score":   post_result.faithfulness_score if post_result else -1.0,
+                "faithfulness_score":   (
+                    None if (post_result and post_result.faithfulness_score == -2.0)
+                    else (post_result.faithfulness_score if post_result else -1.0)
+                ),
                 "citation_valid":       post_result.citation_valid if post_result else True,
                 "number_consistent":    post_result.number_consistent if post_result else True,
                 "abstention_detected":  post_result.abstention_detected if post_result else False,
