@@ -56,3 +56,16 @@ def mf_nav_sync(s3_key: str | None, start_date: str | None, end_date: str | None
         max_workers=max_workers or settings.mfapi_max_workers,
     )
     click.echo(result)
+
+
+@main.command("mf-performance-calc")
+@click.option("--max-workers", default=None, type=int, help="Concurrent scheme-processing threads (default: settings.mfapi_max_workers)")
+def mf_performance_calc(max_workers: int | None) -> None:
+    """Recompute mf_scheme_performance (returns, CAGR, volatility, 52w high/low) from mf_nav_history."""
+    from financial_pipeline.mf_performance.run import calculate_all_performance
+
+    result = calculate_all_performance(
+        postgres_url=settings.postgres_url,
+        max_workers=max_workers or settings.mfapi_max_workers,
+    )
+    click.echo(result)

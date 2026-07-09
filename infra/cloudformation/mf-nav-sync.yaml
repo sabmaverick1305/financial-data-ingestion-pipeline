@@ -81,8 +81,12 @@ Resources:
         - Name: mf-nav-sync
           Image: !Ref EcrImage
           Essential: true
-          # Default command = incremental sync (last N days). The one-time
-          # full historical backfill overrides this command at run-task time.
+          # Default command = incremental sync (last N days) THEN the
+          # performance calc job, sequentially in one task (ingestion
+          # completes -> performance calc -> mf_scheme_performance updated).
+          # The one-time full historical backfill overrides this command at
+          # run-task time (ingestion only, no performance calc — run that
+          # separately once the backfill/gap-fill is done).
           # NOTE: Dockerfile's ENTRYPOINT is ["python"] — do not repeat
           # "python" here, or ECS runs `python python -c ...` and fails
           # trying to open a file literally named "python".
@@ -93,7 +97,8 @@ Resources:
               from datetime import date, timedelta
               from financial_pipeline.config import settings
               from financial_pipeline.mf_ingestion.sync import run_sync
-              result = run_sync(
+              from financial_pipeline.mf_performance.run import calculate_all_performance
+              ingest_result = run_sync(
                   postgres_url=settings.postgres_url,
                   s3_bucket=settings.s3_bucket,
                   s3_prefix=settings.mf_scheme_master_s3_prefix,
@@ -101,7 +106,12 @@ Resources:
                   start_date=(date.today() - timedelta(days=${IncrementalLookbackDays})).isoformat(),
                   request_delay_seconds=settings.mfapi_request_delay_seconds,
               )
-              print(result)
+              print("ingest:", ingest_result)
+              perf_result = calculate_all_performance(
+                  postgres_url=settings.postgres_url,
+                  max_workers=settings.mfapi_max_workers,
+              )
+              print("performance:", perf_result)
           Environment:
             - Name: POSTGRES_URL
               Value: !Ref PostgresUrl
