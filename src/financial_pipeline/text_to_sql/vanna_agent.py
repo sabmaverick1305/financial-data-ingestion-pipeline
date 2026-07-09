@@ -33,7 +33,11 @@ _DEFAULT_CHROMA_PATH = str(
 
 # ── SQL safety policy ─────────────────────────────────────────────────────────
 
-APPROVED_TABLES: frozenset[str] = frozenset({"amfi_fund_stats", "amfi_amc_stats"})
+APPROVED_TABLES: frozenset[str] = frozenset({
+    "amfi_fund_stats", "amfi_amc_stats",
+    # Per-scheme mutual fund dataset (mfapi.in) — see mf_ingestion/, mf_performance/.
+    "mf_scheme_master", "mf_nav_history", "mf_scheme_performance",
+})
 MAX_ROWS: int = 500
 QUERY_TIMEOUT_SEC: int = 30
 
@@ -41,6 +45,9 @@ _SELECT_RE  = re.compile(r"^\s*(?:--[^\n]*\n\s*)*SELECT\b", re.IGNORECASE | re.D
 _TABLE_RE   = re.compile(r"\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)", re.IGNORECASE)
 _LIMIT_RE   = re.compile(r"\bLIMIT\s+\d+", re.IGNORECASE)
 _DATE_RE    = re.compile(r"\bperiod_(?:year|month)\b", re.IGNORECASE)
+# mf_scheme_master/mf_nav_history/mf_scheme_performance have no period_year/
+# period_month columns — scheme_code (or nav_date) is their bounding filter.
+_SCHEME_BOUND_RE = re.compile(r"\b(?:scheme_code|nav_date)\b", re.IGNORECASE)
 
 # Question-level pre-checks: catch SQL injection before calling the LLM
 _QUESTION_DML_RE = re.compile(
@@ -82,8 +89,8 @@ def _validate_and_prepare(sql: str) -> tuple[str, list[str]]:
         )
 
     # 3. Date filter check — warn (LIMIT already caps blast radius)
-    if tables_found and not _DATE_RE.search(sql):
-        msg = "No period_year/period_month filter detected; query may scan full table"
+    if tables_found and not _DATE_RE.search(sql) and not _SCHEME_BOUND_RE.search(sql):
+        msg = "No period_year/period_month/scheme_code/nav_date filter detected; query may scan full table"
         warnings.append(msg)
         log.warning("vanna.no_date_filter", tables=list(tables_found), hint=msg)
 
@@ -135,6 +142,21 @@ def build_vanna_agent(
 
     # Parse postgres_url → individual connection params
     _connect_postgres(vn, postgres_url)
+
+    # connect_to_postgres() sets vn.run_sql to a raw, unfiltered executor.
+    # ask() below applies _validate_and_prepare() before calling it — but
+    # Vanna's own generate_sql(allow_llm_to_see_data=True) also calls
+    # self.run_sql() directly and internally, for the "intermediate_sql"
+    # disambiguation pattern (e.g. "find distinct scheme_name values first").
+    # Wrap run_sql itself so that path is policy-checked too, not just the
+    # explicit one in ask().
+    raw_run_sql = vn.run_sql
+
+    def _policy_checked_run_sql(sql: str, **kwargs):
+        checked_sql, _ = _validate_and_prepare(sql)
+        return raw_run_sql(checked_sql, **kwargs)
+
+    vn.run_sql = _policy_checked_run_sql
 
     log.info("vanna.agent_ready", model=model, chroma_path=chroma_path)
     return vn
@@ -198,7 +220,13 @@ def ask(
                 log.warning("vanna.question_unapproved_table", tables=list(bad), question=q[:80])
                 return None, None, f"SQL blocked by safety policy: Unapproved table(s) {bad}.", []
 
-        raw_sql = vn.generate_sql(question)
+        # allow_llm_to_see_data=True lets Vanna resolve its own documented
+        # "intermediate_sql" pattern automatically (e.g. running a `SELECT
+        # DISTINCT scheme_name ...` disambiguation query and feeding the
+        # results back into a second LLM call) instead of returning that
+        # intermediate query as if it were the final answer. Safe to allow
+        # here since run_sql itself is now policy-checked (see build_vanna_agent).
+        raw_sql = vn.generate_sql(question, allow_llm_to_see_data=True)
         if not raw_sql:
             return None, None, "Could not generate SQL for this question.", []
 

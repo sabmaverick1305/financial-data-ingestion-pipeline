@@ -128,6 +128,195 @@ concepts:
     disallowed_template_families: [sum_over_range, cumulative_range]
 
   # ───────────────────────────────────────────────────────────────────────
+  # Per-scheme concepts — mf_scheme_master / mf_nav_history /
+  # mf_scheme_performance (mfapi.in, see mf_ingestion/, mf_performance/).
+  # A distinct dataset from amfi_fund_stats above: identified by
+  # scheme_code, not fund_category/period_year/period_month.
+  # ───────────────────────────────────────────────────────────────────────
+  scheme_code:
+    type: Identifier
+    canonical_name: Scheme Code
+    definition: >
+      Scheme Code — the unique mfapi.in identifier for a specific mutual
+      fund scheme. Growth, dividend, direct, and regular plans of the same
+      fund each have their own distinct scheme_code.
+    semantic_type: identifier
+    sql_column: scheme_code
+    preferred_tables: [mf_scheme_master, mf_nav_history, mf_scheme_performance]
+    default_aggregation: none
+    valid_aggregations: [none]
+    disallowed_template_families: [sum_over_range, trend]
+
+  scheme_name:
+    type: Identifier
+    canonical_name: Scheme Name
+    definition: >
+      Scheme Name — the full published name of a mutual fund scheme,
+      including its plan/option variant (e.g. "HDFC Top 100 Fund - Direct
+      Plan - Growth").
+    semantic_type: identifier
+    sql_column: scheme_name
+    preferred_tables: [mf_scheme_master]
+    default_aggregation: none
+    valid_aggregations: [none]
+    disallowed_template_families: [sum_over_range, trend]
+
+  amc_name:
+    type: Identifier
+    canonical_name: AMC Name
+    definition: >
+      AMC Name — the Asset Management Company that sponsors and manages a
+      mutual fund scheme (e.g. "HDFC Mutual Fund"), as reported by
+      mfapi.in for that specific scheme.
+    semantic_type: identifier
+    sql_column: amc_name
+    preferred_tables: [mf_scheme_master]
+    default_aggregation: none
+    valid_aggregations: [none]
+    disallowed_template_families: [sum_over_range, trend]
+
+  nav:
+    type: FinancialMetric
+    canonical_name: Net Asset Value
+    definition: >
+      Net Asset Value (NAV) — the per-unit market value of a mutual fund
+      scheme on a given date, published daily by mfapi.in and stored one
+      row per (scheme_code, nav_date) in mf_nav_history.
+    semantic_type: stock
+    unit: inr
+    sql_column: nav
+    preferred_tables: [mf_nav_history]
+    default_aggregation: latest
+    valid_aggregations: [latest, max, min, trend]
+    disallowed_template_families: [sum_over_range]
+    temporal_rule: >
+      NAV is a daily point-in-time value in mf_nav_history, keyed by
+      nav_date. For "the NAV" / "current NAV" with no date given, prefer
+      latest_nav from mf_scheme_performance — it is precomputed and avoids
+      scanning the full history.
+
+  latest_nav:
+    type: FinancialMetric
+    canonical_name: Latest NAV
+    definition: >
+      Latest NAV — the most recently published per-unit NAV for a scheme,
+      precomputed in mf_scheme_performance alongside its date
+      (latest_nav_date).
+    semantic_type: stock
+    unit: inr
+    sql_column: latest_nav
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+
+  return_1m:
+    type: FinancialMetric
+    canonical_name: 1-Month Return
+    definition: >
+      1-Month Return — the simple percentage change in NAV over the
+      trailing 1 month: ((latest_nav / nav_1_month_ago) - 1) * 100.
+    semantic_type: return
+    unit: percent
+    sql_column: return_1m
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+
+  return_3m:
+    type: FinancialMetric
+    canonical_name: 3-Month Return
+    definition: >
+      3-Month Return — the simple percentage change in NAV over the
+      trailing 3 months: ((latest_nav / nav_3_months_ago) - 1) * 100.
+    semantic_type: return
+    unit: percent
+    sql_column: return_3m
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+
+  return_6m:
+    type: FinancialMetric
+    canonical_name: 6-Month Return
+    definition: >
+      6-Month Return — the simple percentage change in NAV over the
+      trailing 6 months: ((latest_nav / nav_6_months_ago) - 1) * 100.
+    semantic_type: return
+    unit: percent
+    sql_column: return_6m
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+
+  return_1y:
+    type: FinancialMetric
+    canonical_name: 1-Year Return
+    definition: >
+      1-Year Return — the simple percentage change in NAV over the
+      trailing 1 year: ((latest_nav / nav_1_year_ago) - 1) * 100.
+    semantic_type: return
+    unit: percent
+    sql_column: return_1y
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+
+  return_3y_cagr:
+    type: FinancialMetric
+    canonical_name: 3-Year CAGR
+    definition: >
+      3-Year CAGR — the compound annual growth rate of NAV over the
+      trailing 3 years: ((latest_nav / nav_3_years_ago) ^ (1/3) - 1) * 100.
+    semantic_type: cagr
+    unit: percent
+    sql_column: return_3y_cagr
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+    note: >
+      CAGR, not a simple return — do not confuse with return_1y. Formula
+      uses a fractional exponent (1/3), not a linear percentage change.
+
+  return_5y_cagr:
+    type: FinancialMetric
+    canonical_name: 5-Year CAGR
+    definition: >
+      5-Year CAGR — the compound annual growth rate of NAV over the
+      trailing 5 years: ((latest_nav / nav_5_years_ago) ^ (1/5) - 1) * 100.
+    semantic_type: cagr
+    unit: percent
+    sql_column: return_5y_cagr
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+    note: >
+      CAGR, not a simple return — formula uses a fractional exponent (1/5).
+
+  since_launch_return:
+    type: FinancialMetric
+    canonical_name: Since Launch Return
+    definition: >
+      Since Launch Return — the simple percentage change in NAV from a
+      scheme's earliest available NAV to its latest NAV. Stored as
+      all_time_return in mf_scheme_performance (mf_ingestion only has NAV
+      history back to 2000-01-01, so for funds launched before then this
+      reflects "since 2000" rather than the true launch date).
+    semantic_type: return
+    unit: percent
+    sql_column: all_time_return
+    preferred_tables: [mf_scheme_performance]
+    default_aggregation: latest
+    valid_aggregations: [latest]
+    disallowed_template_families: [sum_over_range, trend]
+
+  # ───────────────────────────────────────────────────────────────────────
   # FundCategory concepts — brief defining prose per scheme type. Hierarchy
   # (parent/children) lives in taxonomy.yaml; this only adds the definition.
   # ───────────────────────────────────────────────────────────────────────

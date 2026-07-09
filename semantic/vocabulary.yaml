@@ -28,6 +28,37 @@ metric_terms:
   - term_id: schemes
     label: Schemes
 
+# Per-scheme (mf_scheme_master / mf_nav_history / mf_scheme_performance)
+# identifiers and metrics — a distinct dataset from amfi_fund_stats above,
+# sourced from mfapi.in (see mf_ingestion/, mf_performance/). scheme_code/
+# scheme_name/amc_name are identifiers, not aggregatable metrics, but are
+# registered here too so the ontology/thesaurus/planner can resolve and
+# canonicalize them the same way as the numeric metrics.
+  - term_id: scheme_code
+    label: Scheme Code
+  - term_id: scheme_name
+    label: Scheme Name
+  - term_id: amc_name
+    label: AMC Name
+  - term_id: nav
+    label: NAV
+  - term_id: latest_nav
+    label: Latest NAV
+  - term_id: return_1m
+    label: 1-Month Return
+  - term_id: return_3m
+    label: 3-Month Return
+  - term_id: return_6m
+    label: 6-Month Return
+  - term_id: return_1y
+    label: 1-Year Return
+  - term_id: return_3y_cagr
+    label: 3-Year CAGR
+  - term_id: return_5y_cagr
+    label: 5-Year CAGR
+  - term_id: since_launch_return
+    label: Since Launch Return
+
 # Concepts referenced only by financial_relationships.yaml / reasoning_rules.yaml
 # as causal factors — not backed by a SQL column, not directly queryable.
 # Registered here anyway so cross-referencing them from a relationship or a

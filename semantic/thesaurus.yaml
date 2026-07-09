@@ -107,6 +107,117 @@ metric_synonyms:
       - mutual fund products
     negative_synonyms: []
 
+  # Per-scheme (mf_scheme_master / mf_nav_history / mf_scheme_performance)
+  # identifiers and metrics — see financial_ontology.yaml for the same set.
+  scheme_code:
+    synonyms:
+      - scheme code
+      - fund code
+      - amfi code
+      - mfapi code
+    negative_synonyms: []
+  scheme_name:
+    synonyms:
+      - scheme name
+      - fund name
+      - plan name
+      - name of the scheme
+      - name of the fund
+    negative_synonyms: []
+  amc_name:
+    synonyms:
+      - amc
+      - amc name
+      - fund house
+      - mutual fund company
+      - asset management company
+      - sponsor
+      - fund sponsor
+    negative_synonyms: []
+  nav:
+    synonyms:
+      - nav
+      - net asset value
+      - unit price
+      - unit nav
+      - nav history
+      - historical nav
+    negative_synonyms:
+      - latest nav
+      - current nav
+  latest_nav:
+    synonyms:
+      - latest nav
+      - current nav
+      - today's nav
+      - current price
+      - latest price
+      - present nav
+    negative_synonyms: []
+  return_1m:
+    synonyms:
+      - 1 month return
+      - 1m return
+      - one month return
+      - monthly return
+      - last month return
+    negative_synonyms: []
+  return_3m:
+    synonyms:
+      - 3 month return
+      - 3m return
+      - three month return
+      - quarterly return
+      - last quarter return
+    negative_synonyms: []
+  return_6m:
+    synonyms:
+      - 6 month return
+      - 6m return
+      - six month return
+      - half yearly return
+      - half year return
+    negative_synonyms: []
+  return_1y:
+    synonyms:
+      - 1 year return
+      - 1y return
+      - one year return
+      - annual return
+      - yearly return
+      - 12 month return
+    negative_synonyms:
+      - 3 year cagr
+      - 5 year cagr
+  return_3y_cagr:
+    synonyms:
+      - 3 year cagr
+      - 3y cagr
+      - three year cagr
+      - 3 year annualized return
+      - 3yr cagr
+      - three year compound annual growth rate
+    negative_synonyms: []
+  return_5y_cagr:
+    synonyms:
+      - 5 year cagr
+      - 5y cagr
+      - five year cagr
+      - 5 year annualized return
+      - 5yr cagr
+      - five year compound annual growth rate
+    negative_synonyms: []
+  since_launch_return:
+    synonyms:
+      - since launch return
+      - since inception return
+      - all time return
+      - lifetime return
+      - return since launch
+      - return since inception
+      - inception to date return
+    negative_synonyms: []
+
 # Disambiguation between metrics whose synonym sets can overlap on a bare word.
 disambiguation_rules:
   - condition: query contains gross, total invested, mobilized, or subscriptions

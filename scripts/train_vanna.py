@@ -22,6 +22,11 @@ from financial_pipeline.config import settings
 from financial_pipeline.logging import configure_logging
 from financial_pipeline.text_to_sql.schema import DDL
 from financial_pipeline.text_to_sql.schema_amc import DDL as AMC_DDL
+from financial_pipeline.text_to_sql.schema_mf_scheme import (
+    MF_NAV_HISTORY_DDL,
+    MF_SCHEME_MASTER_DDL,
+    MF_SCHEME_PERFORMANCE_DDL,
+)
 from financial_pipeline.text_to_sql.vanna_agent import build_vanna_agent
 
 log = structlog.get_logger()
@@ -142,6 +147,50 @@ _DOCS = [
         "           then GROUP BY period_year, period_month ORDER BY period_year, period_month.\n"
         "  'yearly' or 'annual' → GROUP BY period_year (collapse months into one row per year).\n"
         "  'monthly trend' or 'each month' → include both period_year and period_month in SELECT.\n"
+    ),
+    (
+        "mf_scheme_master / mf_nav_history / mf_scheme_performance tables (per-scheme dataset)",
+        "These three tables are a SEPARATE dataset from amfi_fund_stats/amfi_amc_stats above — "
+        "per INDIVIDUAL mutual fund scheme (sourced from mfapi.in), not per fund_category. "
+        "Never mix scheme_code-keyed tables with period_year/fund_category-keyed tables in the same query. "
+        "\n"
+        "mf_scheme_master: one row per scheme_code (the mfapi.in scheme identifier, a TEXT id, e.g. '119551'). "
+        "Columns: scheme_code, scheme_name (full name incl. plan/option, e.g. 'HDFC Top 100 Fund - Direct Plan - Growth'), "
+        "amc_name (the sponsoring AMC, e.g. 'HDFC Mutual Fund'), category, scheme_type, is_active. "
+        "Growth/Dividend/Direct/Regular variants of the same fund are separate scheme_code rows. "
+        "\n"
+        "mf_nav_history: one row per (scheme_code, nav_date) — the full daily NAV time series back to 2000-01-01. "
+        "Columns: scheme_code, nav_date, nav. Use this ONLY for historical/time-series NAV questions "
+        "(e.g. 'NAV on a specific date', 'NAV trend over time'). ALWAYS filter by scheme_code — "
+        "this table has ~35 million rows across all schemes. "
+        "\n"
+        "mf_scheme_performance: one row per scheme_code — PRECOMPUTED metrics, refreshed nightly. "
+        "Prefer this table over aggregating mf_nav_history yourself whenever the question matches one of "
+        "its columns: latest_nav, latest_nav_date, return_1d, return_1w, return_1m, return_3m, return_6m, "
+        "return_1y (all simple % returns), return_3y_cagr, return_5y_cagr, return_10y_cagr (all CAGR %, "
+        "NOT simple returns — compounded annually), all_time_return (return since the earliest available NAV, "
+        "i.e. 'since launch'/'since inception' return), rolling_volatility, rolling_stddev (annualized, "
+        "from daily NAV returns), nav_high_52w, nav_low_52w."
+    ),
+    (
+        "mf_scheme_master / mf_scheme_performance JOIN pattern",
+        "To answer a question naming a scheme by NAME (not scheme_code), JOIN mf_scheme_master to "
+        "mf_scheme_performance on scheme_code, and filter with scheme_name ILIKE '%...%' (scheme names are "
+        "long and exact-match rarely works — always use ILIKE with wildcards unless given an exact scheme_code). "
+        "Example pattern: "
+        "SELECT sm.scheme_name, sm.amc_name, sp.latest_nav, sp.return_1y FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%hdfc top 100%';"
+    ),
+    (
+        "return vs CAGR terminology (mf_scheme_performance)",
+        "Do not confuse simple returns with CAGR. return_1m/return_3m/return_6m/return_1y are SIMPLE "
+        "percentage changes: ((latest_nav / nav_N_periods_ago) - 1) * 100. "
+        "return_3y_cagr/return_5y_cagr/return_10y_cagr are COMPOUND ANNUAL growth rates: "
+        "((latest_nav / nav_N_years_ago) ^ (1/N) - 1) * 100 — always fractional-exponent compounded, "
+        "never a simple percentage change, even though the underlying formula pattern looks similar. "
+        "'3 year return' or '3Y CAGR' or 'three year annualized return' all mean return_3y_cagr. "
+        "'since launch return' / 'since inception return' / 'all time return' all mean all_time_return."
     ),
 ]
 
@@ -398,6 +447,74 @@ _EXAMPLES = [
         "GROUP BY period_year "
         "ORDER BY period_year;",
     ),
+
+    # ── mf_scheme_master / mf_nav_history / mf_scheme_performance examples ──
+    (
+        "What is the latest NAV of HDFC Top 100 Fund?",
+        "SELECT sm.scheme_name, sm.amc_name, sp.latest_nav, sp.latest_nav_date "
+        "FROM mf_scheme_master sm JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%hdfc top 100%' LIMIT 20;",
+    ),
+    (
+        "What is the AMC name for scheme code 119551?",
+        "SELECT scheme_code, scheme_name, amc_name FROM mf_scheme_master WHERE scheme_code = '119551';",
+    ),
+    (
+        "What is the 1 year return of SBI Bluechip Fund?",
+        "SELECT sm.scheme_name, sp.return_1y FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%sbi bluechip%' LIMIT 20;",
+    ),
+    (
+        "Show the 3 year CAGR and 5 year CAGR for Axis Long Term Equity Fund",
+        "SELECT sm.scheme_name, sp.return_3y_cagr, sp.return_5y_cagr FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%axis long term equity%' LIMIT 20;",
+    ),
+    (
+        "What is the since launch return of scheme code 100027?",
+        "SELECT scheme_code, all_time_return AS since_launch_return "
+        "FROM mf_scheme_performance WHERE scheme_code = '100027';",
+    ),
+    (
+        "List the top 10 schemes by 1 year return for HDFC Mutual Fund",
+        "SELECT sm.scheme_name, sp.return_1y FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.amc_name ILIKE '%hdfc%' AND sp.return_1y IS NOT NULL "
+        "ORDER BY sp.return_1y DESC LIMIT 10;",
+    ),
+    (
+        "Compare the 3 month and 6 month returns of Parag Parikh Flexi Cap Fund",
+        "SELECT sm.scheme_name, sp.return_3m, sp.return_6m FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%parag parikh flexi cap%' LIMIT 20;",
+    ),
+    (
+        "What was the NAV of scheme code 119551 on 2024-01-15?",
+        "SELECT scheme_code, nav_date, nav FROM mf_nav_history "
+        "WHERE scheme_code = '119551' AND nav_date = '2024-01-15';",
+    ),
+    (
+        "Show the NAV history of scheme code 100027 for the last 30 days",
+        "SELECT nav_date, nav FROM mf_nav_history WHERE scheme_code = '100027' "
+        "ORDER BY nav_date DESC LIMIT 30;",
+    ),
+    (
+        "What is the 52 week high and low NAV for Mirae Asset Large Cap Fund?",
+        "SELECT sm.scheme_name, sp.nav_high_52w, sp.nav_low_52w FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%mirae asset large cap%' LIMIT 20;",
+    ),
+    (
+        "Which AMCs have the most active schemes?",
+        "SELECT amc_name, COUNT(*) AS scheme_count FROM mf_scheme_master "
+        "WHERE is_active = TRUE GROUP BY amc_name ORDER BY scheme_count DESC LIMIT 20;",
+    ),
+    (
+        "List all scheme names and codes for Quant Mutual Fund",
+        "SELECT scheme_code, scheme_name FROM mf_scheme_master "
+        "WHERE amc_name ILIKE '%quant%' LIMIT 50;",
+    ),
 ]
 
 
@@ -420,11 +537,17 @@ def main(reset: bool) -> None:
         except Exception as exc:
             log.warning("train.reset_failed", error=str(exc))
 
-    # 1 — DDL (both tables)
-    log.info("train.ddl", table="amfi_fund_stats")
-    vn.train(ddl=DDL)
-    log.info("train.ddl", table="amfi_amc_stats")
-    vn.train(ddl=AMC_DDL)
+    # 1 — DDL (all five tables)
+    all_ddls = [
+        ("amfi_fund_stats", DDL),
+        ("amfi_amc_stats", AMC_DDL),
+        ("mf_scheme_master", MF_SCHEME_MASTER_DDL),
+        ("mf_nav_history", MF_NAV_HISTORY_DDL),
+        ("mf_scheme_performance", MF_SCHEME_PERFORMANCE_DDL),
+    ]
+    for table, ddl in all_ddls:
+        log.info("train.ddl", table=table)
+        vn.train(ddl=ddl)
 
     # 2 — Documentation
     for subject, doc in _DOCS:
@@ -437,10 +560,10 @@ def main(reset: bool) -> None:
         vn.train(question=question, sql=sql)
 
     log.info("train.done",
-             ddl=2,
+             ddl=len(all_ddls),
              docs=len(_DOCS),
              examples=len(_EXAMPLES))
-    print(f"\nTraining complete: 2 DDLs + {len(_DOCS)} docs + {len(_EXAMPLES)} SQL examples.")
+    print(f"\nTraining complete: {len(all_ddls)} DDLs + {len(_DOCS)} docs + {len(_EXAMPLES)} SQL examples.")
 
 
 if __name__ == "__main__":
