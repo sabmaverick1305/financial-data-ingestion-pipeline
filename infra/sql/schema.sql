@@ -279,6 +279,39 @@ CREATE TABLE IF NOT EXISTS mf_ingestion_log (
 CREATE INDEX IF NOT EXISTS idx_mf_ingestion_log_started_at
   ON mf_ingestion_log (started_at);
 
+-- ── mf_scheme_performance ──────────────────────────────────────────────────────
+-- Derived/computed metrics per scheme (latest NAV, trailing returns,
+-- rolling volatility, 52-week high/low), refreshed from mf_nav_history.
+-- Not written by mf_ingestion/ directly — a downstream computation layer.
+CREATE TABLE IF NOT EXISTS mf_scheme_performance (
+  scheme_code  TEXT PRIMARY KEY REFERENCES mf_scheme_master(scheme_code),
+
+  latest_nav       NUMERIC,
+  latest_nav_date  DATE,
+
+  return_1d  NUMERIC,
+  return_1w  NUMERIC,
+
+  return_1m  NUMERIC,
+  return_3m  NUMERIC,
+  return_6m  NUMERIC,
+
+  return_1y        NUMERIC,
+  return_3y_cagr    NUMERIC,
+  return_5y_cagr    NUMERIC,
+  return_10y_cagr   NUMERIC,
+
+  all_time_return  NUMERIC,
+
+  rolling_volatility  NUMERIC,
+  rolling_stddev      NUMERIC,
+
+  nav_high_52w  NUMERIC,
+  nav_low_52w   NUMERIC,
+
+  updated_at  TIMESTAMP
+);
+
 -- ── Idempotent migrations (for existing databases) ────────────────────────────
 -- Safe to run against a database that was created with the v1 schema.
 ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS has_text_layer   BOOLEAN;
