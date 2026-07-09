@@ -169,6 +169,28 @@ class SemanticEngine:
                 return e["label"]
         return None
 
+    # mf_scheme_categories is a deliberately separate taxonomy from
+    # scheme_types — see taxonomy.yaml's comment on why they aren't merged
+    # (avoids a thesaurus synonym collision with the eval-verified
+    # amfi_fund_stats scheme_type resolution). Not wired into
+    # ontology_resolver.py; currently consumed by scripts/train_vanna.py
+    # to give Vanna authoritative mf_scheme_master.category values.
+    @property
+    def mf_scheme_category_ids(self) -> list[str]:
+        return [e["entity_id"] for e in self.docs["taxonomy.yaml"].get("mf_scheme_categories", [])]
+
+    def mf_scheme_category(self, entity_id: str) -> dict | None:
+        for e in self.docs["taxonomy.yaml"].get("mf_scheme_categories", []):
+            if e["entity_id"] == entity_id:
+                return e
+        return None
+
+    def mf_scheme_categories_leaf(self) -> list[dict]:
+        """Entries with a category_pattern — excludes the four group headers
+        (equity_scheme/debt_scheme/hybrid_scheme/other_scheme), which are
+        parent nodes only, not real category_pattern-filterable leaves."""
+        return [e for e in self.docs["taxonomy.yaml"].get("mf_scheme_categories", []) if "category_pattern" in e]
+
     # ── layer 3: thesaurus ──────────────────────────────────────────────
     def metric_synonyms(self, metric_id: str) -> list[str]:
         return self.docs["thesaurus.yaml"].get("metric_synonyms", {}).get(metric_id, {}).get("synonyms", [])

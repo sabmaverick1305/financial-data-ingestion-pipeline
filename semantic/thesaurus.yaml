@@ -349,6 +349,8 @@ amc_synonyms:
     - kotak
     - kotak mf
     - kotak mutual fund
+    - kotak mahindra
+    - kotak mahindra mutual fund
   aditya_birla_sun_life_mf:
     - aditya birla
     - absl
@@ -363,3 +365,215 @@ amc_synonyms:
     - parag parikh
     - parag parikh mutual fund
     - ppfas mutual fund
+  # The rest are every other AMC in mf_scheme_master — see taxonomy.yaml's
+  # amcs: comment for the full rationale.
+  360_one_mf:
+    - 360 one
+    - 360 one mutual fund
+  abakkus_mf:
+    - abakkus
+    - abakkus mutual fund
+  abn_amro_mf:
+    - abn amro
+    - abn amro mutual fund
+  angel_one_mf:
+    - angel one
+    - angel one mutual fund
+  bajaj_finserv_mf:
+    - bajaj finserv
+    - bajaj finserv mutual fund
+  bandhan_mf:
+    - bandhan
+    - bandhan mutual fund
+  bank_of_india_mf:
+    - bank of india
+    - bank of india mutual fund
+  baroda_bnp_paribas_mf:
+    - baroda bnp paribas
+    - baroda bnp paribas mutual fund
+  baroda_mf:
+    - baroda
+    - baroda mutual fund
+  baroda_pioneer_mf:
+    - baroda pioneer
+    - baroda pioneer mutual fund
+  benchmark_mf:
+    - benchmark
+    - benchmark mutual fund
+  bnp_paribas_mf:
+    - bnp paribas
+    - bnp paribas mutual fund
+  boi_axa_mf:
+    - boi axa
+    - boi axa mutual fund
+  canara_robeco_mf:
+    - canara robeco
+    - canara robeco mutual fund
+  capitalmind_mf:
+    - capitalmind
+    - capitalmind mutual fund
+  choice_mf:
+    - choice
+    - choice mutual fund
+  daiwa_mf:
+    - daiwa
+    - daiwa mutual fund
+  dbs_chola_mf:
+    - dbs chola
+    - dbs chola mutual fund
+  deutsche_mf:
+    - deutsche
+    - deutsche mutual fund
+  dhfl_pramerica_mf:
+    - dhfl pramerica
+    - dhfl pramerica mutual fund
+  dsp_mf:
+    - dsp
+    - dsp mutual fund
+  edelweiss_mf:
+    - edelweiss
+    - edelweiss mutual fund
+  essel_mf:
+    - essel
+    - essel mutual fund
+  fidelity_mf:
+    - fidelity
+    - fidelity mutual fund
+  fortis_mf:
+    - fortis
+    - fortis mutual fund
+  franklin_templeton_mf:
+    - franklin templeton
+    - franklin templeton mutual fund
+  goldman_sachs_mf:
+    - goldman sachs
+    - goldman sachs mutual fund
+  groww_mf:
+    - groww
+    - groww mutual fund
+  helios_mf:
+    - helios
+    - helios mutual fund
+  hsbc_mf:
+    - hsbc
+    - hsbc mutual fund
+  idbi_mf:
+    - idbi
+    - idbi mutual fund
+  idfc_mf:
+    - idfc
+    - idfc mutual fund
+  iifl_mf:
+    - iifl
+    - iifl mutual fund
+  indiabulls_mf:
+    - indiabulls
+    - indiabulls mutual fund
+  ing_mf:
+    - ing
+    - ing mutual fund
+  invesco_mf:
+    - invesco
+    - invesco mutual fund
+  iti_mf:
+    - iti
+    - iti mutual fund
+  jio_blackrock_mf:
+    - jio blackrock
+    - jio blackrock mutual fund
+  jm_financial_mf:
+    - jm financial
+    - jm financial mutual fund
+  jpmorgan_mf:
+    - jpmorgan
+    - jpmorgan mutual fund
+  landt_mf:
+    - l&t
+    - l&t mutual fund
+  lic_mf:
+    - lic
+    - lic mutual fund
+  mahindra_manulife_mf:
+    - mahindra manulife
+    - mahindra manulife mutual fund
+  mirae_asset_mf:
+    - mirae asset
+    - mirae asset mutual fund
+  morgan_stanley_mf:
+    - morgan stanley
+    - morgan stanley mutual fund
+  motilal_oswal_mf:
+    - motilal oswal
+    - motilal oswal mutual fund
+  navi_mf:
+    - navi
+    - navi mutual fund
+  nj_mf:
+    - nj
+    - nj mutual fund
+  old_bridge_mf:
+    - old bridge
+    - old bridge mutual fund
+  pgim_india_mf:
+    - pgim india
+    - pgim india mutual fund
+  pinebridge_mf:
+    - pinebridge
+    - pinebridge mutual fund
+  principal_mf:
+    - principal
+    - principal mutual fund
+  quantum_mf:
+    - quantum
+    - quantum mutual fund
+  reliance_mf:
+    - reliance
+    - reliance mutual fund
+  sahara_mf:
+    - sahara
+    - sahara mutual fund
+  samco_mf:
+    - samco
+    - samco mutual fund
+  shinsei_mf:
+    - shinsei
+    - shinsei mutual fund
+  shriram_mf:
+    - shriram
+    - shriram mutual fund
+  standard_chartered_mf:
+    - standard chartered
+    - standard chartered mutual fund
+  sundaram_mf:
+    - sundaram
+    - sundaram mutual fund
+  tata_mf:
+    - tata
+    - tata mutual fund
+  taurus_mf:
+    - taurus
+    - taurus mutual fund
+  the_wealth_company_mf:
+    - the wealth company
+    - the wealth company mutual fund
+  trust_mf:
+    - trust
+    - trust mutual fund
+  unifi_mf:
+    - unifi
+    - unifi mutual fund
+  union_mf:
+    - union
+    - union mutual fund
+  uti_mf:
+    - uti
+    - uti mutual fund
+  whiteoak_capital_mf:
+    - whiteoak capital
+    - whiteoak capital mutual fund
+  yes_mf:
+    - yes
+    - yes mutual fund
+  zerodha_mf:
+    - zerodha
+    - zerodha mutual fund

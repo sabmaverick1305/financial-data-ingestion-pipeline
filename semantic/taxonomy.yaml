@@ -73,6 +73,199 @@ scheme_types:
     label: All Categories
     parent: all
 
+# ── mf_scheme_categories ─────────────────────────────────────────────────────
+# A SEPARATE hierarchy for mf_scheme_master.category (per-scheme dataset,
+# see mf_ingestion/) — deliberately NOT merged into scheme_types above.
+# scheme_types maps to amfi_fund_stats.fund_category ("Large Cap Fund");
+# mf_scheme_master.category follows SEBI's official scheme naming
+# ("Equity Scheme - Large Cap Fund") — same real-world concepts, different
+# literal column values in different tables. Keeping them apart avoids a
+# synonym collision in thesaurus.yaml: both would want "large cap" as a
+# synonym, and ontology_resolver.py's scheme_type resolution (used by the
+# eval-verified amfi_fund_stats routing) has no notion of "which table" to
+# disambiguate by. This taxonomy is consumed via
+# semantic_engine.mf_scheme_category_ids/synonyms(), not the shared
+# scheme_type_synonyms() path — currently used for Vanna training-doc
+# generation (scripts/train_vanna.py), not live query routing.
+mf_scheme_categories:
+  - entity_id: equity_scheme
+    label: Equity Scheme
+    parent: null
+  - entity_id: contra_fund_scheme
+    label: Equity Scheme - Contra Fund
+    parent: equity_scheme
+    category_pattern: "%contra%"
+  - entity_id: dividend_yield_scheme
+    label: Equity Scheme - Dividend Yield Fund
+    parent: equity_scheme
+    category_pattern: "%dividend yield%"
+  - entity_id: elss_scheme
+    label: Equity Scheme - ELSS
+    parent: equity_scheme
+    category_pattern: "%elss%"
+  - entity_id: flexi_cap_scheme
+    label: Equity Scheme - Flexi Cap Fund
+    parent: equity_scheme
+    category_pattern: "%flexi cap%"
+  - entity_id: focused_fund_scheme
+    label: Equity Scheme - Focused Fund
+    parent: equity_scheme
+    category_pattern: "%focus%"
+    note: Source data has both "Focused" and "Focussed" spellings — pattern matches either.
+  - entity_id: large_cap_scheme
+    label: Equity Scheme - Large Cap Fund
+    parent: equity_scheme
+    category_pattern: "%large cap%"
+    note: Also matches "Large & Mid Cap Fund" — narrow to "%large cap fund%" if that's unwanted.
+  - entity_id: large_and_mid_cap_scheme
+    label: Equity Scheme - Large & Mid Cap Fund
+    parent: equity_scheme
+    category_pattern: "%large & mid%"
+  - entity_id: mid_cap_scheme
+    label: Equity Scheme - Mid Cap Fund
+    parent: equity_scheme
+    category_pattern: "%mid cap%"
+    note: Also matches "Large & Mid Cap Fund" — narrow if that's unwanted.
+  - entity_id: multi_cap_scheme
+    label: Equity Scheme - Multi Cap Fund
+    parent: equity_scheme
+    category_pattern: "%multi cap%"
+  - entity_id: sectoral_thematic_scheme
+    label: Equity Scheme - Sectoral/ Thematic
+    parent: equity_scheme
+    category_pattern: "%sectoral%"
+  - entity_id: small_cap_scheme
+    label: Equity Scheme - Small Cap Fund
+    parent: equity_scheme
+    category_pattern: "%small cap%"
+  - entity_id: value_fund_scheme
+    label: Equity Scheme - Value Fund
+    parent: equity_scheme
+    category_pattern: "%value fund%"
+
+  - entity_id: debt_scheme
+    label: Debt Scheme
+    parent: null
+  - entity_id: banking_psu_scheme
+    label: Debt Scheme - Banking and PSU Fund
+    parent: debt_scheme
+    category_pattern: "%banking%psu%"
+  - entity_id: corporate_bond_scheme
+    label: Debt Scheme - Corporate Bond Fund
+    parent: debt_scheme
+    category_pattern: "%corporate bond%"
+  - entity_id: credit_risk_scheme
+    label: Debt Scheme - Credit Risk Fund
+    parent: debt_scheme
+    category_pattern: "%credit risk%"
+  - entity_id: dynamic_bond_scheme
+    label: Debt Scheme - Dynamic Bond
+    parent: debt_scheme
+    category_pattern: "%dynamic bond%"
+  - entity_id: floater_scheme
+    label: Debt Scheme - Floater Fund
+    parent: debt_scheme
+    category_pattern: "%floater%"
+  - entity_id: gilt_scheme
+    label: Debt Scheme - Gilt Fund
+    parent: debt_scheme
+    category_pattern: "%gilt%"
+    note: Also matches "Gilt Fund with 10 year constant duration".
+  - entity_id: liquid_scheme
+    label: Debt Scheme - Liquid Fund
+    parent: debt_scheme
+    category_pattern: "%liquid%"
+  - entity_id: long_duration_scheme
+    label: Debt Scheme - Long Duration Fund
+    parent: debt_scheme
+    category_pattern: "%long duration%"
+    note: Also matches "Medium to Long Duration Fund" — narrow to "^long duration" if unwanted.
+  - entity_id: low_duration_scheme
+    label: Debt Scheme - Low Duration Fund
+    parent: debt_scheme
+    category_pattern: "%low duration%"
+  - entity_id: medium_duration_scheme
+    label: Debt Scheme - Medium Duration Fund
+    parent: debt_scheme
+    category_pattern: "%medium duration%"
+    note: Also matches "Medium to Long Duration Fund" — narrow if unwanted.
+  - entity_id: medium_to_long_duration_scheme
+    label: Debt Scheme - Medium to Long Duration Fund
+    parent: debt_scheme
+    category_pattern: "%medium to long%"
+  - entity_id: money_market_scheme
+    label: Debt Scheme - Money Market Fund
+    parent: debt_scheme
+    category_pattern: "%money market%"
+  - entity_id: overnight_scheme
+    label: Debt Scheme - Overnight Fund
+    parent: debt_scheme
+    category_pattern: "%overnight%"
+  - entity_id: short_duration_scheme
+    label: Debt Scheme - Short Duration Fund
+    parent: debt_scheme
+    category_pattern: "%short duration%"
+  - entity_id: ultra_short_duration_scheme
+    label: Debt Scheme - Ultra Short Duration Fund
+    parent: debt_scheme
+    category_pattern: "%ultra short%"
+
+  - entity_id: hybrid_scheme
+    label: Hybrid Scheme
+    parent: null
+  - entity_id: aggressive_hybrid_scheme
+    label: Hybrid Scheme - Aggressive Hybrid Fund
+    parent: hybrid_scheme
+    category_pattern: "%aggressive hybrid%"
+  - entity_id: arbitrage_scheme
+    label: Hybrid Scheme - Arbitrage Fund
+    parent: hybrid_scheme
+    category_pattern: "%arbitrage%"
+  - entity_id: balanced_hybrid_scheme
+    label: Hybrid Scheme - Balanced Hybrid Fund
+    parent: hybrid_scheme
+    category_pattern: "%balanced hybrid%"
+  - entity_id: conservative_hybrid_scheme
+    label: Hybrid Scheme - Conservative Hybrid Fund
+    parent: hybrid_scheme
+    category_pattern: "%conservative hybrid%"
+  - entity_id: dynamic_asset_allocation_scheme
+    label: Hybrid Scheme - Dynamic Asset Allocation or Balanced Advantage
+    parent: hybrid_scheme
+    category_pattern: "%balanced advantage%"
+  - entity_id: equity_savings_scheme
+    label: Hybrid Scheme - Equity Savings
+    parent: hybrid_scheme
+    category_pattern: "%equity savings%"
+  - entity_id: multi_asset_allocation_scheme
+    label: Hybrid Scheme - Multi Asset Allocation
+    parent: hybrid_scheme
+    category_pattern: "%multi asset%"
+
+  - entity_id: other_scheme
+    label: Other Scheme
+    parent: null
+  - entity_id: fof_domestic_scheme
+    label: Other Scheme - FoF Domestic
+    parent: other_scheme
+    category_pattern: "%fof domestic%"
+  - entity_id: fof_overseas_scheme
+    label: Other Scheme - FoF Overseas
+    parent: other_scheme
+    category_pattern: "%fof overseas%"
+  - entity_id: gold_etf_scheme
+    label: Other Scheme - Gold ETF
+    parent: other_scheme
+    category_pattern: "%gold etf%"
+  - entity_id: index_funds_scheme
+    label: Other Scheme - Index Funds
+    parent: other_scheme
+    category_pattern: "%index fund%"
+  - entity_id: other_etfs_scheme
+    label: Other Scheme - Other ETFs
+    parent: other_scheme
+    category_pattern: "%other%etf%"
+
 # AMCs — flat, no hierarchy.
 amcs:
   - entity_id: sbi_mf
@@ -86,13 +279,158 @@ amcs:
   - entity_id: nippon_india_mf
     label: Nippon India Mutual Fund
   - entity_id: kotak_mf
-    label: Kotak Mutual Fund
+    label: Kotak Mahindra Mutual Fund
   - entity_id: aditya_birla_sun_life_mf
     label: Aditya Birla Sun Life Mutual Fund
   - entity_id: quant_mf
     label: Quant Mutual Fund
   - entity_id: ppfas_mf
     label: PPFAS Mutual Fund
+  # The 9 above predate mf_ingestion/ (built for AMFI-PDF RAG retrieval
+  # expansion). The rest are every other distinct amc_name in
+  # mf_scheme_master (82 real values total, minus a few casing-only
+  # duplicates merged into one entity each — e.g. "quant"/"Quant", "PRINCIPAL"/
+  # "Principal" — and one data-quality artifact row excluded entirely).
+  - entity_id: 360_one_mf
+    label: 360 ONE Mutual Fund
+  - entity_id: abakkus_mf
+    label: Abakkus Mutual Fund
+  - entity_id: abn_amro_mf
+    label: ABN AMRO Mutual Fund
+  - entity_id: angel_one_mf
+    label: Angel One Mutual Fund
+  - entity_id: bajaj_finserv_mf
+    label: Bajaj Finserv Mutual Fund
+  - entity_id: bandhan_mf
+    label: Bandhan Mutual Fund
+  - entity_id: bank_of_india_mf
+    label: Bank of India Mutual Fund
+  - entity_id: baroda_bnp_paribas_mf
+    label: Baroda BNP Paribas Mutual Fund
+  - entity_id: baroda_mf
+    label: Baroda Mutual Fund
+  - entity_id: baroda_pioneer_mf
+    label: Baroda Pioneer Mutual Fund
+  - entity_id: benchmark_mf
+    label: Benchmark Mutual Fund
+  - entity_id: bnp_paribas_mf
+    label: BNP Paribas Mutual Fund
+  - entity_id: boi_axa_mf
+    label: BOI AXA Mutual Fund
+  - entity_id: canara_robeco_mf
+    label: Canara Robeco Mutual Fund
+  - entity_id: capitalmind_mf
+    label: Capitalmind Mutual Fund
+  - entity_id: choice_mf
+    label: Choice Mutual Fund
+  - entity_id: daiwa_mf
+    label: Daiwa Mutual Fund
+  - entity_id: dbs_chola_mf
+    label: DBS Chola Mutual Fund
+  - entity_id: deutsche_mf
+    label: Deutsche Mutual Fund
+  - entity_id: dhfl_pramerica_mf
+    label: DHFL Pramerica Mutual Fund
+  - entity_id: dsp_mf
+    label: DSP Mutual Fund
+  - entity_id: edelweiss_mf
+    label: Edelweiss Mutual Fund
+  - entity_id: essel_mf
+    label: Essel Mutual Fund
+  - entity_id: fidelity_mf
+    label: Fidelity Mutual Fund
+  - entity_id: fortis_mf
+    label: Fortis Mutual Fund
+  - entity_id: franklin_templeton_mf
+    label: Franklin Templeton Mutual Fund
+  - entity_id: goldman_sachs_mf
+    label: Goldman Sachs Mutual Fund
+  - entity_id: groww_mf
+    label: Groww Mutual Fund
+  - entity_id: helios_mf
+    label: Helios Mutual Fund
+  - entity_id: hsbc_mf
+    label: HSBC Mutual Fund
+  - entity_id: idbi_mf
+    label: IDBI Mutual Fund
+  - entity_id: idfc_mf
+    label: IDFC Mutual Fund
+  - entity_id: iifl_mf
+    label: IIFL Mutual Fund
+  - entity_id: indiabulls_mf
+    label: Indiabulls Mutual Fund
+  - entity_id: ing_mf
+    label: ING Mutual Fund
+  - entity_id: invesco_mf
+    label: Invesco Mutual Fund
+  - entity_id: iti_mf
+    label: ITI Mutual Fund
+  - entity_id: jio_blackrock_mf
+    label: Jio BlackRock Mutual Fund
+  - entity_id: jm_financial_mf
+    label: JM Financial Mutual Fund
+  - entity_id: jpmorgan_mf
+    label: JPMorgan Mutual Fund
+  - entity_id: landt_mf
+    label: L&T Mutual Fund
+  - entity_id: lic_mf
+    label: LIC Mutual Fund
+  - entity_id: mahindra_manulife_mf
+    label: Mahindra Manulife Mutual Fund
+  - entity_id: mirae_asset_mf
+    label: Mirae Asset Mutual Fund
+  - entity_id: morgan_stanley_mf
+    label: Morgan Stanley Mutual Fund
+  - entity_id: motilal_oswal_mf
+    label: Motilal Oswal Mutual Fund
+  - entity_id: navi_mf
+    label: Navi Mutual Fund
+  - entity_id: nj_mf
+    label: NJ Mutual Fund
+  - entity_id: old_bridge_mf
+    label: Old Bridge Mutual Fund
+  - entity_id: pgim_india_mf
+    label: PGIM India Mutual Fund
+  - entity_id: pinebridge_mf
+    label: PineBridge Mutual Fund
+  - entity_id: principal_mf
+    label: Principal Mutual Fund
+  - entity_id: quantum_mf
+    label: Quantum Mutual Fund
+  - entity_id: reliance_mf
+    label: Reliance Mutual Fund
+  - entity_id: sahara_mf
+    label: Sahara Mutual Fund
+  - entity_id: samco_mf
+    label: Samco Mutual Fund
+  - entity_id: shinsei_mf
+    label: Shinsei Mutual Fund
+  - entity_id: shriram_mf
+    label: Shriram Mutual Fund
+  - entity_id: standard_chartered_mf
+    label: Standard Chartered Mutual Fund
+  - entity_id: sundaram_mf
+    label: Sundaram Mutual Fund
+  - entity_id: tata_mf
+    label: Tata Mutual Fund
+  - entity_id: taurus_mf
+    label: Taurus Mutual Fund
+  - entity_id: the_wealth_company_mf
+    label: The Wealth Company Mutual Fund
+  - entity_id: trust_mf
+    label: Trust Mutual Fund
+  - entity_id: unifi_mf
+    label: Unifi Mutual Fund
+  - entity_id: union_mf
+    label: Union Mutual Fund
+  - entity_id: uti_mf
+    label: UTI Mutual Fund
+  - entity_id: whiteoak_capital_mf
+    label: WhiteOak Capital Mutual Fund
+  - entity_id: yes_mf
+    label: YES Mutual Fund
+  - entity_id: zerodha_mf
+    label: Zerodha Mutual Fund
 
 # Source document types — flat, no hierarchy.
 document_types:

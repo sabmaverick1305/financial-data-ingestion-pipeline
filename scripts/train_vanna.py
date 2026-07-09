@@ -22,12 +22,37 @@ from financial_pipeline.config import settings
 from financial_pipeline.logging import configure_logging
 from financial_pipeline.text_to_sql.schema import DDL
 from financial_pipeline.text_to_sql.schema_amc import DDL as AMC_DDL
+from financial_pipeline.semantic.semantic_engine import get_engine
 from financial_pipeline.text_to_sql.schema_mf_scheme import (
     MF_NAV_HISTORY_DDL,
     MF_SCHEME_MASTER_DDL,
     MF_SCHEME_PERFORMANCE_DDL,
 )
 from financial_pipeline.text_to_sql.vanna_agent import build_vanna_agent
+
+
+def _mf_scheme_category_doc() -> str:
+    """Build the mf_scheme_master.category reference doc from
+    semantic/taxonomy.yaml's mf_scheme_categories at train-time, so it
+    can't drift out of sync with the ontology like a hand-copied list would.
+    """
+    eng = get_engine()
+    by_parent: dict[str, list[dict]] = {}
+    for entry in eng.mf_scheme_categories_leaf():
+        by_parent.setdefault(entry["parent"], []).append(entry)
+
+    lines = [
+        "mf_scheme_master.category reference values — use these exact ILIKE patterns "
+        "(not the fund_category enum from amfi_fund_stats, which uses different literal "
+        "strings for the same real-world concepts, e.g. 'Large Cap Fund' vs "
+        "'Equity Scheme - Large Cap Fund'):",
+    ]
+    for parent_id in ("equity_scheme", "debt_scheme", "hybrid_scheme", "other_scheme"):
+        parent_label = (eng.mf_scheme_category(parent_id) or {}).get("label", parent_id)
+        lines.append(f"\n{parent_label}:")
+        for entry in by_parent.get(parent_id, []):
+            lines.append(f"  '{entry['label']}' -> category ILIKE '{entry['category_pattern']}'")
+    return "\n".join(lines)
 
 log = structlog.get_logger()
 
@@ -601,16 +626,20 @@ def main(reset: bool) -> None:
         log.info("train.doc", subject=subject)
         vn.train(documentation=doc)
 
+    log.info("train.doc", subject="mf_scheme_master.category reference (generated)")
+    vn.train(documentation=_mf_scheme_category_doc())
+
     # 3 — Question–SQL pairs
     for i, (question, sql) in enumerate(_EXAMPLES, 1):
         log.info("train.example", n=i, question=question[:60])
         vn.train(question=question, sql=sql)
 
+    total_docs = len(_DOCS) + 1  # +1 for the generated category-reference doc
     log.info("train.done",
              ddl=len(all_ddls),
-             docs=len(_DOCS),
+             docs=total_docs,
              examples=len(_EXAMPLES))
-    print(f"\nTraining complete: {len(all_ddls)} DDLs + {len(_DOCS)} docs + {len(_EXAMPLES)} SQL examples.")
+    print(f"\nTraining complete: {len(all_ddls)} DDLs + {total_docs} docs + {len(_EXAMPLES)} SQL examples.")
 
 
 if __name__ == "__main__":

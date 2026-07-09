@@ -407,6 +407,219 @@ concepts:
   ppfas_mf:
     type: AssetManagementCompany
     definition: Parag Parikh Financial Advisory Services Mutual Fund.
+  # The rest are every other AMC in mf_scheme_master (see taxonomy.yaml's
+  # amcs: for the full list/rationale) — generic definitions since these
+  # are identifiers, not concepts needing prose explanation.
+  360_one_mf:
+    type: AssetManagementCompany
+    definition: 360 ONE Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  abakkus_mf:
+    type: AssetManagementCompany
+    definition: Abakkus Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  abn_amro_mf:
+    type: AssetManagementCompany
+    definition: ABN AMRO Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  angel_one_mf:
+    type: AssetManagementCompany
+    definition: Angel One Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  bajaj_finserv_mf:
+    type: AssetManagementCompany
+    definition: Bajaj Finserv Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  bandhan_mf:
+    type: AssetManagementCompany
+    definition: Bandhan Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  bank_of_india_mf:
+    type: AssetManagementCompany
+    definition: Bank of India Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  baroda_bnp_paribas_mf:
+    type: AssetManagementCompany
+    definition: Baroda BNP Paribas Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  baroda_mf:
+    type: AssetManagementCompany
+    definition: Baroda Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  baroda_pioneer_mf:
+    type: AssetManagementCompany
+    definition: Baroda Pioneer Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  benchmark_mf:
+    type: AssetManagementCompany
+    definition: Benchmark Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  bnp_paribas_mf:
+    type: AssetManagementCompany
+    definition: BNP Paribas Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  boi_axa_mf:
+    type: AssetManagementCompany
+    definition: BOI AXA Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  canara_robeco_mf:
+    type: AssetManagementCompany
+    definition: Canara Robeco Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  capitalmind_mf:
+    type: AssetManagementCompany
+    definition: Capitalmind Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  choice_mf:
+    type: AssetManagementCompany
+    definition: Choice Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  daiwa_mf:
+    type: AssetManagementCompany
+    definition: Daiwa Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  dbs_chola_mf:
+    type: AssetManagementCompany
+    definition: DBS Chola Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  deutsche_mf:
+    type: AssetManagementCompany
+    definition: Deutsche Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  dhfl_pramerica_mf:
+    type: AssetManagementCompany
+    definition: DHFL Pramerica Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  dsp_mf:
+    type: AssetManagementCompany
+    definition: DSP Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  edelweiss_mf:
+    type: AssetManagementCompany
+    definition: Edelweiss Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  essel_mf:
+    type: AssetManagementCompany
+    definition: Essel Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  fidelity_mf:
+    type: AssetManagementCompany
+    definition: Fidelity Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  fortis_mf:
+    type: AssetManagementCompany
+    definition: Fortis Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  franklin_templeton_mf:
+    type: AssetManagementCompany
+    definition: Franklin Templeton Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  goldman_sachs_mf:
+    type: AssetManagementCompany
+    definition: Goldman Sachs Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  groww_mf:
+    type: AssetManagementCompany
+    definition: Groww Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  helios_mf:
+    type: AssetManagementCompany
+    definition: Helios Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  hsbc_mf:
+    type: AssetManagementCompany
+    definition: HSBC Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  idbi_mf:
+    type: AssetManagementCompany
+    definition: IDBI Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  idfc_mf:
+    type: AssetManagementCompany
+    definition: IDFC Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  iifl_mf:
+    type: AssetManagementCompany
+    definition: IIFL Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  indiabulls_mf:
+    type: AssetManagementCompany
+    definition: Indiabulls Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  ing_mf:
+    type: AssetManagementCompany
+    definition: ING Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  invesco_mf:
+    type: AssetManagementCompany
+    definition: Invesco Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  iti_mf:
+    type: AssetManagementCompany
+    definition: ITI Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  jio_blackrock_mf:
+    type: AssetManagementCompany
+    definition: Jio BlackRock Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  jm_financial_mf:
+    type: AssetManagementCompany
+    definition: JM Financial Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  jpmorgan_mf:
+    type: AssetManagementCompany
+    definition: JPMorgan Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  landt_mf:
+    type: AssetManagementCompany
+    definition: L&T Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  lic_mf:
+    type: AssetManagementCompany
+    definition: LIC Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  mahindra_manulife_mf:
+    type: AssetManagementCompany
+    definition: Mahindra Manulife Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  mirae_asset_mf:
+    type: AssetManagementCompany
+    definition: Mirae Asset Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  morgan_stanley_mf:
+    type: AssetManagementCompany
+    definition: Morgan Stanley Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  motilal_oswal_mf:
+    type: AssetManagementCompany
+    definition: Motilal Oswal Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  navi_mf:
+    type: AssetManagementCompany
+    definition: Navi Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  nj_mf:
+    type: AssetManagementCompany
+    definition: NJ Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  old_bridge_mf:
+    type: AssetManagementCompany
+    definition: Old Bridge Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  pgim_india_mf:
+    type: AssetManagementCompany
+    definition: PGIM India Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  pinebridge_mf:
+    type: AssetManagementCompany
+    definition: PineBridge Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  principal_mf:
+    type: AssetManagementCompany
+    definition: Principal Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  quantum_mf:
+    type: AssetManagementCompany
+    definition: Quantum Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  reliance_mf:
+    type: AssetManagementCompany
+    definition: Reliance Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  sahara_mf:
+    type: AssetManagementCompany
+    definition: Sahara Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  samco_mf:
+    type: AssetManagementCompany
+    definition: Samco Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  shinsei_mf:
+    type: AssetManagementCompany
+    definition: Shinsei Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  shriram_mf:
+    type: AssetManagementCompany
+    definition: Shriram Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  standard_chartered_mf:
+    type: AssetManagementCompany
+    definition: Standard Chartered Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  sundaram_mf:
+    type: AssetManagementCompany
+    definition: Sundaram Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  tata_mf:
+    type: AssetManagementCompany
+    definition: Tata Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  taurus_mf:
+    type: AssetManagementCompany
+    definition: Taurus Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  the_wealth_company_mf:
+    type: AssetManagementCompany
+    definition: The Wealth Company Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  trust_mf:
+    type: AssetManagementCompany
+    definition: Trust Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  unifi_mf:
+    type: AssetManagementCompany
+    definition: Unifi Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  union_mf:
+    type: AssetManagementCompany
+    definition: Union Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  uti_mf:
+    type: AssetManagementCompany
+    definition: UTI Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  whiteoak_capital_mf:
+    type: AssetManagementCompany
+    definition: WhiteOak Capital Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  yes_mf:
+    type: AssetManagementCompany
+    definition: YES Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
+  zerodha_mf:
+    type: AssetManagementCompany
+    definition: Zerodha Mutual Fund, an AMC sponsoring mutual fund schemes in mf_scheme_master.
 
   # ───────────────────────────────────────────────────────────────────────
   # DocumentType concepts
