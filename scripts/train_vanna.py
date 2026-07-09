@@ -515,6 +515,53 @@ _EXAMPLES = [
         "SELECT scheme_code, scheme_name FROM mf_scheme_master "
         "WHERE amc_name ILIKE '%quant%' LIMIT 50;",
     ),
+
+    # ── Fund-level comparison patterns ───────────────────────────────────────
+    (
+        "Compare the 1 year return of Parag Parikh Flexi Cap Fund vs Axis Bluechip Fund",
+        "SELECT sm.scheme_name, sp.return_1y FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%parag parikh flexi cap%' "
+        "   OR sm.scheme_name ILIKE '%axis bluechip%' "
+        "ORDER BY sm.scheme_name;",
+    ),
+    (
+        "Compare the 3 year CAGR of HDFC Top 100 Fund and SBI Bluechip Fund",
+        "SELECT sm.scheme_name, sp.return_3y_cagr FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.scheme_name ILIKE '%hdfc top 100%' "
+        "   OR sm.scheme_name ILIKE '%sbi bluechip%' "
+        "ORDER BY sm.scheme_name;",
+    ),
+    (
+        "What are the top 10 funds by 1 year return in the Large Cap category?",
+        "SELECT sm.scheme_name, sm.amc_name, sp.return_1y FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.category ILIKE '%large cap%' AND sp.return_1y IS NOT NULL "
+        "ORDER BY sp.return_1y DESC LIMIT 10;",
+    ),
+    (
+        "Show the best performing Flexi Cap funds by 3 year CAGR",
+        "SELECT sm.scheme_name, sm.amc_name, sp.return_3y_cagr FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.category ILIKE '%flexi cap%' AND sp.return_3y_cagr IS NOT NULL "
+        "ORDER BY sp.return_3y_cagr DESC LIMIT 10;",
+    ),
+    (
+        "Compare average 1 year return across AMCs for Large Cap schemes",
+        "SELECT sm.amc_name, AVG(sp.return_1y) AS avg_return_1y, COUNT(*) AS scheme_count "
+        "FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.category ILIKE '%large cap%' AND sp.return_1y IS NOT NULL "
+        "GROUP BY sm.amc_name ORDER BY avg_return_1y DESC LIMIT 20;",
+    ),
+    (
+        "Rank all ELSS schemes by 5 year CAGR",
+        "SELECT sm.scheme_name, sm.amc_name, sp.return_5y_cagr FROM mf_scheme_master sm "
+        "JOIN mf_scheme_performance sp ON sp.scheme_code = sm.scheme_code "
+        "WHERE sm.category ILIKE '%elss%' AND sp.return_5y_cagr IS NOT NULL "
+        "ORDER BY sp.return_5y_cagr DESC;",
+    ),
 ]
 
 

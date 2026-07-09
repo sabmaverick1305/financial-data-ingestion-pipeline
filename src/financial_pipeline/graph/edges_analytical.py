@@ -8,6 +8,7 @@ after_aggregate_year : after aggregate_year → plan_months (next year) | synthe
 """
 from __future__ import annotations
 
+from financial_pipeline.graph.nodes_fund_performance import FUND_PERFORMANCE_METRIC_IDS
 from financial_pipeline.graph.state import RAGState
 
 
@@ -15,6 +16,7 @@ def is_range_query(state: RAGState) -> str:
     """Route after analyze_query.
 
     blocked=True                    → format_response (early policy block — advice/OOS)
+    fund-performance metric resolved → fund_performance_sql (per-scheme NAV/returns)
     intent.needs_reasoning=True     → reasoning   (causal "why" queries)
     intent.intent_type == "tabular" → query_sql   (Vanna text-to-SQL path)
     intent.needs_analytical=True    → plan_years  (analytical agent loop)
@@ -26,7 +28,16 @@ def is_range_query(state: RAGState) -> str:
 
     intent = state.get("intent")
 
-    # Checked first: a causal "why did X change" query would otherwise be
+    # Checked first, before needs_reasoning/needs_analytical: a query about a
+    # specific scheme's NAV/return/CAGR could otherwise also carry a year
+    # range or a resolved metric and get caught by plan_years/query_sql below,
+    # neither of which know mf_scheme_master/mf_nav_history/mf_scheme_performance
+    # exist — they only query AMFI's aggregate fund_category/AMC tables.
+    canonical_metrics = set(getattr(getattr(intent, "canonical", None), "metrics", None) or [])
+    if canonical_metrics & FUND_PERFORMANCE_METRIC_IDS:
+        return "fund_performance_sql"
+
+    # Checked next: a causal "why did X change" query would otherwise be
     # caught by needs_analytical/tabular below (it usually also has a year
     # range and a resolved metric) and sent through plan_years/query_sql,
     # which can only report numbers — not explain them.

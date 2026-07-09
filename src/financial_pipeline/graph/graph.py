@@ -35,6 +35,7 @@ from financial_pipeline.graph.edges_analytical import (
 )
 from financial_pipeline.graph.nodes import NodeFactory
 from financial_pipeline.graph.nodes_analytical import AnalyticalNodeFactory
+from financial_pipeline.graph.nodes_fund_performance import FundPerformanceNodeFactory
 from financial_pipeline.graph.nodes_reasoning import ReasoningNodeFactory
 from financial_pipeline.graph.nodes_sql import SQLNodeFactory
 from financial_pipeline.graph.state import RAGState
@@ -44,6 +45,7 @@ def build_graph(
     factory: NodeFactory,
     analytical: AnalyticalNodeFactory | None = None,
     sql: SQLNodeFactory | None = None,
+    fund_performance: FundPerformanceNodeFactory | None = None,
     reasoning: ReasoningNodeFactory | None = None,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
@@ -60,6 +62,14 @@ def build_graph(
     sql:
         SQLNodeFactory wrapping the Vanna text-to-SQL agent.
         If None, the query_sql node is skipped (tabular queries fall through to route).
+    fund_performance:
+        FundPerformanceNodeFactory answering per-scheme NAV/return/CAGR
+        queries against mf_scheme_master/mf_nav_history/mf_scheme_performance
+        (a distinct dataset from AMFI's aggregate fund_category/AMC tables
+        that query_sql targets). If None, a default instance is created from
+        sql's Vanna agent (same agent, already trained on both domains — see
+        scripts/train_vanna.py). If sql is also None, this node is skipped
+        (fund-performance queries fall through to route, same as query_sql).
     reasoning:
         ReasoningNodeFactory answering causal "why did X change" queries by
         matching real computed metric directions against
@@ -82,8 +92,11 @@ def build_graph(
         analytical = AnalyticalNodeFactory(repo=factory._repo)
     if reasoning is None:
         reasoning = ReasoningNodeFactory(repo=factory._repo)
+    if fund_performance is None and sql is not None:
+        fund_performance = FundPerformanceNodeFactory(sql._vanna)
     g = StateGraph(RAGState)
     _has_sql = sql is not None
+    _has_fund_performance = fund_performance is not None
 
     # ── Nodes ──────────────────────────────────────────────────────────────
     g.add_node("analyze_query",     factory.analyze_query)
@@ -126,6 +139,16 @@ def build_graph(
             return {}
         g.add_node("query_sql", _sql_noop)
 
+    # ── Fund performance (per-scheme NAV/return/CAGR) node ─────────────────
+    # If no FundPerformanceNodeFactory is available, these queries fall
+    # through to route, same fallback pattern as query_sql above.
+    if _has_fund_performance:
+        g.add_node("fund_performance_sql", fund_performance.query_fund_performance)
+    else:
+        def _fund_performance_noop(state: RAGState) -> dict:  # noqa: E306
+            return {}
+        g.add_node("fund_performance_sql", _fund_performance_noop)
+
     # ── Reasoning (causal "why" queries) node ───────────────────────────────
     g.add_node("reasoning", reasoning.reasoning_node)
 
@@ -152,6 +175,7 @@ def build_graph(
         {
             "query_sql": "query_sql", "plan_years": "plan_years", "route": "route",
             "format_response": "format_response", "reasoning": "reasoning",
+            "fund_performance_sql": "fund_performance_sql",
         },
     )
 
@@ -162,6 +186,14 @@ def build_graph(
         g.add_edge("query_sql", "pre_guardrail")
     else:
         g.add_edge("query_sql", "route")  # fallback: treat as normal query
+
+    # Fund performance path: same contract as query_sql — see
+    # nodes_fund_performance.py's query_fund_performance for the field-by-field
+    # rationale (it sets citations/is_analytical/sql_context identically).
+    if _has_fund_performance:
+        g.add_edge("fund_performance_sql", "pre_guardrail")
+    else:
+        g.add_edge("fund_performance_sql", "route")  # fallback: treat as normal query
 
     # Reasoning path: same pre_guardrail feed as query_sql. reasoning_node
     # sets structured_answer directly (the explanation is already rendered
