@@ -175,6 +175,7 @@ def run_sync(
     end_date: str | None = None,
     request_delay_seconds: float = 0.15,
     max_workers: int = 10,
+    scheme_codes: set[str] | None = None,
 ) -> dict:
     end_date = end_date or date.today().isoformat()
     # pool_size >= max_workers so every worker thread gets its own connection
@@ -235,6 +236,13 @@ def run_sync(
     if duplicate_count:
         run_log.info("mf_ingestion.duplicates_skipped", duplicate_count=duplicate_count, unique_schemes=len(valid))
 
+    # Optional gap-fill mode: only (re)process a specific subset of scheme_codes
+    # instead of the full list — used to complete a backfill that was
+    # interrupted partway through without re-touching schemes already done.
+    if scheme_codes is not None:
+        valid = [s for s in valid if s.scheme_code in scheme_codes]
+        run_log.info("mf_ingestion.filtered_to_subset", requested=len(scheme_codes), matched=len(valid))
+
     counts = {f"{k}_count": 0 for k in _STATUS_COUNT_KEYS}
     counts["nav_rows_inserted"] = 0
     counts["nav_rows_updated"] = 0
@@ -262,8 +270,14 @@ def run_sync(
             if done % 500 == 0:
                 run_log.info("mf_ingestion.progress", done=done, total=len(valid), **counts)
 
-    active_codes = {s.scheme_code for s in valid}
-    inactive_marked = repo.mark_missing_inactive(active_codes)
+    # In gap-fill mode, `valid` is a small deliberate subset — comparing it
+    # against the full scheme universe would wrongly mark every scheme NOT
+    # in the subset (i.e. everything already fully synced) as inactive.
+    if scheme_codes is None:
+        active_codes = {s.scheme_code for s in valid}
+        inactive_marked = repo.mark_missing_inactive(active_codes)
+    else:
+        inactive_marked = 0
 
     overall_status = (
         "completed" if counts["failed_count"] == 0 and counts["rate_limited_count"] == 0 else "completed_with_errors"
