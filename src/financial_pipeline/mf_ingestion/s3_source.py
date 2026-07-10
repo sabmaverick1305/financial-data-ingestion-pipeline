@@ -8,12 +8,15 @@ This ingestion source is a different dataset and stays independent.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import boto3
 import structlog
 
 log = structlog.get_logger()
+
+_DATE_FOLDER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}/$")
 
 
 def resolve_latest_scheme_master_key(
@@ -38,7 +41,12 @@ def resolve_latest_scheme_master_key(
     )
     prefix = prefix.rstrip("/") + "/"
     resp = client.list_objects_v2(Bucket=bucket, Prefix=prefix, Delimiter="/")
-    date_prefixes = sorted(p["Prefix"] for p in resp.get("CommonPrefixes", []))
+    # Only real YYYY-MM-DD folders — a non-dated common prefix (e.g. a stray
+    # "raw/" leftover from a one-off manual copy) would otherwise sort after
+    # any date lexicographically and get picked as "latest" by mistake.
+    date_prefixes = sorted(
+        p["Prefix"] for p in resp.get("CommonPrefixes", []) if _DATE_FOLDER_RE.match(p["Prefix"][len(prefix):])
+    )
     if not date_prefixes:
         raise FileNotFoundError(f"no dated snapshots found under s3://{bucket}/{prefix}")
     latest = date_prefixes[-1]

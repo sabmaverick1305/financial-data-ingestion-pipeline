@@ -22,22 +22,23 @@ from financial_pipeline.storage.document_repo import DocumentRepository
 
 log = structlog.get_logger()
 
-# S3 artifact layout version. Bump to 'v2', 'v3' etc. when the schema of
-# text.json / chunks.json changes so consumers can distinguish old from new.
+# Artifact schema version — still tracked per-document in Postgres
+# (document_metadata.schema_version, see document_repo.py's update_status
+# calls), not baked into the S3 path anymore now that path itself denotes
+# the medallion layer (silver/ = cleaned/extracted, not raw).
 SCHEMA_VERSION = "v1"
 
 
 def processed_prefix(doc: dict) -> str:
+    """silver/ medallion layer — cleaned/extracted text/chunks/tables,
+    derived from the bronze/amfi/{monthly_aum,quarterly_aum,other}/ raw PDFs."""
     cat = doc.get("category", "unknown")
     if cat == "monthly" and doc.get("period_year") and doc.get("period_month"):
-        return f"processed/{SCHEMA_VERSION}/amfi/monthly/{doc['period_year']}/{doc['period_month']:02d}"
+        return f"silver/amfi/monthly/{doc['period_year']}/{doc['period_month']:02d}"
     if cat == "quarterly" and doc.get("volume") and doc.get("issue"):
-        return (
-            f"processed/{SCHEMA_VERSION}/amfi/quarterly"
-            f"/{doc.get('period_year', 'unknown')}/vol{doc['volume']}/issue{doc['issue']}"
-        )
+        return f"silver/amfi/quarterly/{doc.get('period_year', 'unknown')}/vol{doc['volume']}/issue{doc['issue']}"
     stem = (doc.get("file_name") or "unknown").rsplit(".", 1)[0]
-    return f"processed/{SCHEMA_VERSION}/amfi/unknown/{stem}"
+    return f"silver/amfi/other/{stem}"
 
 
 def make_repo() -> DocumentRepository:

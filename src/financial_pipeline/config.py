@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     aws_secret_access_key: str = ""
     aws_region: str = "ap-south-1"
     s3_bucket: str = ""
-    s3_prefix: str = "amfi/nav"
+    s3_prefix: str = "bronze/amfi/nav"
 
     # HuggingFace
     hf_token: str = ""
@@ -98,7 +98,7 @@ class Settings(BaseSettings):
     # AMFI PDF pipeline above, sourced from api.mfapi.in + an S3 scheme list.
     # Snapshots live at {prefix}/{YYYY-MM-DD}/mf_scheme_master.json — the sync
     # job resolves the latest dated snapshot automatically (see s3_source.py).
-    mf_scheme_master_s3_prefix: str = "amfi/mf_scheme_master/raw"
+    mf_scheme_master_s3_prefix: str = "bronze/amfi/scheme_master"
     mfapi_default_start_date: str = "2000-01-01"
     mfapi_request_delay_seconds: float = 0.15
     mfapi_max_workers: int = 10

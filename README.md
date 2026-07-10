@@ -50,6 +50,11 @@ python scripts/fetch_amfi_research_files.py
 ```
 Scrapes amfiindia.com, classifies documents (monthly/quarterly), uploads to S3, upserts metadata into RDS.
 
+S3 objects follow a bronze/silver/gold medallion layout across all sources
+(AMFI PDFs, mfapi.in per-scheme data, SEBI SIDs) — see
+[docs/s3-data-layout.md](docs/s3-data-layout.md) for the full structure and
+each subtree's producer.
+
 ### Document Processing (ECS Fargate workers)
 
 | Worker | Memory | What it does |

@@ -69,3 +69,17 @@ def mf_performance_calc(max_workers: int | None) -> None:
         max_workers=max_workers or settings.mfapi_max_workers,
     )
     click.echo(result)
+
+
+@main.command("sebi-sid-sync")
+def sebi_sid_sync() -> None:
+    """Scrape registered AMC SID pages and upload new PDFs to bronze/sebi/sid/."""
+    from financial_pipeline.sebi_ingestion.sync import sync_sid_documents
+
+    result = sync_sid_documents(
+        s3_bucket=settings.s3_bucket,
+        aws_region=settings.aws_region,
+        aws_access_key_id=settings.aws_access_key_id or None,
+        aws_secret_access_key=settings.aws_secret_access_key or None,
+    )
+    click.echo(result)

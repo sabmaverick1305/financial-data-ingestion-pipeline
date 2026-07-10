@@ -4,10 +4,10 @@
 Usage:
     python scripts/fetch_amfi_research_files.py
 
-S3 layout:
-    s3://<S3_BUCKET>/amfi/research/<YYYY-MM-DD>/monthly/<filename>
-    s3://<S3_BUCKET>/amfi/research/<YYYY-MM-DD>/quarterly/<filename>
-    s3://<S3_BUCKET>/amfi/research/<YYYY-MM-DD>/unknown/<filename>
+S3 layout (bronze/ medallion layer — raw, as-downloaded files):
+    s3://<S3_BUCKET>/bronze/amfi/monthly_aum/<YYYY-MM-DD>/<filename>
+    s3://<S3_BUCKET>/bronze/amfi/quarterly_aum/<YYYY-MM-DD>/<filename>
+    s3://<S3_BUCKET>/bronze/amfi/other/<YYYY-MM-DD>/<filename>
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from financial_pipeline.storage.s3 import S3Storage
 log = structlog.get_logger()
 
 AMFI_RESEARCH_URL = "https://www.amfiindia.com/research-information/amfi-data"
-S3_PREFIX = "amfi/research"
+S3_PREFIX = "bronze/amfi"
 
 _DOC_TYPE = {
     "monthly": "monthly_report",
@@ -41,18 +41,25 @@ _DOC_TYPE = {
     "unknown": "research_document",
 }
 
+# classification (from classify_filename) -> bronze/ folder name
+_BRONZE_FOLDER = {
+    "monthly": "monthly_aum",
+    "quarterly": "quarterly_aum",
+    "unknown": "other",
+}
+
 
 def main() -> None:
     configure_logging(level=settings.log_level, fmt=settings.log_format)
     today = date.today().isoformat()
 
-    base_prefix = f"{S3_PREFIX}/{today}"
-
-    # One S3Storage per classification folder
-    def _storage(folder: str) -> S3Storage:
+    # One S3Storage per classification folder — bronze/amfi/{monthly_aum,
+    # quarterly_aum,other}/{today}/, not a single shared date-prefix, since
+    # classification is now the top-level bronze/ folder, not a subfolder.
+    def _storage(classification: str) -> S3Storage:
         return S3Storage(
             bucket=settings.s3_bucket,
-            prefix=f"{base_prefix}/{folder}",
+            prefix=f"{S3_PREFIX}/{_BRONZE_FOLDER[classification]}/{today}",
             region=settings.aws_region,
             aws_access_key_id=settings.aws_access_key_id or None,
             aws_secret_access_key=settings.aws_secret_access_key or None,
@@ -152,7 +159,7 @@ def main() -> None:
     )
     print(f"Skipped  : {len(skipped)}  (already in S3)")
     print(f"Failed   : {len(failed)}")
-    print(f"S3 prefix: s3://{settings.s3_bucket}/{base_prefix}/")
+    print(f"S3 prefix: s3://{settings.s3_bucket}/{S3_PREFIX}/{{monthly_aum,quarterly_aum,other}}/{today}/")
     if repo:
         print(f"DB       : document_metadata rows inserted = {len(uploaded)}")
 

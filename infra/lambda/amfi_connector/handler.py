@@ -1,12 +1,12 @@
 """AMFI NAV connector — runs inside Lambda (stdlib + boto3 only, no extra deps).
 
 Triggered by EventBridge Scheduler. Fetches the AMFI NAV text file and
-writes the raw bytes to S3 under:
-    s3://<S3_BUCKET>/<S3_PREFIX>/raw/YYYY-MM-DD/NAVAll.txt
+writes the raw bytes to S3 under (bronze/ medallion layer — raw, as-fetched):
+    s3://<S3_BUCKET>/<S3_PREFIX>/YYYY-MM-DD/NAVAll.txt
 
-Environment variables (set by CloudFormation):
+Environment variables (set by CloudFormation / the ECS task definition):
     S3_BUCKET   – destination bucket
-    S3_PREFIX   – key prefix (default: amfi/nav)
+    S3_PREFIX   – key prefix (default: bronze/amfi/nav)
 """
 from __future__ import annotations
 
@@ -30,14 +30,14 @@ def _fetch(url: str, timeout: int = REQUEST_TIMEOUT) -> bytes:
 
 def lambda_handler(event: dict, context: object) -> dict:
     bucket = os.environ["S3_BUCKET"]
-    prefix = os.environ.get("S3_PREFIX", "amfi/nav").rstrip("/")
+    prefix = os.environ.get("S3_PREFIX", "bronze/amfi/nav").rstrip("/")
     today = date.today().isoformat()
 
     print(json.dumps({"event": "fetch.started", "url": AMFI_NAV_URL}))
     raw = _fetch(AMFI_NAV_URL)
     print(json.dumps({"event": "fetch.completed", "bytes": len(raw)}))
 
-    key = f"{prefix}/raw/{today}/NAVAll.txt"
+    key = f"{prefix}/{today}/NAVAll.txt"
     s3 = boto3.client("s3")
     s3.put_object(
         Bucket=bucket,

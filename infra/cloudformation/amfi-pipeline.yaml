@@ -15,7 +15,7 @@ Parameters:
 
   S3Prefix:
     Type: String
-    Default: amfi/nav
+    Default: bronze/amfi/nav
     Description: Key prefix inside the bucket (no trailing slash).
 
   ScheduleExpression:
@@ -98,14 +98,14 @@ Resources:
 
           def lambda_handler(event, context):
               bucket = os.environ["S3_BUCKET"]
-              prefix = os.environ.get("S3_PREFIX", "amfi/nav").rstrip("/")
+              prefix = os.environ.get("S3_PREFIX", "bronze/amfi/nav").rstrip("/")
               today = date.today().isoformat()
 
               print(json.dumps({"event": "fetch.started", "url": AMFI_NAV_URL}))
               raw = _fetch(AMFI_NAV_URL)
               print(json.dumps({"event": "fetch.completed", "bytes": len(raw)}))
 
-              key = f"{prefix}/raw/{today}/NAVAll.txt"
+              key = f"{prefix}/{today}/NAVAll.txt"
               boto3.client("s3").put_object(
                   Bucket=bucket,
                   Key=key,
@@ -189,4 +189,4 @@ Outputs:
 
   S3RawPrefix:
     Description: S3 key prefix for raw NAV files.
-    Value: !Sub "s3://${S3BucketName}/${S3Prefix}/raw/"
+    Value: !Sub "s3://${S3BucketName}/${S3Prefix}/"

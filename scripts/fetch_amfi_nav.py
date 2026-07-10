@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Fetch the AMFI India NAV file and upload raw + parsed CSV to S3.
 
+Writes raw text to bronze/ (as-fetched) and the parsed CSV to silver/
+(cleaned/typed) — see the bronze/silver/gold medallion convention.
+
 Usage:
     python scripts/fetch_amfi_nav.py
 
@@ -8,7 +11,7 @@ Environment variables (via .env or shell):
     AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY
     S3_BUCKET
-    S3_PREFIX        (default: amfi/nav)
+    S3_PREFIX        (default: bronze/amfi/nav)
     AWS_REGION       (default: ap-south-1)
 """
 
@@ -108,9 +111,10 @@ def main() -> None:
 
     today = date.today().isoformat()  # e.g. 2026-06-27
 
+    # No shared prefix on the storage object — bronze/ and silver/ are
+    # siblings, not one nested under the other.
     storage = S3Storage(
         bucket=settings.s3_bucket,
-        prefix=settings.s3_prefix,
         region=settings.aws_region,
         aws_access_key_id=settings.aws_access_key_id or None,
         aws_secret_access_key=settings.aws_secret_access_key or None,
@@ -119,7 +123,7 @@ def main() -> None:
     raw = fetch_nav_text()
 
     raw_key = storage.put_raw(
-        key_suffix=f"raw/{today}/NAVAll.txt",
+        key_suffix=f"{settings.s3_prefix}/{today}/NAVAll.txt",
         data=raw,
         content_type="text/plain",
     )
@@ -128,7 +132,7 @@ def main() -> None:
     df = parse_nav_text(raw)
 
     csv_key = storage.put_csv(
-        key_suffix=f"processed/{today}/NAVAll.csv",
+        key_suffix=f"silver/amfi/nav_csv/{today}/NAVAll.csv",
         df=df,
     )
     log.info("upload.csv.done", s3_key=csv_key, rows=len(df))

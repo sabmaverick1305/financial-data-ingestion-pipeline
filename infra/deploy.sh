@@ -19,7 +19,7 @@ TEMPLATE="${SCRIPT_DIR}/cloudformation/amfi-pipeline.yaml"
 STACK_NAME="amfi-pipeline"
 REGION="${AWS_REGION:-ap-south-1}"
 S3_BUCKET="mf-finance-kb"
-S3_PREFIX="amfi/nav"
+S3_PREFIX="bronze/amfi/nav"
 SCHEDULE="cron(30 3 * * ? *)"   # 09:00 IST daily
 
 # ── Argument parsing ─────────────────────────────────────────────────────────
