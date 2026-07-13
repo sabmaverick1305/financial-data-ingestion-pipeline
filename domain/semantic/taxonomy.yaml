@@ -147,6 +147,28 @@ mf_scheme_categories:
       colloquial sub-segment of Small Cap. Kept as its own leaf rather than
       folded into small_cap_scheme's pattern, so it doesn't change that
       leaf's existing match behavior.
+  - entity_id: mid_cap_nospace_scheme
+    label: Equity Scheme - Mid Cap Fund (no-space spelling)
+    parent: equity_scheme
+    category_pattern: "%midcap%"
+    note: >
+      Added 2026-07-13 (DQ005 follow-up) — mid_cap_scheme's "%mid cap%"
+      pattern requires a space; some legacy scheme names (e.g. "Sahara
+      Midcap Fund") run the words together. Kept separate rather than
+      widening mid_cap_scheme's pattern to avoid touching an already-correct
+      leaf's match behavior.
+  - entity_id: equity_opportunities_scheme
+    label: Equity Scheme - Equity Opportunities Fund
+    parent: equity_scheme
+    category_pattern: "%equity opportunit%"
+  - entity_id: equity_advantage_scheme
+    label: Equity Scheme - Equity Advantage Fund
+    parent: equity_scheme
+    category_pattern: "%equity advantage%"
+  - entity_id: banking_financial_services_sector_scheme
+    label: Equity Scheme - Sectoral/Thematic (Banking & Financial Services)
+    parent: equity_scheme
+    category_pattern: "%banking%financial services%"
   - entity_id: value_fund_scheme
     label: Equity Scheme - Value Fund
     parent: equity_scheme
@@ -254,6 +276,68 @@ mf_scheme_categories:
     label: Debt Scheme - Interval Fund
     parent: debt_scheme
     category_pattern: "%interval fund%"
+  - entity_id: fixed_term_plan_scheme
+    label: Debt Scheme - Fixed Term Plan
+    parent: debt_scheme
+    category_pattern: "%fixed term plan%"
+    note: >
+      Added 2026-07-13 (DQ005 follow-up, second pass on remaining 375
+      schemes) — distinct from fixed_maturity_plan_scheme/
+      fixed_duration_fund_scheme because "Fixed Term Plan/Series" is the
+      literal wording AMCs (Axis, Sundaram, HSBC) use for this same
+      close-ended debt product family. Deliberately does NOT match "Hybrid
+      Fixed Term Fund" names (see hybrid_fixed_term_scheme below) since
+      those lack "plan"/"series" immediately after "term".
+  - entity_id: fixed_term_series_scheme
+    label: Debt Scheme - Fixed Term Series
+    parent: debt_scheme
+    category_pattern: "%fixed term series%"
+  - entity_id: fixed_horizon_fund_scheme
+    label: Debt Scheme - Fixed Horizon Fund
+    parent: debt_scheme
+    category_pattern: "%fixed horizon%"
+  - entity_id: fixed_tenure_fund_scheme
+    label: Debt Scheme - Fixed Tenure Fund
+    parent: debt_scheme
+    category_pattern: "%fixed tenure%"
+  - entity_id: debt_fund_series_alt_scheme
+    label: Debt Scheme - Debt Fund(s) Series (alt spelling)
+    parent: debt_scheme
+    category_pattern: "%debt fund%series%"
+    note: >
+      Multi-wildcard variant of close_ended_debt_series_scheme's "%debt fund
+      series%" — that pattern requires the literal singular "fund series"
+      substring, which the plural "SBI DEBT FUNDS SERIES A" narrowly misses
+      (funds != fund followed by a space). Kept as a separate leaf rather
+      than editing the original pattern, to avoid touching a leaf that's
+      already matching correctly elsewhere.
+  - entity_id: sdfs_scheme
+    label: Debt Scheme - Structured/Short Debt Fund Series (SDFS)
+    parent: debt_scheme
+    category_pattern: "%sdfs%"
+    note: SBI's own abbreviation for its close-ended debt fund series (e.g. "SBI SDFS 367 DAYS - 1").
+  - entity_id: cash_fund_scheme
+    label: Debt Scheme - Cash Fund (legacy Liquid Fund naming)
+    parent: debt_scheme
+    category_pattern: "%cash fund%"
+    note: Pre-2017 SEBI recategorization naming for what are now Liquid Funds.
+  - entity_id: flexi_debt_scheme
+    label: Debt Scheme - Flexi Debt Fund
+    parent: debt_scheme
+    category_pattern: "%flexi%debt%"
+  - entity_id: g_sec_scheme
+    label: Debt Scheme - Gilt / G-Sec Fund
+    parent: debt_scheme
+    category_pattern: "%g-sec%"
+    note: >
+      Alias for gilt_scheme's concept — "G-Sec" (Government Securities) is
+      the colloquial abbreviation some AMCs (e.g. UTI) use in place of the
+      word "Gilt", which gilt_scheme's own pattern requires literally.
+  - entity_id: money_manager_fund_scheme
+    label: Debt Scheme - Money Manager Fund
+    parent: debt_scheme
+    category_pattern: "%money manager%"
+    note: IDFC's product name for what money_market_scheme's "%money market%" pattern doesn't reach.
 
   - entity_id: hybrid_scheme
     label: Hybrid Scheme
@@ -281,7 +365,11 @@ mf_scheme_categories:
   - entity_id: equity_savings_scheme
     label: Hybrid Scheme - Equity Savings
     parent: hybrid_scheme
-    category_pattern: "%equity savings%"
+    category_pattern: "%equity saving%"
+    note: >
+      Widened from "%equity savings%" 2026-07-13 (Phase 6 DQ005 follow-up) to
+      also match "Equity Saving Scheme" (singular, e.g. the RGESS family) —
+      purely additive, matches a strict superset of the original pattern.
   - entity_id: multi_asset_allocation_scheme
     label: Hybrid Scheme - Multi Asset Allocation
     parent: hybrid_scheme
@@ -294,6 +382,44 @@ mf_scheme_categories:
     label: Hybrid Scheme - Dual Advantage Fund
     parent: hybrid_scheme
     category_pattern: "%dual advantage%"
+  - entity_id: hybrid_fixed_term_scheme
+    label: Hybrid Scheme - Hybrid Fixed Term Fund
+    parent: hybrid_scheme
+    category_pattern: "%hybrid fixed term%"
+    note: >
+      Added 2026-07-13 (DQ005 follow-up) — DHFL Pramerica/PGIM's close-ended
+      hybrid debt+equity series funds literally say "Hybrid Fixed Term
+      Fund"/"Fund" in the scheme name. Placed before the generic hybrid_
+      generic_scheme catch-all below so it wins; also checked before any
+      debt_scheme "fixed term" pattern could apply since none of those
+      require the literal word "hybrid".
+  - entity_id: debt_oriented_hybrid_scheme
+    label: Hybrid Scheme - Debt Oriented Hybrid Fund
+    parent: hybrid_scheme
+    category_pattern: "%debt oriented%"
+    note: Pre-2017 SEBI naming, roughly equivalent to today's Conservative Hybrid Fund.
+  - entity_id: capital_protection_cpo_abbrev_scheme
+    label: Hybrid Scheme - Capital Protection Oriented Fund (CPO abbreviation)
+    parent: hybrid_scheme
+    category_pattern: "%cpo -%"
+    note: Covers "HDFC CPO - I/II/III - ..." naming that capital_protection_scheme's "%capital protection%" pattern doesn't reach.
+  - entity_id: capital_protection_cpof_scheme
+    label: Hybrid Scheme - Capital Protection Oriented Fund (CPOF abbreviation)
+    parent: hybrid_scheme
+    category_pattern: "%cpof%"
+    note: Covers "Sundaram CPOF ..." naming.
+  - entity_id: hybrid_generic_scheme
+    label: Hybrid Scheme - Unspecified Hybrid Fund
+    parent: hybrid_scheme
+    category_pattern: "%hybrid%"
+    note: >
+      Added 2026-07-13 (DQ005 follow-up) as the last leaf checked in this
+      section — a broad catch-all for scheme names that literally contain
+      "Hybrid" (SEBI's own top-level category word) but don't match any of
+      the more specific hybrid sub-patterns above (e.g. "Axis Hybrid Fund -
+      Series 18", "Sundaram Hybrid Series N"). Every more specific
+      debt_scheme/hybrid_scheme pattern is tried first by file order, so
+      this only fires when nothing narrower matched.
 
   - entity_id: other_scheme
     label: Other Scheme
