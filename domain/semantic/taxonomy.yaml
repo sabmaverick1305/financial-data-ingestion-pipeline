@@ -338,6 +338,56 @@ mf_scheme_categories:
     parent: debt_scheme
     category_pattern: "%money manager%"
     note: IDFC's product name for what money_market_scheme's "%money market%" pattern doesn't reach.
+  - entity_id: fixed_maturity_plan_typo_scheme
+    label: Debt Scheme - Fixed Maturity Plan (typo alias)
+    parent: debt_scheme
+    category_pattern: "%fixed matuirty%"
+    note: >
+      Added 2026-07-13 (DQ005 third pass) — literal misspelling ("Matuirty"
+      for "Maturity") present in real scheme names (DHFL Pramerica, Tata).
+      Kept as a separate leaf from fixed_maturity_plan_scheme rather than
+      editing that pattern, same rationale as the other alias leaves above.
+  - entity_id: fixed_duration_fund_typo_scheme
+    label: Debt Scheme - Fixed Duration Fund (typo alias)
+    parent: debt_scheme
+    category_pattern: "%fixed duartion%"
+    note: Literal misspelling ("Duartion" for "Duration") present in real PGIM India scheme names.
+  - entity_id: debt_fund_series_typo_scheme
+    label: Debt Scheme - Debt Fund Series (typo alias, missing "d")
+    parent: debt_scheme
+    category_pattern: "%debt funs series%"
+    note: Literal misspelling ("Funs" for "Fund(s)") present in real SBI scheme names.
+  - entity_id: savings_fund_scheme
+    label: Debt Scheme - Savings Fund
+    parent: debt_scheme
+    category_pattern: "%savings fund%"
+    note: >
+      Generic debt-product naming (Sundaram/Mirae Asset/Indiabulls Savings
+      Fund) — distinct from equity_savings_scheme, which requires the
+      literal word "equity" and is a real hybrid sub-category (RGESS-style
+      schemes), not this plain debt product name.
+  - entity_id: short_term_fund_scheme
+    label: Debt Scheme - Short Term Fund
+    parent: debt_scheme
+    category_pattern: "%short term fund%"
+    note: Older naming for what's roughly equivalent to today's Short Duration Fund.
+  - entity_id: money_fund_scheme
+    label: Debt Scheme - Money Fund
+    parent: debt_scheme
+    category_pattern: "%money fund%"
+    note: Generic debt/money-market product naming (e.g. "Sundaram Money Fund").
+  - entity_id: debt_generic_bond_scheme
+    label: Debt Scheme - Unspecified Bond Fund
+    parent: debt_scheme
+    category_pattern: "%bond%"
+    note: >
+      Added 2026-07-13 (DQ005 third pass) as the last leaf checked in this
+      section — mirrors hybrid_generic_scheme's role: a broad catch-all for
+      names that literally say "Bond" (e.g. "Kotak Bond Bonus Plan",
+      "Sundaram Medium Term Bond Fund") but don't match any more specific
+      debt pattern above. Every more specific debt_scheme pattern is tried
+      first by file order, and no hybrid_scheme pattern requires the word
+      "bond", so this can't steal a hybrid match.
 
   - entity_id: hybrid_scheme
     label: Hybrid Scheme
@@ -382,6 +432,11 @@ mf_scheme_categories:
     label: Hybrid Scheme - Dual Advantage Fund
     parent: hybrid_scheme
     category_pattern: "%dual advantage%"
+  - entity_id: dual_advantage_typo_scheme
+    label: Hybrid Scheme - Dual Advantage Fund (typo alias)
+    parent: hybrid_scheme
+    category_pattern: "%dual advanatge%"
+    note: Literal misspelling ("Advanatge" for "Advantage") present in a real SBI scheme name.
   - entity_id: hybrid_fixed_term_scheme
     label: Hybrid Scheme - Hybrid Fixed Term Fund
     parent: hybrid_scheme
@@ -393,6 +448,11 @@ mf_scheme_categories:
       generic_scheme catch-all below so it wins; also checked before any
       debt_scheme "fixed term" pattern could apply since none of those
       require the literal word "hybrid".
+  - entity_id: hybrid_fixed_term_typo_scheme
+    label: Hybrid Scheme - Hybrid Fixed Term Fund (typo alias)
+    parent: hybrid_scheme
+    category_pattern: "%hybird fixed term%"
+    note: Literal misspelling ("Hybird" for "Hybrid") present in a real DHFL Pramerica scheme name.
   - entity_id: debt_oriented_hybrid_scheme
     label: Hybrid Scheme - Debt Oriented Hybrid Fund
     parent: hybrid_scheme
