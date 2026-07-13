@@ -138,10 +138,28 @@ mf_scheme_categories:
     label: Equity Scheme - Small Cap Fund
     parent: equity_scheme
     category_pattern: "%small cap%"
+  - entity_id: micro_cap_scheme
+    label: Equity Scheme - Micro Cap Fund
+    parent: equity_scheme
+    category_pattern: "%micro cap%"
+    note: >
+      AMFI has no separate "Micro Cap" SEBI category — it's a marketing/
+      colloquial sub-segment of Small Cap. Kept as its own leaf rather than
+      folded into small_cap_scheme's pattern, so it doesn't change that
+      leaf's existing match behavior.
   - entity_id: value_fund_scheme
     label: Equity Scheme - Value Fund
     parent: equity_scheme
     category_pattern: "%value fund%"
+  - entity_id: close_ended_equity_scheme
+    label: Equity Scheme - Close Ended Equity Fund
+    parent: equity_scheme
+    category_pattern: "%close ended equity%"
+    note: >
+      Added 2026-07-13 (Phase 6 DQ005 investigation) — mfapi's category field
+      is unreliable for close-ended series funds (often "Growth"/"Payout"/a
+      plan name, not a real category), so this matches scheme_name via
+      resolve_category's tier-3 fallback instead.
 
   - entity_id: debt_scheme
     label: Debt Scheme
@@ -209,6 +227,33 @@ mf_scheme_categories:
     label: Debt Scheme - Ultra Short Duration Fund
     parent: debt_scheme
     category_pattern: "%ultra short%"
+  - entity_id: fixed_maturity_plan_scheme
+    label: Debt Scheme - Fixed Maturity Plan (FMP)
+    parent: debt_scheme
+    category_pattern: "%fixed maturity%"
+    note: >
+      Close-ended debt series funds — see close_ended_equity_scheme's note.
+      Covers "Fixed Maturity Plan"/"Fixed Maturity Fund" scheme names.
+  - entity_id: fixed_term_income_fund_scheme
+    label: Debt Scheme - Fixed Term Income Fund (FTIF)
+    parent: debt_scheme
+    category_pattern: "%ftif%"
+  - entity_id: fixed_duration_fund_scheme
+    label: Debt Scheme - Fixed Duration Fund
+    parent: debt_scheme
+    category_pattern: "%fixed duration%"
+  - entity_id: close_ended_debt_series_scheme
+    label: Debt Scheme - Close Ended Debt Fund Series
+    parent: debt_scheme
+    category_pattern: "%debt fund series%"
+  - entity_id: fmp_series_scheme
+    label: Debt Scheme - FMP Series
+    parent: debt_scheme
+    category_pattern: "%fmp%"
+  - entity_id: interval_scheme
+    label: Debt Scheme - Interval Fund
+    parent: debt_scheme
+    category_pattern: "%interval fund%"
 
   - entity_id: hybrid_scheme
     label: Hybrid Scheme
@@ -241,6 +286,14 @@ mf_scheme_categories:
     label: Hybrid Scheme - Multi Asset Allocation
     parent: hybrid_scheme
     category_pattern: "%multi asset%"
+  - entity_id: capital_protection_scheme
+    label: Hybrid Scheme - Capital Protection Oriented Fund
+    parent: hybrid_scheme
+    category_pattern: "%capital protection%"
+  - entity_id: dual_advantage_scheme
+    label: Hybrid Scheme - Dual Advantage Fund
+    parent: hybrid_scheme
+    category_pattern: "%dual advantage%"
 
   - entity_id: other_scheme
     label: Other Scheme

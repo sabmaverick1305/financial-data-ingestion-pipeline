@@ -66,7 +66,24 @@ log = structlog.get_logger()
 # fallback. Both amfi_navall and primary score 1.0 in MatchResult — this
 # ranking is what breaks that tie in the direction the domain rule intends,
 # not raw score alone.
-_SOURCE_PRIORITY = {"amfi_navall": 3, "primary": 2, "scheme_name_fallback": 1}
+#
+# "amfi" (not "amfi_navall") is a real, live value in production: 100% of
+# the ~20,700 active belongs_to edges — every one of them — was written by
+# the original one-off historical bulk backfill (scratchpad's
+# populate_entity_relationship.py, predating this module and resolve_category
+# entirely), which tagged its AMFI-sourced rows "amfi", not "amfi_navall".
+# Discovered 2026-07-13 running reconcile_belongs_to for the first time
+# against live data: _priority() didn't recognize "amfi", scored it 0 (below
+# even scheme_name_fallback), and started silently "upgrading" every one of
+# those 20,673 correctly-AMFI-sourced edges to the far less reliable
+# "primary" (mfapi's own category field) tier — caught and killed after ~44
+# rows via anomalous belongs_to_upgraded log lines (new_source=primary
+# old_source=amfi is never a legitimate upgrade), nothing committed since
+# reconcile_belongs_to's caller commits once at the end. "amfi" is kept as
+# an explicit alias here rather than migrating the historical rows' data,
+# so this function (and anyone reading it) has one place documenting both
+# spellings mean the same thing.
+_SOURCE_PRIORITY = {"amfi_navall": 3, "amfi": 3, "primary": 2, "scheme_name_fallback": 1}
 
 
 def _priority(source: str | None) -> int:
