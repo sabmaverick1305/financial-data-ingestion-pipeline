@@ -1,0 +1,47 @@
+{
+  "DQ001": {
+    "description": "No duplicate active belongs_to edges per scheme (source_entity_id should be single-valued for belongs_to)",
+    "kind": "count_max",
+    "threshold": 0
+  },
+  "DQ002": {
+    "description": "No duplicate active manages edges per scheme (target_entity_id should be single-valued for manages — grouping by the correct, target side; see services/entity_reconciliation.py's documented incident about grouping manages by source instead)",
+    "kind": "count_max",
+    "threshold": 0
+  },
+  "DQ003": {
+    "description": "Every scheme_plan entity has an active has_plan edge pointing to it",
+    "kind": "count_max",
+    "threshold": 0
+  },
+  "DQ004": {
+    "description": "Active scheme entities missing an active manages edge (AMC unresolved)",
+    "kind": "ratio_max",
+    "threshold": 0.05
+  },
+  "DQ005": {
+    "description": "Active scheme entities missing an active belongs_to edge (category unresolved)",
+    "kind": "ratio_max",
+    "threshold": 0.05
+  },
+  "DQ006": {
+    "description": "Relationship completeness — fraction of active scheme entities with both a manages and a belongs_to edge",
+    "kind": "ratio_min",
+    "threshold": 0.95
+  },
+  "DQ007": {
+    "description": "Identifier mapping coverage — fraction of scheme_plan entities with at least one financial_entity_identifier row",
+    "kind": "ratio_min",
+    "threshold": 0.99
+  },
+  "DQ008": {
+    "description": "NAV freshness — fraction of schemes that were trading within the last 90 days (latest_nav_date) whose NAV is nonetheless more than 4 days stale. Restricted to recently-active schemes, not all is_active=TRUE schemes — see run_dataquality_eval.py's _check_nav_freshness docstring for the 2026-07-13 incident where scoring against all 'active' schemes produced a permanent 77% false-positive rate from long-dormant/closed-ended funds mfapi.in still lists but hasn't updated in over a year.",
+    "kind": "ratio_max",
+    "threshold": 0.05
+  },
+  "DQ009": {
+    "description": "Sync freshness — fraction of active schemes the daily sync hasn't attempted (last_attempt_at) in the last 30 hours (one daily cron cycle, see infra/cloudformation/mf-nav-sync.yaml, plus buffer). Deliberately uses last_attempt_at, not last_success_at — see run_dataquality_eval.py's _check_sync_freshness docstring for why checking last_success_at produced a 77% false-positive rate (it's only stamped on sync_status='success', not on the equally-legitimate 'no new data available' outcome).",
+    "kind": "ratio_max",
+    "threshold": 0.05
+  }
+}

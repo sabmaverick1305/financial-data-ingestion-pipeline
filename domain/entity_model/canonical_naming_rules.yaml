@@ -1,0 +1,64 @@
+# canonical_naming_rules.yaml — normalization conventions for free-text
+# name fields (identifier_types.yaml's scheme_name and amc_name).
+#
+# STATUS: none of these rules are implemented as code today (no parsing
+# module exists — verified: no plan/option extraction anywhere in src/).
+# This file specifies the target normalization so a future scheme_name
+# parser and the existing AMC matching path (domain/resolution/
+# entity_resolution_rules.yaml) have one agreed vocabulary instead of each
+# inventing its own.
+
+scheme_name:
+  structure: >
+    Observed convention (not schema-enforced): "{base_fund_name} - {plan} -
+    {option}", e.g. "HDFC Top 100 Fund - Direct Plan - Growth". All three
+    segments live in the single mf_scheme_master.scheme_name TEXT column —
+    there is no plan/option column to query directly (financial_ontology.yaml's
+    scheme_name concept documents the same example).
+  plan_tokens:
+    - canonical: direct
+      surface_forms: ["Direct Plan", "Direct"]
+      meaning: "No distributor commission — lower expense ratio than Regular."
+    - canonical: regular
+      surface_forms: ["Regular Plan", "Regular"]
+      meaning: "Sold through a distributor/advisor — commission embedded in expense ratio."
+  option_tokens:
+    - canonical: growth
+      surface_forms: ["Growth", "Growth Option"]
+      meaning: "Gains reinvested, NAV compounds — no periodic payout."
+    - canonical: idcw
+      surface_forms: ["IDCW", "Income Distribution cum Capital Withdrawal", "Dividend", "Dividend Option"]
+      meaning: >
+        Post-2021 SEBI renamed "Dividend" to "IDCW"; both surface forms occur
+        in mfapi.in data depending on when the scheme name was last updated
+        by the AMC, so a parser must treat them as synonyms, not as a
+        naming change to detect.
+  parsing_status: >
+    Not implemented. A scheme_name matched against a user query today (e.g.
+    ontology_resolver.py, Vanna's ILIKE-based scheme lookup) is treated as
+    one opaque string — "HDFC Top 100 Fund Direct Growth" and "HDFC Top 100
+    Fund Regular IDCW" are different schemes with different scheme_codes and
+    are matched independently, not grouped under one base_fund_name.
+
+amc_name:
+  structure: >
+    mf_scheme_master.amc_name values are the free-text meta.fund_house
+    string mfapi.in returns per scheme — inconsistent casing/spacing
+    observed across the 82 distinct raw values (domain/semantic/taxonomy.yaml's
+    amcs: comment). No structural convention like scheme_name's plan/option
+    suffixes; the variance is pure data-entry inconsistency, not encoded
+    sub-fields.
+  canonicalization_rule: >
+    Canonical form is domain/semantic/taxonomy.yaml's amcs: label field
+    (e.g. "Kotak Mahindra Mutual Fund", not the shorter "Kotak Mutual Fund"
+    that was corrected earlier — see taxonomy.yaml's kotak_mf entry). Every
+    raw amc_name is expected to resolve to exactly one amc_entity_id via
+    domain/resolution/entity_resolution_rules.yaml's amc_name_to_entity_id
+    rule; amc_name itself is never used as a grouping key directly in
+    queries that need cross-scheme AMC aggregation.
+  known_alias_pattern: >
+    Historical AMC renames (e.g. "Reliance Mutual Fund" -> "Nippon India
+    Mutual Fund") are captured as amc_synonyms entries in
+    domain/semantic/thesaurus.yaml, not as a separate rename-history file —
+    there is exactly one canonical amc_entity_id per AMC regardless of how
+    many names it has held.

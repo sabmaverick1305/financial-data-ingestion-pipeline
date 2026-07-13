@@ -1,0 +1,111 @@
+# entity_types.yaml — the real, distinct "things" tracked across this
+# pipeline's three data sources (AMFI bulk/PDF, mfapi.in, SEBI SID scrape).
+#
+# This is a distinct concern from domain/semantic/ (which models query
+# *concepts* — metrics, scheme-type vocabulary, synonyms). This file models
+# entity *identity*: what table backs each entity, what its primary key is,
+# and which source system(s) populate it. See domain/resolution/ for how
+# entities are matched/deduped across sources.
+#
+# Every entity_id here is referenced by domain/entity_model/relationship_types.yaml,
+# identifier_types.yaml, lifecycle_statuses.yaml, and domain/resolution/*.yaml.
+
+entities:
+  - entity_id: mf_scheme
+    label: "Mutual Fund Scheme"
+    description: >
+      One row per mfapi.in-tracked scheme (a single fund/plan/option
+      combination, e.g. "Axis Bluechip Fund - Direct Plan - Growth").
+      Distinct from the AMFI-aggregate world (amfi_fund_stats / amfi_amc_stats),
+      which reports category-level rollups, not per-scheme rows.
+    primary_table: mf_scheme_master
+    primary_key: scheme_code
+    source_systems: [mfapi]
+    has_lifecycle: true
+
+  - entity_id: nav_observation
+    label: "NAV Observation"
+    description: >
+      One scheme's Net Asset Value on one calendar date. High-volume
+      (one row per scheme per trading day since mfapi_default_start_date).
+    primary_table: mf_nav_history
+    primary_key: [scheme_code, nav_date]
+    source_systems: [mfapi]
+    has_lifecycle: false
+
+  - entity_id: scheme_performance
+    label: "Scheme Performance Snapshot"
+    description: >
+      Derived, not sourced — one row per scheme computed from
+      nav_observation history (mf_performance/calculator.py: returns,
+      CAGR, volatility, 52w high/low). Recomputed wholesale on each run,
+      not incrementally updated.
+    primary_table: mf_scheme_performance
+    primary_key: scheme_code
+    source_systems: [derived]
+    derived_from: [mf_scheme, nav_observation]
+    has_lifecycle: false
+
+  - entity_id: sync_run
+    label: "Ingestion Sync Run"
+    description: >
+      One mf-nav-sync CLI invocation's summary (schemes processed,
+      succeeded, failed, rate-limited).
+    primary_table: mf_ingestion_log
+    primary_key: run_id
+    source_systems: [mfapi]
+    has_lifecycle: false
+
+  - entity_id: amc
+    label: "Asset Management Company"
+    description: >
+      A fund house (e.g. "SBI Mutual Fund"). NOT a first-class DB entity —
+      no amc table exists. Exists as (a) free-text mf_scheme_master.amc_name
+      values, and (b) a canonical entity_id/label list in
+      domain/semantic/taxonomy.yaml's amcs:. See identifier_types.yaml's
+      amc_entity_id and domain/resolution/entity_resolution_rules.yaml for
+      how (a) resolves to (b).
+    primary_table: null
+    primary_key: null
+    source_systems: [mfapi, amfi, sebi]
+    has_lifecycle: false
+    note: "Aspirational entity — no dedicated table; resolved at query time only."
+
+  - entity_id: amfi_document
+    label: "AMFI Research Document"
+    description: >
+      One PDF/XLS downloaded from amfiindia.com's research page (monthly/
+      quarterly AUM reports, or unclassified "other"). Distinct from
+      nav_observation — this is unstructured/semi-structured document
+      content that goes through the text/table/OCR/chunk extraction
+      pipeline, not typed NAV numbers.
+    primary_table: document_metadata
+    primary_key: document_id
+    source_systems: [amfi]
+    has_lifecycle: true
+
+  - entity_id: document_chunk
+    label: "Document Chunk"
+    description: >
+      A retrieval-unit slice of an amfi_document's extracted text/table
+      content, embedded for hybrid search. One amfi_document produces many
+      document_chunk rows.
+    primary_table: document_chunks
+    primary_key: chunk_id
+    source_systems: [derived]
+    derived_from: [amfi_document]
+    has_lifecycle: false
+
+  - entity_id: sid_document
+    label: "Scheme Information Document"
+    description: >
+      A SEBI-mandated per-scheme/per-AMC compliance PDF, scraped from an
+      AMC's own website (no SEBI bulk feed exists). Scaffold-level: unlike
+      amfi_document, has no dedicated metadata table yet — identity is
+      S3-key-only (bronze/sebi/sid/{amc_entity_id}/{filename}), idempotent
+      via S3Storage.exists(), not file_hash.
+    primary_table: null
+    primary_key: null
+    source_systems: [sebi]
+    has_lifecycle: false
+    note: "Scaffold gap — see domain/entity_model/source_trust.yaml sebi entry."

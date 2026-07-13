@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 sys.path.insert(0, "src")
 
 import structlog  # noqa: E402
-from _worker_common import SCHEMA_VERSION, init  # noqa: E402
+from _worker_common import SCHEMA_VERSION, LineageContext, init  # noqa: E402
 
 from financial_pipeline.config import settings  # noqa: E402
 from financial_pipeline.processing.chunk_guardrail import Outcome, check_chunks  # noqa: E402
@@ -33,7 +33,7 @@ from financial_pipeline.storage.document_repo import Status  # noqa: E402
 log = structlog.get_logger()
 
 
-def process_one(doc: dict, s3, repo) -> bool:
+def process_one(doc: dict, s3, repo, lineage: LineageContext) -> bool:
     doc_id = str(doc["document_id"])
     filename = doc.get("file_name", doc_id)
     prefix = doc["s3_processed_key"]
@@ -112,6 +112,14 @@ def process_one(doc: dict, s3, repo) -> bool:
             quality=guard.outcome.value,
             elapsed_s=round((completed_at - started_at).total_seconds(), 1),
         )
+        lineage.record(
+            stage="bronze_to_silver",
+            source_type="s3",
+            source_ref=text_key,
+            target_type="s3",
+            target_ref=chunks_key,
+            record_count=len(chunks),
+        )
         return True
 
     except Exception as exc:
@@ -122,10 +130,19 @@ def process_one(doc: dict, s3, repo) -> bool:
         )
         repo.log_stage(doc_id, "chunking", "failed", message=str(exc))
         logger.error("chunk_worker.failed", error=str(exc), new_status=new_status)
+        lineage.record(
+            stage="bronze_to_silver",
+            source_type="s3",
+            source_ref=f"{prefix}/text.json",
+            target_type="s3",
+            target_ref=None,
+            status="failed",
+            error=str(exc),
+        )
         return False
 
 
-def run_batch(repo, s3, limit: int | None) -> int:
+def run_batch(repo, s3, lineage: LineageContext, limit: int | None) -> int:
     docs = repo.claim_documents(
         Status.CHUNK_PENDING,
         claim_status=Status.CHUNK_PROCESSING,
@@ -137,7 +154,7 @@ def run_batch(repo, s3, limit: int | None) -> int:
     print(f"chunk-worker: processing {len(docs)} document(s)…")
     succeeded = failed = 0
     for doc in docs:
-        ok = process_one(doc, s3, repo)
+        ok = process_one(doc, s3, repo, lineage)
         succeeded += ok
         failed += not ok
         print(f"  {'✓' if ok else '✗'}  {doc.get('file_name')}")
@@ -147,21 +164,25 @@ def run_batch(repo, s3, limit: int | None) -> int:
 
 def main(limit: int | None = None, loop: bool = False) -> None:
     repo, s3 = init("chunk-worker")
+    lineage = LineageContext("document_chunking")
 
-    if loop:
-        print("chunk-worker: starting in --loop mode (self-drains until queue empty)")
-        total = 0
-        while True:
-            count = run_batch(repo, s3, limit)
-            total += count
+    try:
+        if loop:
+            print("chunk-worker: starting in --loop mode (self-drains until queue empty)")
+            total = 0
+            while True:
+                count = run_batch(repo, s3, lineage, limit)
+                total += count
+                if count == 0:
+                    print(f"chunk-worker: queue empty after {total} documents. exiting.")
+                    break
+                time.sleep(1)
+        else:
+            count = run_batch(repo, s3, lineage, limit)
             if count == 0:
-                print(f"chunk-worker: queue empty after {total} documents. exiting.")
-                break
-            time.sleep(1)
-    else:
-        count = run_batch(repo, s3, limit)
-        if count == 0:
-            print("No documents pending chunking.")
+                print("No documents pending chunking.")
+    finally:
+        lineage.close()
 
 
 if __name__ == "__main__":

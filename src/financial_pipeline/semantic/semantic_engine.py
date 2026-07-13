@@ -1,20 +1,28 @@
-"""Semantic Engine — loads and cross-validates the semantic/ knowledge stack.
+"""Semantic Engine — loads and cross-validates the domain/semantic/ knowledge
+stack.
 
-    semantic/vocabulary.yaml           (layer 1: what concepts exist)
+    domain/semantic/vocabulary.yaml    (layer 1: what concepts exist)
       -> taxonomy.yaml                  (layer 2: how entities classify)
       -> thesaurus.yaml                 (layer 3: what synonyms resolve to what)
       -> financial_ontology.yaml        (layer 4: what concepts formally mean)
       -> financial_relationships.yaml   (layer 5: how concepts causally relate)
       -> reasoning_rules.yaml           (layer 6: IF/THEN causal inference)
 
-Single loader + cross-validator for the whole stack — semantic/ is the sole
-source of truth (fies/ontology/entities.yaml, metrics.yaml, and the old
+Single loader + cross-validator for the whole stack — domain/semantic/ is the
+sole source of truth (fies/ontology/entities.yaml, metrics.yaml, and the old
 financial_ontology.yaml have been retired; fies/ontology/ now only holds
 capabilities.yaml / templates.yaml / execution_labels.yaml, which are about
 benchmark generation, not domain semantics).
 
+Sibling layers under domain/ — entity_model/ (entity/relationship/identifier/
+lifecycle/source-trust/naming definitions) and resolution/ (cross-source
+entity-matching rules + thresholds) — describe *entity identity*, a distinct
+concern from this stack's *query/concept* semantics. They are declarative
+reference data consumed by documentation and (incrementally) by matching
+code; they are not loaded or cross-validated by this module.
+
 Consumed by:
-  - retrieval/ontology_resolver.py    (canonical entity/metric resolution)
+  - services/ontology_resolver.py     (canonical entity/metric resolution)
   - retrieval/ontology_expansion.py   (retrieval query expansion)
   - retrieval/ontology_reranker.py    (reranking bonus)
   - reasoning/reasoning_engine.py     (causal "why" explanations)
@@ -27,13 +35,22 @@ layer 5 referencing a term that doesn't exist fails loudly at load time
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
 import yaml
 
-SEMANTIC_DIR = Path(__file__).resolve().parents[3] / "semantic"
+# parents[3] assumes this file runs from a source checkout (src/financial_pipeline/
+# semantic/semantic_engine.py -> project root) — true for an editable install
+# (pip install -e .) but NOT for a non-editable install (pip install --no-deps
+# --prefix=/install .), where this file lands under site-packages/ instead and
+# parents[3] resolves to nonsense. FIES_DOMAIN_DIR lets a container built that
+# way (see Dockerfile.api) point at wherever domain/ was actually COPY'd.
+_DEFAULT_DOMAIN_DIR = Path(__file__).resolve().parents[3] / "domain"
+DOMAIN_DIR = Path(os.environ["FIES_DOMAIN_DIR"]) if os.environ.get("FIES_DOMAIN_DIR") else _DEFAULT_DOMAIN_DIR
+SEMANTIC_DIR = DOMAIN_DIR / "semantic"
 
 LAYER_FILES = [
     "vocabulary.yaml",
@@ -283,5 +300,5 @@ class SemanticEngine:
 def get_engine() -> SemanticEngine:
     problems = validate_stack()
     if problems:
-        raise ValueError("semantic/ stack validation failed:\n" + "\n".join(f"  - {p}" for p in problems))
+        raise ValueError("domain/semantic/ stack validation failed:\n" + "\n".join(f"  - {p}" for p in problems))
     return SemanticEngine(docs=load_stack())

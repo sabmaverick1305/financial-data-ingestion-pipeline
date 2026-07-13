@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
 
-PHASES = ["intent", "sql", "retrieval", "answer", "guardrail"]
+PHASES = ["intent", "sql", "retrieval", "answer", "guardrail", "data_quality"]
 
 
 def _upload_to_langsmith(suite_result: dict, phases_to_run: list[str]) -> str | None:
@@ -87,6 +87,9 @@ def _run_phase(phase: str, ids: list[str] | None, run_ragas: bool = False) -> di
         result = run(ids, run_ragas=run_ragas)
     elif phase == "guardrail":
         from eval.runners.run_guardrail_eval import run
+        result = run(ids)
+    elif phase == "data_quality":
+        from eval.runners.run_dataquality_eval import run
         result = run(ids)
     else:
         raise ValueError(f"Unknown phase: {phase}")

@@ -1,0 +1,93 @@
+# lifecycle_statuses.yaml — every status/state field that exists per entity,
+# its real value set (as used in code today, not aspirational), and the
+# transitions between values.
+
+status_fields:
+  - entity: mf_scheme
+    column: mf_scheme_master.is_active
+    type: BOOLEAN
+    default: true
+    values:
+      - value: true
+        meaning: "Scheme present in the most recently synced scheme-master snapshot."
+      - value: false
+        meaning: >
+          Scheme was present in a prior sync but absent from the latest
+          bronze/amfi/scheme_master/ snapshot — treated as delisted/matured/
+          merged (mfapi.in gives no explicit reason code, only omission).
+    transitions:
+      - from: true
+        to: false
+        trigger: >
+          MFIngestionRepository.mark_missing_inactive (repository.py), called
+          from sync.py after a full (non gap-fill) sync, for every scheme_code
+          NOT present in the current run's scheme set.
+      - from: false
+        to: true
+        trigger: >
+          Any subsequent sync where the scheme reappears in the scheme-master
+          snapshot — upsert_scheme_master always writes is_active=TRUE
+          (repository.py upsert).
+    notes: >
+      Skipped entirely during gap-fill/subset syncs (scheme_codes filter
+      passed) to avoid false-inactivating schemes outside the current run's
+      scope — sync.py checks this before calling mark_missing_inactive.
+
+  - entity: sync_run
+    column: mf_scheme_sync_status.sync_status
+    type: TEXT
+    default: pending
+    values:
+      - value: pending
+        meaning: "Row created for this scheme_code, not yet attempted this run."
+      - value: success
+        meaning: "NAV history fetched and upserted without error."
+      - value: failed
+        meaning: "Non-rate-limit exception during fetch/upsert."
+      - value: rate_limited
+        meaning: >
+          mfapi.in returned a rate-limit signal; retried up to 3 times per
+          the original ingestion spec, then left in this terminal state for
+          that run (picked up again on next scheduled sync).
+      - value: no_data
+        meaning: "mfapi.in returned 200 but an empty/absent NAV series for the scheme."
+    transitions: "Overwritten each run — this table is current-state only, not an append log (mf_ingestion_log is the append-only run history)."
+
+  - entity: amfi_document
+    column: document_metadata.processing_status
+    type: TEXT
+    default: uploaded
+    values:
+      - value: uploaded
+        meaning: "Raw file stored to bronze/, row inserted, nothing extracted yet."
+      - value: classified
+        meaning: "classify_filename() assigned monthly/quarterly/other category."
+      - value: text_extracted
+        meaning: "process_text_worker.py ran; has_text_layer flag now meaningful."
+      - value: tables_extracted
+        meaning: "process_table_worker.py (or process_ocr_worker.py for scanned PDFs) ran."
+      - value: processed
+        meaning: "process_chunk_worker.py produced document_chunk rows."
+      - value: embedded
+        meaning: "Chunks have embeddings — eligible for retrieval (pipeline.py filters on this value)."
+      - value: failed
+        meaning: >
+          Terminal error state; attempt_count/last_error populated. Can be
+          reverted to a retry-eligible status by claim-recovery logic
+          (document_repo.py's stale-claim handling), which reverts to the
+          stage-appropriate prior status on retry, not always back to 'uploaded'.
+    transitions: >
+      Linear pipeline: uploaded -> classified -> text_extracted ->
+      tables_extracted -> processed -> embedded, with failed reachable from
+      any stage and retry-revertible per document_repo.py's claim/reclaim logic.
+
+  - entity: sid_document
+    column: null
+    type: null
+    default: null
+    values: []
+    notes: >
+      No status field — existence in S3 (via S3Storage.exists()) IS the only
+      state. This is the scaffold gap noted in entity_types.yaml's
+      sid_document entry: no uploaded/processed/failed lifecycle like
+      amfi_document has, because there's no metadata table to hold it.

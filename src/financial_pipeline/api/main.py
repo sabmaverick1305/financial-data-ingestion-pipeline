@@ -22,6 +22,7 @@ Start locally:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 import uuid
@@ -29,9 +30,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from langchain_core.runnables import RunnableConfig
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     Counter,
@@ -54,6 +56,7 @@ from financial_pipeline.api.schemas import (
     SearchResponse,
     Source,
 )
+from financial_pipeline.evaluation.observability import RequestTrace, emitter, ls_feedback
 from financial_pipeline.graph import build_graph, NodeFactory, AnalyticalNodeFactory
 from financial_pipeline.config import settings
 from financial_pipeline.retrieval.pipeline import RetrievalPipeline
@@ -113,6 +116,20 @@ class _AppState:
 
 
 _state = _AppState()
+
+
+async def _periodic_metrics_flush(interval_seconds: int = 120) -> None:
+    """Safety-net flush for MetricsEmitter's CloudWatch buffer — it only
+    auto-flushes once BATCH_SIZE (20) requests have accumulated (see
+    evaluation/observability.py), so a quiet period could otherwise leave
+    metrics sitting in memory indefinitely. Runs for the lifetime of the
+    app; cancelled in lifespan()'s shutdown block."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            emitter.flush()
+        except Exception as exc:
+            log.warning("api.metrics_periodic_flush_failed", error=str(exc))
 
 
 @asynccontextmanager
@@ -185,7 +202,15 @@ async def lifespan(app: FastAPI):
         checkpointing=_state.checkpointer is not None,
         query_log=_state.query_log is not None,
     )
+    flush_task = asyncio.create_task(_periodic_metrics_flush())
     yield
+
+    flush_task.cancel()
+    try:
+        await flush_task
+    except asyncio.CancelledError:
+        pass
+    emitter.flush()  # final flush — don't lose whatever's still buffered
 
     if _state.checkpointer is not None:
         # PostgresSaver.conn is the ConnectionPool build_checkpointer() created —
@@ -332,12 +357,38 @@ def search(req: SearchRequest) -> SearchResponse:
     )
 
 
+def _record_observability(trace: RequestTrace, run_id: str, guardrail: dict) -> None:
+    """Runs as a FastAPI background task, after the response has already
+    been sent — emitter.record()/flush() and ls_feedback.record_case() make
+    real network calls (CloudWatch PutMetricData, LangSmith create_feedback
+    respectively), so this must never run inline in the request path.
+    Mirrors evaluation/runner.py's exact call sequence (same RequestTrace
+    shape, same emitter/ls_feedback calls) — this is what makes live /api/ask
+    traffic produce the same traces/costs/latency/retrieval diagnostics the
+    offline eval suite already did, instead of only the eval suite.
+    """
+    try:
+        emitter.record(trace)
+        # Only the production-meaningful feedback keys are populated — the
+        # eval-only ground-truth keys (citation_coverage, keyword_recall,
+        # numeric_precision, expected_num_hit, abstention_correct) have no
+        # live equivalent for a real user question with no expected answer,
+        # and record_case already skips None values for the rest (see
+        # observability.py's _LS_FEEDBACK_KEYS loop).
+        ls_feedback.record_case(run_id, {
+            "pre_blocked": guardrail.get("blocked"),
+            "post_passed": guardrail.get("post_passed"),
+        })
+    except Exception as exc:  # noqa: BLE001 — best-effort, never affects an already-sent response
+        log.warning("api.observability_failed", error=str(exc), run_id=run_id)
+
+
 @app.post("/api/ask", response_model=AskResponse, tags=["rag"])
-def ask(req: AskRequest) -> AskResponse:
+def ask(req: AskRequest, background_tasks: BackgroundTasks) -> AskResponse:
     """6-stage Augmentation Pipeline.
 
     1. Retrieve  — intent-aware hybrid search (pgvector + BM25 + MMR)
-    2. Re-rank   — CrossEncoder (ms-marco-MiniLM-L-6-v2) joint scoring
+    2. Re-rank   — CrossEncoder (ms-marco-MiniLM-L-12-v2) joint scoring
     3. Cite      — numbered citations [1]…[N] with confidence scores
     4. Prompt    — intent-aware template (regulatory / factual / trend / …)
     5. Generate  — Claude / OpenAI with temperature tuned per intent
@@ -351,14 +402,18 @@ def ask(req: AskRequest) -> AskResponse:
     # graph/graph.py's build_graph docstring for the multi-turn follow-up path).
     # query_id — stable id for this specific answer, independent of thread_id,
     # returned to the client for POST /api/feedback and eval linkage.
+    # run_id — ties this invocation to its LangSmith trace (same RunnableConfig
+    # pattern evaluation/runner.py uses) so _record_observability's feedback
+    # attaches to the right run.
     thread_id = str(uuid.uuid4())
     query_id  = str(uuid.uuid4())
+    run_id    = uuid.uuid4()
     t0 = time.time()
 
     try:
         result = _state.graph.invoke(
             {"query": req.question, "retry_count": 0, "repair_count": 0},
-            config={"configurable": {"thread_id": thread_id}},
+            config=RunnableConfig(run_id=run_id, configurable={"thread_id": thread_id}),
         )
     except Exception as exc:
         log.exception("api.ask_error", error=str(exc), thread_id=thread_id, query_id=query_id)
@@ -383,6 +438,30 @@ def ask(req: AskRequest) -> AskResponse:
         GUARDRAIL_BLOCKS.inc()
     if getattr(intent, "needs_analytical", False):
         ANALYTICAL_QUERIES.inc()
+
+    # ── Live observability — same RequestTrace shape evaluation/runner.py
+    # builds for the offline eval suite, now scheduled for real /api/ask
+    # traffic too. Gated on prompt_tokens/model like runner.py's own gate
+    # (runner.py:101) — a blocked/abstained query with no generation call
+    # has nothing meaningful to trace here.
+    if resp_dict.get("prompt_tokens") and resp_dict.get("model"):
+        trace = RequestTrace(
+            request_id=str(run_id),
+            question=req.question[:200],
+            intent=intent_type,
+            model=resp_dict.get("model", ""),
+            provider=resp_dict.get("provider", ""),
+            prompt_tokens=resp_dict.get("prompt_tokens", 0),
+            completion_tokens=resp_dict.get("completion_tokens", 0),
+            total_ms=latency,
+            pre_blocked=bool(g.get("blocked", False)),
+            post_passed=bool(g.get("post_passed", True)),
+            answer_safe=bool(g.get("answer_safe", True)),
+            abstention_detected=bool(g.get("abstention_detected", False)),
+            faithfulness_score=(fs if (fs := g.get("faithfulness_score")) is not None else -1.0),
+            citation_count=resp_dict.get("retrieval_count", 0),
+        )
+        background_tasks.add_task(_record_observability, trace, str(run_id), g)
 
     log.info("api.ask_done",
              grade=result.get("grade"),

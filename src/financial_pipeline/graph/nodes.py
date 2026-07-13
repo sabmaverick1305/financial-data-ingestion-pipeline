@@ -863,6 +863,7 @@ class NodeFactory:
                 for c in citations
             ],
             "model":              gen_meta.get("model", ""),
+            "provider":           gen_meta.get("provider", ""),
             "latency_ms":         gen_meta.get("latency_ms", 0),
             "prompt_tokens":      gen_meta.get("prompt_tokens", 0),
             "completion_tokens":  gen_meta.get("completion_tokens", 0),

@@ -17,12 +17,14 @@ different source, different tables, no shared code paths.
 
 from __future__ import annotations
 
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, datetime
 
 import httpx
+import psycopg2
 import structlog
 from sqlalchemy import create_engine
 from tenacity import Retrying, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -32,6 +34,10 @@ from financial_pipeline.mf_ingestion.models import NavRecord, SchemeRecord
 from financial_pipeline.mf_ingestion.repository import MFIngestionRepository
 from financial_pipeline.mf_ingestion.s3_source import read_scheme_master_json, resolve_latest_scheme_master_key
 from financial_pipeline.mf_ingestion.validation import InvalidSchemeRecord, parse_scheme_record
+from financial_pipeline.services import entity_store, lineage
+from financial_pipeline.services.amfi_category_source import load_amfi_category_map
+from financial_pipeline.services.entity_ingestion import ingest_scheme_plan
+from financial_pipeline.storage.checkpointer import to_psycopg_dsn
 
 log = structlog.get_logger()
 
@@ -44,6 +50,62 @@ _STATUS_COUNT_KEYS = ("success", "failed", "rate_limited", "no_data")
 
 def _parse_mfapi_date(raw: str) -> date:
     return datetime.strptime(raw, "%d-%m-%Y").date()  # mfapi returns DD-MM-YYYY
+
+
+# One psycopg2 connection per worker thread, reused across every scheme that
+# thread processes (not one per scheme) — a fresh connection per scheme would
+# add a full TCP+auth round trip to a cross-region RDS on top of the few
+# round trips ingest_scheme_plan itself makes, for every one of tens of
+# thousands of schemes on a full sync. ThreadPoolExecutor reuses its worker
+# threads across submitted tasks, so threading.local() naturally gives each
+# worker exactly one long-lived connection.
+_entity_conn_local = threading.local()
+
+
+def _entity_conn():
+    conn = getattr(_entity_conn_local, "conn", None)
+    if conn is None or conn.closed:
+        conn = entity_store.connect()
+        _entity_conn_local.conn = conn
+    return conn
+
+
+def _sync_entity(resolved_scheme: SchemeRecord, run_id: str) -> None:
+    """financial_entity_master/_identifier/_relationship sync for one
+    scheme, run right after its mf_scheme_master upsert (mirroring that
+    upsert's own "single write regardless of NAV fetch outcome" behavior —
+    see repo.upsert_scheme's call site below).
+
+    Routed through services/lineage.py's resolve_and_link — the mandatory
+    entity-resolution gateway (see that function's docstring) — which logs
+    an entity_resolution lineage row for every call, success or failure,
+    and never raises: a bad category/AMC match on one scheme still can't
+    abort an otherwise-healthy NAV sync run, exactly as before this was
+    routed through the gateway.
+    """
+    conn = _entity_conn()
+    cur = conn.cursor()
+    # amfi_category (AMFI's own NAVAll.txt section-header category) is
+    # resolve_category()'s highest-priority signal — real SEBI
+    # classification, vs. resolved_scheme.category (mfapi's own field,
+    # unreliable for over half of all rows: "Income" alone on 19,708 of
+    # 37,659 mf_scheme_master rows). load_amfi_category_map() is
+    # process-cached, so this is an in-memory dict lookup per scheme,
+    # not an S3 call.
+    amfi_category = load_amfi_category_map().get(resolved_scheme.scheme_code)
+    lineage.resolve_and_link(
+        conn,
+        cur,
+        run_id=run_id,
+        ingest_fn=ingest_scheme_plan,
+        source_ref=f"mf_scheme_master:{resolved_scheme.scheme_code}",
+        scheme_code=resolved_scheme.scheme_code,
+        scheme_name=resolved_scheme.scheme_name,
+        amc_name=resolved_scheme.amc_name,
+        category=resolved_scheme.category,
+        amfi_category=amfi_category,
+    )
+    cur.close()
 
 
 @dataclass
@@ -63,6 +125,7 @@ def _process_scheme(
     start_date: str,
     end_date: str,
     request_delay_seconds: float,
+    run_id: str,
 ) -> _SchemeResult:
     """Fetch one scheme's NAV history and upsert it. Runs inside a worker thread —
     each call gets its own DB connection checked out from the shared pool and its
@@ -126,6 +189,31 @@ def _process_scheme(
     # mf_nav_history/mf_scheme_sync_status both require, and carries mfapi's
     # meta enrichment (amc_name/category/scheme_type) when available.
     repo.upsert_scheme(resolved_scheme, raw_s3_key=scheme_raw_s3_key)
+
+    # Lineage: this scheme's mf_scheme_master row traces back to its slice
+    # of the S3 scheme-master snapshot — the Bronze -> Silver hop.
+    lineage_conn = _entity_conn()
+    lineage_cur = lineage_conn.cursor()
+    lineage.record_transform(
+        lineage_cur,
+        run_id=run_id,
+        stage="bronze_to_silver",
+        source_type="s3",
+        source_ref=scheme_raw_s3_key,
+        target_type="postgres",
+        target_ref=f"mf_scheme_master:{resolved_scheme.scheme_code}",
+        record_count=1,
+    )
+    lineage_conn.commit()
+    lineage_cur.close()
+
+    # Keep financial_entity_master/_identifier/_relationship in step with
+    # every sync, not just the historical one-off bulk backfill (see
+    # services/entity_ingestion.py) — same "regardless of NAV fetch
+    # outcome" scope as the upsert_scheme call above, since this is about
+    # scheme identity/classification, not NAV data. Routed through the
+    # mandatory entity-resolution gateway (services/lineage.py).
+    _sync_entity(resolved_scheme, run_id)
 
     if status == "success":
         nav_records = [
@@ -212,6 +300,17 @@ def run_sync(
         requested_end_date=date.fromisoformat(end_date),
     )
 
+    # Separate, cross-pipeline lineage run — additive alongside
+    # mf_ingestion_log above (kept unchanged for its existing rich summary
+    # columns), giving this pipeline the same pipeline_run/ingestion_lineage
+    # trail every other ingestion entry point now writes to (see
+    # services/lineage.py).
+    lineage_conn = psycopg2.connect(to_psycopg_dsn(postgres_url))
+    lineage_cur = lineage_conn.cursor()
+    lineage_run_id = lineage.start_run(lineage_cur, "mf_ingestion_sync")
+    lineage_conn.commit()
+    lineage_cur.close()
+
     # The S3 scheme-master snapshot has been observed to contain each
     # scheme_code exactly twice (byte-identical duplicate entries) — dedupe
     # here so every scheme is fetched/upserted once, not twice. Without this,
@@ -258,6 +357,7 @@ def run_sync(
                 start_date=start_date,
                 end_date=end_date,
                 request_delay_seconds=request_delay_seconds,
+                run_id=lineage_run_id,
             )
             for scheme in valid
         ]
@@ -304,4 +404,20 @@ def run_sync(
         inactive_marked=inactive_marked,
         **counts,
     )
+
+    lineage_cur = lineage_conn.cursor()
+    lineage.complete_run(
+        lineage_cur,
+        lineage_run_id,
+        overall_status,
+        total_schemes=len(raw_records),
+        valid_schemes=len(valid),
+        invalid_schemes=invalid_count,
+        inactive_marked=inactive_marked,
+        **counts,
+    )
+    lineage_conn.commit()
+    lineage_cur.close()
+    lineage_conn.close()
+
     return {"run_id": run_id, "invalid_schemes": invalid_count, "inactive_marked": inactive_marked, **counts}

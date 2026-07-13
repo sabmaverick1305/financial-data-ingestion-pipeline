@@ -29,7 +29,7 @@ from datetime import UTC, datetime
 sys.path.insert(0, "src")
 
 import structlog  # noqa: E402
-from _worker_common import init  # noqa: E402
+from _worker_common import LineageContext, init  # noqa: E402
 
 from financial_pipeline.config import settings  # noqa: E402
 from financial_pipeline.storage.document_repo import Status  # noqa: E402
@@ -51,16 +51,16 @@ def load_model():
     return model
 
 
-def process_one(doc: dict, s3, repo, model) -> bool:
+def process_one(doc: dict, s3, repo, model, lineage: LineageContext) -> bool:
     doc_id = str(doc["document_id"])
     filename = doc.get("file_name", doc_id)
     prefix = doc.get("s3_processed_key", "")
     logger = log.bind(document_id=doc_id, file_name=filename)
+    chunks_key = f"{prefix}/chunks.json"
 
     started_at = datetime.now(tz=UTC)
     try:
         # ── 1. Read chunks.json from S3 ──────────────────────────────────────
-        chunks_key = f"{prefix}/chunks.json"
         logger.info("embed_worker.reading_chunks", key=chunks_key)
         obj = s3.get_object(Bucket=settings.s3_bucket, Key=chunks_key)
         data = json.loads(obj["Body"].read())
@@ -111,6 +111,17 @@ def process_one(doc: dict, s3, repo, model) -> bool:
             chunks=stored,
             elapsed_s=round((completed_at - started_at).total_seconds(), 1),
         )
+        # Silver -> Gold: chunks.json becomes searchable, embedded rows in
+        # document_chunks (pgvector) — the consumption-ready artifact the
+        # retrieval layer (§04) actually queries.
+        lineage.record(
+            stage="silver_to_gold",
+            source_type="s3",
+            source_ref=chunks_key,
+            target_type="postgres",
+            target_ref=f"document_chunks:{doc_id}",
+            record_count=stored,
+        )
         return True
 
     except Exception as exc:
@@ -121,10 +132,19 @@ def process_one(doc: dict, s3, repo, model) -> bool:
         )
         repo.log_stage(doc_id, "embedding", "failed", message=str(exc))
         logger.error("embed_worker.failed", error=str(exc), new_status=new_status)
+        lineage.record(
+            stage="silver_to_gold",
+            source_type="s3",
+            source_ref=chunks_key,
+            target_type="postgres",
+            target_ref=None,
+            status="failed",
+            error=str(exc),
+        )
         return False
 
 
-def run_batch(repo, s3, model, limit: int | None) -> int:
+def run_batch(repo, s3, model, lineage: LineageContext, limit: int | None) -> int:
     docs = repo.claim_documents(
         Status.EMBED_PENDING,
         claim_status=Status.EMBED_PROCESSING,
@@ -136,7 +156,7 @@ def run_batch(repo, s3, model, limit: int | None) -> int:
     print(f"embed-worker: processing {len(docs)} document(s)…")
     succeeded = failed = 0
     for doc in docs:
-        ok = process_one(doc, s3, repo, model)
+        ok = process_one(doc, s3, repo, model, lineage)
         succeeded += ok
         failed += not ok
         print(f"  {'✓' if ok else '✗'}  {doc.get('file_name')}")
@@ -151,21 +171,25 @@ def main(limit: int | None = None, loop: bool = False, batch_size: int = ENCODE_
 
     repo, s3 = init("embed-worker")
     model = load_model()
+    lineage = LineageContext("document_embedding")
 
-    if loop:
-        print("embed-worker: starting in --loop mode (self-drains until queue empty)")
-        total = 0
-        while True:
-            count = run_batch(repo, s3, model, limit)
-            total += count
+    try:
+        if loop:
+            print("embed-worker: starting in --loop mode (self-drains until queue empty)")
+            total = 0
+            while True:
+                count = run_batch(repo, s3, model, lineage, limit)
+                total += count
+                if count == 0:
+                    print(f"embed-worker: queue empty after {total} documents. exiting.")
+                    break
+                time.sleep(1)
+        else:
+            count = run_batch(repo, s3, model, lineage, limit)
             if count == 0:
-                print(f"embed-worker: queue empty after {total} documents. exiting.")
-                break
-            time.sleep(1)
-    else:
-        count = run_batch(repo, s3, model, limit)
-        if count == 0:
-            print("No documents pending embedding.")
+                print("No documents pending embedding.")
+    finally:
+        lineage.close()
 
 
 if __name__ == "__main__":

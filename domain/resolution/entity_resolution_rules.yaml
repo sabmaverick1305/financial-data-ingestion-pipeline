@@ -1,0 +1,181 @@
+# entity_resolution_rules.yaml — how entity instances get matched/deduped,
+# both within one source (duplicate records in a single feed) and across
+# sources (an AMC referenced by name in mfapi vs. its canonical taxonomy id).
+#
+# Each rule states: what's being matched, the actual matching strategy
+# (grounded in real code — file:line references, not aspirational), and
+# what happens on no-match. Where no rule exists for a real need, that's
+# recorded as a gap, not invented.
+
+rules:
+  - rule_id: amc_name_to_entity_id
+    matches: [amc_name identifier -> amc_entity_id identifier]
+    strategy: exact_word_boundary_regex
+    implementation: >
+      services/ontology_resolver.py's _word_match() — re.search(r"\bterm\b", q)
+      against domain/semantic/thesaurus.yaml's amc_synonyms lists (built once
+      via _build_tables(), sorted longest-synonym-first so "hdfc" doesn't
+      pre-empt a more specific multi-word synonym). Case-insensitive
+      (synonyms lowercased at table-build time). Also implemented as a
+      standalone single-value resolver in services/entity_resolver.py's
+      resolve_amc_name() for batch/programmatic use (see scope below).
+    on_no_match: >
+      amc_name passes through unresolved — no amc_entity_id is attached, no
+      fuzzy fallback is attempted (see domain/resolution/matching_thresholds.yaml
+      for why). The query proceeds using the raw amc_name string only.
+    scope: >
+      Applied to query text (user questions) via services/ontology_resolver.py.
+      Also now applied to financial_entity_master/financial_entity_identifier
+      population (scratchpad's populate_entity_master.py /
+      populate_entity_identifier.py, run manually, not a scheduled job) —
+      this resolves amc_name into financial_entity_identifier rows, not
+      directly onto mf_scheme_master (which still has no amc_entity_id
+      column; only the newer entity_id FK added for the financial_entity_*
+      tables).
+    known_gap: >
+      Because this only runs at query-resolution time, an amc_name value
+      that has zero registered synonym (e.g. a newly onboarded AMC added to
+      mf_scheme_master by a sync run but not yet added to taxonomy.yaml/
+      thesaurus.yaml) is silently unmatchable until someone manually adds it
+      — see canonical_naming_rules.yaml's amc_name section for the
+      taxonomy.yaml maintenance expectation this implies.
+
+  - rule_id: category_resolution_with_scheme_name_fallback
+    matches: [mf_scheme_master.category value -> mf_scheme_category taxonomy leaf entity_id]
+    strategy: pattern_match_with_fallback_field
+    implementation: >
+      services/entity_resolver.py's resolve_category(). Primary: real
+      SQL-LIKE-semantics regex match (category_pattern's '%' translated to
+      '.*', not naive substring containment — 2 of the 41 leaf patterns are
+      multi-wildcard, e.g. "%banking%psu%") against the raw category value.
+      Fallback, only tried when the primary match fails: the same pattern
+      set matched against scheme_name instead, since scheme names often
+      embed their real category (e.g. "...Liquid Fund...") even when the
+      category field itself doesn't. Fallback matches score 0.85
+      ("needs_review" band per matching_thresholds.yaml), not 1.0 — see
+      MatchResult.source ("primary" vs "scheme_name_fallback") for which
+      path produced a given match.
+    on_no_match: >
+      No belongs_to relationship is created for that scheme — see
+      domain/entity_model/source_trust.yaml's known_gaps for why this
+      happens so often (mfapi.in's own category field is unreliable, not a
+      bug in this rule): 'Income' alone accounts for 19,708 of
+      mf_scheme_master's 37,659 rows, 'IDF'/'1099 Days'/'1'/'Growth' etc.
+      account for most of the rest of the ~26,900 unresolved rows. This is
+      an honest gap, not filled with a guess — a wrong belongs_to link
+      would be worse than none.
+    scope: >
+      Run via scratchpad's populate_entity_relationship.py against
+      financial_entity_master's scheme_plan rows (one resolve_category()
+      call per scheme_plan, majority-voted up to the parent scheme entity
+      before the belongs_to row is written — see relationship_types.yaml's
+      belongs_to). Recovered ~80 additional schemes when the taxonomy grew
+      from 39 to 41 leaves (added retirement_fund_scheme,
+      childrens_fund_scheme — genuine SEBI categories that were entirely
+      missing, found via this rule's on_no_match diagnostics, not a
+      matching bug).
+    known_gap: >
+      The scheme_name fallback only recovers cases where the base fund's
+      name happens to restate its category in taxonomy-recognizable words —
+      it does nothing for genuinely opaque names or garbage category values
+      with no signal anywhere (e.g. "1", "1099 Days" on an FMP scheme whose
+      name doesn't say what kind of debt fund it is). The more complete fix
+      — cross-referencing AMFI's own official SEBI classification — is
+      blocked on cross_source_scheme_identity (see
+      entity_resolution_rules.yaml's cross_source_scheme_identity rule
+      below): there's no reliable join key between an AMFI record and a
+      mfapi.in scheme_code today.
+
+  - rule_id: scheme_type_vs_mf_scheme_category_namespace_isolation
+    matches: [scheme_type entity_id, mf_scheme_category entity_id]
+    strategy: disjoint_namespace
+    implementation: >
+      domain/semantic/taxonomy.yaml keeps scheme_types: and
+      mf_scheme_categories: as two separate top-level lists with two
+      separate thesaurus.yaml synonym dicts (scheme_type_synonyms vs. no
+      dedicated mf_scheme_categories synonym dict — it's matched via
+      category_pattern ILIKE instead, not the synonym-resolution path at all).
+    on_no_match: n/a — this is a deliberate non-match rule.
+    scope: >
+      This is a NEGATIVE resolution rule: "large cap" must resolve to
+      exactly one of {scheme_types.large_cap_fund (used against
+      amfi_fund_stats.scheme_type), mf_scheme_categories.large_cap
+      (used against mf_scheme_master.category via category_pattern)} —
+      never both, and never merged into one shared synonym. Existing at
+      the taxonomy/thesaurus layer already; recorded here because it IS an
+      entity-resolution rule (disambiguating which entity a phrase refers
+      to), even though its mechanism lives in domain/semantic/, not here.
+
+  - rule_id: within_run_scheme_dedup
+    matches: [duplicate SchemeRecord within one scheme-master JSON snapshot]
+    strategy: last_write_wins_by_primary_key
+    implementation: >
+      mf_ingestion/sync.py collapses parsed SchemeRecords into a
+      dict[str, SchemeRecord] keyed on scheme_code before processing —
+      mfapi.in's scheme-master JSON has been observed to contain each
+      scheme_code exactly twice (byte-identical duplicate entries).
+      duplicate_count is tracked and logged, not silently dropped.
+    on_no_match: n/a — collision is expected and handled, not a failure case.
+    scope: "Single ingestion run only. Does not address cross-run conflicts (see cross_run_upsert_precedence below)."
+
+  - rule_id: cross_run_upsert_precedence
+    matches: [existing mf_scheme_master row vs. newly-synced values for same scheme_code]
+    strategy: coalesce_new_over_old
+    implementation: >
+      MFIngestionRepository's upsert_scheme_master (repository.py) uses
+      ON CONFLICT (scheme_code) DO UPDATE with two different overwrite
+      rules: scheme_name is unconditionally set to EXCLUDED.scheme_name
+      (always takes the latest sync's value, even if it changed), while
+      amc_name/category/scheme_type use COALESCE(EXCLUDED.x,
+      mf_scheme_master.x) — a NULL/missing value in a later sync does not
+      erase a previously-populated one, but a non-null new value always
+      overwrites.
+    on_no_match: n/a
+    scope: "scheme_code is the immutable key. scheme_name always takes the newest value; amc_name/category/scheme_type are COALESCE-protected against nulling out on partial data."
+
+  - rule_id: nav_observation_identity
+    matches: [(scheme_code, nav_date) pair -> single canonical NAV value]
+    strategy: primary_key_upsert
+    implementation: >
+      mf_nav_history's composite PK (scheme_code, nav_date) — a re-sync
+      overwrites the prior value for that date rather than appending a new
+      row. This is the entity-resolution rule for nav_observation, but note
+      it only dedupes WITHIN mfapi.in's own data; see
+      domain/entity_model/source_trust.yaml's nav_source_conflict gap for
+      the unaddressed AMFI-vs-mfapi cross-source case.
+    on_no_match: n/a
+
+  - rule_id: cross_source_scheme_identity
+    matches: [AMFI NAVAll.txt scheme reference, mf_scheme_master.scheme_code, SEBI SID document]
+    strategy: shared_scheme_code_for_amfi_and_mfapi; unresolved_for_sebi
+    implementation: >
+      CORRECTED — the original version of this rule claimed AMFI and
+      mfapi.in use different scheme-code numbering. That was never verified
+      and is false: mfapi.in's scheme_code IS AMFI's own "Scheme Code"
+      column. Confirmed directly against a real file
+      (bronze/amfi/nav/2026-07-10/NAVAll.txt): scheme_code 119551 in both
+      mf_scheme_master and that file's "119551;INF209KA12Z1;...;Aditya
+      Birla Sun Life Banking & PSU Debt Fund - DIRECT - IDCW;..." row are
+      the same scheme. No join-key problem exists for AMFI<->mfapi scheme
+      identity — scheme_code already IS the shared key. A parser for this
+      exact format already existed and was reused, not rebuilt:
+      scripts/fetch_amfi_nav.py's parse_nav_text() extracts scheme_code,
+      the section-header category ("Open Ended Schemes(Debt Scheme -
+      Banking and PSU Fund)" -> "Debt Scheme - Banking and PSU Fund"), and
+      both ISIN columns per row. services/entity_resolver.py's
+      resolve_category() now takes this AMFI header category as its
+      highest-priority signal (see category_resolution_with_scheme_name_fallback,
+      updated).
+    on_no_match: >
+      sid_document still has no scheme-level identity (only
+      amc_entity_id-level) — that part of the original gap is real and
+      unresolved; NAVAll.txt has no per-scheme SID reference to join
+      against.
+    scope: >
+      NAVAll.txt is a daily snapshot of currently-reporting schemes only
+      (14,216 rows on 2026-07-10, vs. mf_scheme_master's 37,659 total
+      including long-inactive ones) — it does not give 100% scheme
+      coverage, only coverage of what's actively publishing NAV. Not yet
+      persisted anywhere (isin_gap in identifier_types.yaml is still real —
+      the ISIN columns this file has are read at population-script run
+      time, not stored in mf_scheme_master).

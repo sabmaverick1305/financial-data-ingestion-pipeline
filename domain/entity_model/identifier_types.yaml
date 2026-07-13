@@ -1,0 +1,103 @@
+# identifier_types.yaml — every identifier field actually in use (or
+# notably absent) across the three source systems, and how reliable each is.
+#
+# reliability: "primary_key" (unique, stable, DB-enforced) | "free_text"
+# (unvalidated string, may collide/drift) | "derived" (computed, not sourced)
+# | "external_reference" (points outside this DB, e.g. a taxonomy entity_id).
+
+identifiers:
+  - identifier_id: scheme_code
+    entity: mf_scheme
+    column: mf_scheme_master.scheme_code
+    type: TEXT
+    reliability: primary_key
+    description: >
+      mfapi.in's own numeric scheme id (stored as TEXT). The only identifier
+      shared across mf_scheme_master, mf_nav_history, and mf_scheme_performance
+      — every join in this domain uses scheme_code. Assigned by mfapi.in, not
+      by AMFI or SEBI; there is no cross-source scheme identifier (see
+      isin_gap below and domain/resolution/entity_resolution_rules.yaml).
+
+  - identifier_id: scheme_name
+    entity: mf_scheme
+    column: mf_scheme_master.scheme_name
+    type: TEXT
+    reliability: free_text
+    description: >
+      Human-facing name, e.g. "Axis Bluechip Fund - Direct Plan - Growth".
+      High cardinality (37k+ distinct values observed) and NOT normalized —
+      plan (Direct/Regular) and option (Growth/IDCW/Dividend) are embedded
+      as free-text suffixes within this single string, not separate columns.
+      See canonical_naming_rules.yaml for the suffix vocabulary.
+
+  - identifier_id: isin_gap
+    entity: mf_scheme
+    column: null
+    type: null
+    reliability: null
+    description: >
+      KNOWN GAP, not a real identifier: mf_ingestion/validation.py explicitly
+      drops mfapi's isInGrowth/isInDivReinvidend fields — "mf_scheme_master
+      has no ISIN columns." CORRECTED: cross-source scheme identity does NOT
+      actually depend on this gap being closed — scheme_code itself already
+      works as the AMFI<->mfapi join key (see
+      domain/resolution/entity_resolution_rules.yaml's
+      cross_source_scheme_identity rule, corrected after direct verification
+      against a real NAVAll.txt file). ISIN is still worth capturing on its
+      own merits (it's the identifier a portfolio-holdings/security-level
+      feature would need — see entity_types.yaml's "security" entity note),
+      just not for the reason originally written here. NAVAll.txt already
+      carries both ISIN columns per row; scripts/fetch_amfi_nav.py's
+      parse_nav_text() already extracts them — nothing currently persists
+      them to Postgres.
+
+  - identifier_id: amc_name
+    entity: amc
+    column: mf_scheme_master.amc_name
+    type: TEXT
+    reliability: free_text
+    description: >
+      Sourced from mfapi's meta.fund_house per-scheme field (mf_ingestion/sync.py).
+      Not FK'd to anything — same AMC can appear with inconsistent casing/
+      spacing across scheme rows (this is exactly why domain/semantic/taxonomy.yaml's
+      amcs: list exists, auto-derived from the 82 distinct values observed
+      with casing dupes merged).
+
+  - identifier_id: amc_entity_id
+    entity: amc
+    column: null
+    type: string (snake_case slug, e.g. "sbi_mf")
+    reliability: external_reference
+    description: >
+      The ONLY canonical AMC identifier in this system — defined in
+      domain/semantic/taxonomy.yaml's amcs: list (entity_id + label), not a
+      DB column anywhere. Used to link amc_name (mf_scheme_master),
+      amc_synonyms (domain/semantic/thesaurus.yaml), and the SEBI SID scrape
+      registry (sebi_ingestion/amc_sources.py's AMCSidSource.amc_entity_id) —
+      the one identifier all three source systems can agree to reference,
+      precisely because it lives outside all of them.
+
+  - identifier_id: document_id
+    entity: amfi_document
+    column: document_metadata.document_id
+    type: UUID
+    reliability: primary_key
+    description: Generated at ingestion time, not sourced from AMFI.
+
+  - identifier_id: file_hash
+    entity: amfi_document
+    column: document_metadata.file_hash
+    type: TEXT
+    reliability: derived
+    description: >
+      Content hash used for document-level dedup (distinct object, same
+      bytes -> same file_hash). The closest thing to a content-identity
+      check in this codebase; sid_document has no equivalent (see
+      source_trust.yaml's sebi entry).
+
+  - identifier_id: nav_date
+    entity: nav_observation
+    column: mf_nav_history.nav_date
+    type: DATE
+    reliability: primary_key
+    description: "Composite PK with scheme_code — (scheme_code, nav_date) uniquely identifies a NAV row."

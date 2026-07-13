@@ -257,6 +257,19 @@ mf_scheme_categories:
     label: Other Scheme - Gold ETF
     parent: other_scheme
     category_pattern: "%gold etf%"
+  - entity_id: equity_etf_scheme
+    label: Other Scheme - Equity ETF
+    parent: other_scheme
+    category_pattern: "%equity%etf%"
+    note: >
+      Added after finding AMFI's own NAVAll.txt category headers use
+      "Exchange Traded Funds (ETFs) - Equity ETF" — a phrasing
+      other_etfs_scheme's "%other%etf%" pattern doesn't catch.
+  - entity_id: debt_etf_scheme
+    label: Other Scheme - Debt ETF
+    parent: other_scheme
+    category_pattern: "%debt%etf%"
+    note: "Same AMFI NAVAll.txt phrasing gap as equity_etf_scheme, for the Debt ETF sub-category."
   - entity_id: index_funds_scheme
     label: Other Scheme - Index Funds
     parent: other_scheme
@@ -265,6 +278,35 @@ mf_scheme_categories:
     label: Other Scheme - Other ETFs
     parent: other_scheme
     category_pattern: "%other%etf%"
+  - entity_id: solution_oriented_scheme
+    label: Solution Oriented Scheme
+    parent: null
+  - entity_id: retirement_fund_scheme
+    label: Solution Oriented Scheme - Retirement Fund
+    parent: solution_oriented_scheme
+    category_pattern: "%retirement%"
+  - entity_id: childrens_fund_scheme
+    label: Solution Oriented Scheme - Children's Fund
+    parent: solution_oriented_scheme
+    category_pattern: "%children%"
+  - entity_id: income_scheme
+    label: Debt Scheme - Income
+    parent: debt_scheme
+    category_pattern: "%income%"
+    note: >
+      "Income" is AMFI's own real (not corrupted) legacy/generic category
+      header — checked against a real NAVAll.txt: it covers close-ended
+      Fixed Maturity Plans, Interval Funds, and older open-ended schemes
+      that predate SEBI's 2017 debt-scheme sub-category reform (Liquid/
+      Overnight/Low Duration/etc. don't cleanly apply to fixed-maturity or
+      interval products). Deliberately placed LAST in this file — its
+      "%income%" pattern is broad enough that it must only be checked after
+      every more specific debt pattern (liquid_scheme, overnight_scheme,
+      etc.) has already had a chance, since e.g. "Income/Debt Oriented
+      Schemes - Liquid Fund" should resolve to liquid_scheme, not here.
+      Matching is first-match-wins in file order (see
+      services/entity_resolver.py's resolve_category()) — moving this
+      entry earlier would silently break that.
 
 # AMCs — flat, no hierarchy.
 amcs:

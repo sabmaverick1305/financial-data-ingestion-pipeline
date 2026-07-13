@@ -312,6 +312,141 @@ CREATE TABLE IF NOT EXISTS mf_scheme_performance (
   updated_at  TIMESTAMP
 );
 
+-- ── financial_entity_master / _identifier / _relationship ─────────────────────
+-- The canonical entity graph (scheme / scheme_plan / organization / category
+-- nodes, connected by has_plan / manages / belongs_to edges). Originally
+-- created out-of-band against the live DB during an earlier session (bulk
+-- backfill via scratchpad's populate_entity_{master,identifier,
+-- relationship}.py) and never codified here — every column below is taken
+-- directly from the exact queries services/entity_store.py already runs
+-- against these tables, not newly designed. Codifying it here so a fresh
+-- database can be provisioned from this file alone, matching what services/
+-- entity_store.py, entity_ingestion.py, and entity_reconciliation.py expect.
+CREATE TABLE IF NOT EXISTS financial_entity_master (
+  entity_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_type        TEXT NOT NULL,            -- scheme | scheme_plan | organization | category
+  entity_subtype     TEXT,                     -- e.g. 'mutual_fund_scheme', 'amc', taxonomy leaf id
+  canonical_name     TEXT NOT NULL,
+  normalized_name    TEXT NOT NULL,
+  canonical_source   TEXT,                     -- mfapi | amfi | fies_taxonomy
+  source_confidence  NUMERIC,
+  metadata           JSONB DEFAULT '{}'::jsonb,
+  lifecycle_status   TEXT NOT NULL DEFAULT 'pending',
+  -- pending | active | renamed | merged | inactive | closed | archived
+  created_at         TIMESTAMPTZ DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Natural-key uniqueness, scoped to the lifecycle statuses that count as
+-- "existing" for resolution purposes — see entity_store.lookup_entity's
+-- own docstring for why merged/inactive/closed/archived rows are excluded.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_entity_identity
+  ON financial_entity_master (entity_type, entity_subtype, normalized_name)
+  WHERE lifecycle_status IN ('pending', 'active', 'renamed');
+
+CREATE INDEX IF NOT EXISTS idx_entity_master_type
+  ON financial_entity_master (entity_type, entity_subtype);
+
+CREATE TABLE IF NOT EXISTS financial_entity_identifier (
+  identifier_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entity_id              UUID NOT NULL REFERENCES financial_entity_master(entity_id) ON DELETE CASCADE,
+  source_system          TEXT NOT NULL,        -- mfapi | amfi | fies_taxonomy | sebi
+  identifier_type        TEXT NOT NULL,        -- scheme_code | amc_entity_id | category_taxonomy_id | ...
+  identifier_value       TEXT NOT NULL,
+  is_primary_for_source  BOOLEAN DEFAULT TRUE,
+  match_method           TEXT,                 -- deterministic | exact_identifier | ...
+  match_confidence       NUMERIC,
+  source_record_name     TEXT,
+  created_at             TIMESTAMPTZ DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE (source_system, identifier_type, identifier_value)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_identifier_entity_id
+  ON financial_entity_identifier (entity_id);
+
+CREATE TABLE IF NOT EXISTS financial_entity_relationship (
+  relationship_id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_entity_id          UUID NOT NULL REFERENCES financial_entity_master(entity_id) ON DELETE CASCADE,
+  relationship_type         TEXT NOT NULL,     -- has_plan | manages | belongs_to
+  target_entity_id          UUID NOT NULL REFERENCES financial_entity_master(entity_id) ON DELETE CASCADE,
+  source_system             TEXT,
+  relationship_confidence   NUMERIC,
+  is_inferred                BOOLEAN DEFAULT FALSE,
+  is_active                  BOOLEAN DEFAULT TRUE,
+  valid_from                 DATE DEFAULT CURRENT_DATE,
+  valid_to                   DATE,
+  created_at                 TIMESTAMPTZ DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Soft-supersede pattern: only one *active* edge per (source, type, target)
+-- triple. deactivate_relationship() flips is_active rather than deleting, so
+-- history is preserved and a new active edge can be inserted immediately
+-- after superseding an old one — see entity_store.py's own docstrings.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_active_entity_relationship
+  ON financial_entity_relationship (source_entity_id, relationship_type, target_entity_id)
+  WHERE is_active = TRUE;
+
+-- relationship_exists_for_source's access pattern (source_entity_id, relationship_type)
+-- is already the unique index's left prefix; target-side lookups
+-- (relationship_exists_for_target, used for manages) need their own index.
+CREATE INDEX IF NOT EXISTS idx_entity_relationship_target
+  ON financial_entity_relationship (target_entity_id, relationship_type)
+  WHERE is_active = TRUE;
+
+-- ── pipeline_run / ingestion_lineage ───────────────────────────────────────────
+-- Generalizes mf_ingestion_log's run-tracking pattern to every ingestion
+-- pipeline (AMFI NAV fetch, mf_ingestion sync, SEBI SID scrape, mf_performance,
+-- the document worker chain), so "which job run produced this artifact" is
+-- answerable for all of them, not just mf_ingestion. mf_ingestion_log itself
+-- is left in place unchanged (mf_ingestion/sync.py still writes it) — this is
+-- an additive, cross-pipeline layer above it, not a replacement.
+CREATE TABLE IF NOT EXISTS pipeline_run (
+  run_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pipeline_name  TEXT NOT NULL,     -- e.g. 'amfi_nav_fetch', 'mf_ingestion_sync', 'sebi_sid_scrape'
+  started_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at   TIMESTAMPTZ,
+  status         TEXT NOT NULL DEFAULT 'running',
+  -- running | completed | completed_with_errors | failed
+  summary        JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_name_started
+  ON pipeline_run (pipeline_name, started_at);
+
+-- One row per artifact-to-artifact transformation event within a run — the
+-- Bronze -> Silver -> Gold trail. source_ref/target_ref are S3 keys, HTTP
+-- URLs, or "table:primary_key" strings (e.g. 'mf_scheme_master:118825'),
+-- matching the raw_s3_key convention mf_scheme_master/mf_nav_history already
+-- use, generalized into a queryable log instead of a single overwritable
+-- column.
+CREATE TABLE IF NOT EXISTS ingestion_lineage (
+  lineage_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id         UUID NOT NULL REFERENCES pipeline_run(run_id) ON DELETE CASCADE,
+  stage          TEXT NOT NULL,
+  -- bronze_ingest | bronze_to_silver | silver_to_gold | entity_resolution
+  source_type    TEXT,              -- http | s3 | postgres
+  source_ref     TEXT,
+  target_type    TEXT,              -- s3 | postgres
+  target_ref     TEXT,
+  record_count   INT,
+  status         TEXT NOT NULL DEFAULT 'success',  -- success | failed
+  error_message  TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ingestion_lineage_run_id
+  ON ingestion_lineage (run_id);
+
+-- "What produced this row/file" and "what did this row/file produce" lookups
+CREATE INDEX IF NOT EXISTS idx_ingestion_lineage_target_ref
+  ON ingestion_lineage (target_ref);
+
+CREATE INDEX IF NOT EXISTS idx_ingestion_lineage_source_ref
+  ON ingestion_lineage (source_ref);
+
 -- ── Idempotent migrations (for existing databases) ────────────────────────────
 -- Safe to run against a database that was created with the v1 schema.
 ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS has_text_layer   BOOLEAN;
@@ -319,3 +454,9 @@ ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS attempt_count    INT DEFA
 ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS last_error       TEXT;
 ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS claim_expires_at TIMESTAMPTZ;
 ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS schema_version   TEXT DEFAULT 'v1';
+
+-- v3: SEBI SID documents are linked to their canonical AMC entity so lineage
+-- can trace a document back through entity resolution, not just to its raw
+-- S3 key — see services/sebi_ingestion/sync.py and services/lineage.py.
+ALTER TABLE document_metadata ADD COLUMN IF NOT EXISTS amc_entity_id UUID
+  REFERENCES financial_entity_master(entity_id);

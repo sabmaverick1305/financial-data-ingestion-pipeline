@@ -1,0 +1,94 @@
+# relationship_types.yaml — how entity_types.yaml's entities connect.
+#
+# Distinct from domain/semantic/financial_relationships.yaml, which relates
+# query *concepts* (e.g. "expense_ratio influenced_by aum"). This file
+# relates *entity instances* (e.g. "this mf_scheme row is issued_by that amc").
+#
+# cardinality is expressed as "1:1", "1:N", or "N:1" read subject-to-object.
+# enforced: whether a real FK/constraint backs this in Postgres today, vs.
+# a relationship that only exists implicitly (matched at query/resolution time).
+
+relationships:
+  - relationship_id: issued_by
+    subject: mf_scheme
+    object: amc
+    cardinality: "N:1"
+    enforced: false
+    description: >
+      A scheme belongs to one AMC. NOT FK-enforced — mf_scheme_master.amc_name
+      is free text with no foreign key, since amc has no table (see
+      entity_types.yaml's amc entry). Resolved via
+      domain/resolution/entity_resolution_rules.yaml's amc_name_to_entity_id rule.
+
+  - relationship_id: has_nav_history
+    subject: mf_scheme
+    object: nav_observation
+    cardinality: "1:N"
+    enforced: true
+    description: >
+      mf_nav_history.scheme_code REFERENCES mf_scheme_master(scheme_code)
+      (schema_mf_scheme.py MF_NAV_HISTORY_DDL). Real FK.
+
+  - relationship_id: has_performance_snapshot
+    subject: mf_scheme
+    object: scheme_performance
+    cardinality: "1:1"
+    enforced: true
+    description: >
+      mf_scheme_performance.scheme_code REFERENCES mf_scheme_master(scheme_code),
+      PRIMARY KEY (one row per scheme). Real FK. Populated by
+      mf_performance/run.py, not by the ingestion path.
+
+  - relationship_id: computed_from
+    subject: scheme_performance
+    object: nav_observation
+    cardinality: "1:N"
+    enforced: false
+    description: >
+      Every return/CAGR/volatility field in scheme_performance is derived by
+      mf_performance/calculator.py reading nav_observation rows for the
+      scheme. Not a DB-level relationship (no join column captures "which
+      NAV rows contributed") — purely a computation lineage fact.
+
+  - relationship_id: summarized_by
+    subject: sync_run
+    object: mf_scheme
+    cardinality: "1:N"
+    enforced: false
+    description: >
+      A sync_run's counters (processed/succeeded/failed) summarize a set of
+      mf_scheme rows touched in that run; no join table records the exact
+      set (mf_scheme_sync_status is keyed by scheme_code only, overwritten
+      each run, not run-scoped).
+
+  - relationship_id: classified_as
+    subject: mf_scheme
+    object: mf_scheme_category
+    cardinality: "N:1"
+    enforced: false
+    description: >
+      mf_scheme_master.category is free text matched against
+      domain/semantic/taxonomy.yaml's mf_scheme_categories leaves via each
+      leaf's category_pattern (SQL ILIKE). Deliberately a separate taxonomy
+      from scheme_types (see taxonomy.yaml's comment) — do not conflate the
+      two in resolution rules.
+
+  - relationship_id: has_sid_document
+    subject: amc
+    object: sid_document
+    cardinality: "1:N"
+    enforced: false
+    description: >
+      sebi_ingestion writes to bronze/sebi/sid/{amc_entity_id}/ keyed by the
+      amc entity_id from domain/semantic/taxonomy.yaml — the only link
+      between an AMC and its SID documents is the S3 key prefix, no DB join.
+
+  - relationship_id: produces_chunk
+    subject: amfi_document
+    object: document_chunk
+    cardinality: "1:N"
+    enforced: true
+    description: >
+      document_chunks rows reference document_metadata.document_id. Real FK,
+      populated by the text/table/OCR -> chunk worker pipeline
+      (scripts/_worker_common.py's processed_prefix() and downstream).

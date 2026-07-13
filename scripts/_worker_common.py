@@ -73,6 +73,61 @@ def init(worker_name: str):
     return repo, make_s3()
 
 
+class LineageContext:
+    """Wraps one pipeline_run (services/lineage.py) for a single worker
+    invocation's lifetime — opened once in main(), not once per document,
+    same rationale as mf_ingestion/sync.py's per-thread connection reuse.
+    Each process_one() call records its own bronze/silver/gold hop via
+    record(); document_processing_log (repo.log_stage) is untouched and
+    still the detailed per-document audit trail — this sits one level up,
+    making cross-pipeline "what produced this artifact" queries possible.
+    """
+
+    def __init__(self, pipeline_name: str):
+        from financial_pipeline.services import entity_store, lineage
+
+        self._lineage = lineage
+        self._conn = entity_store.connect()
+        self._cur = self._conn.cursor()
+        self.run_id = lineage.start_run(self._cur, pipeline_name)
+        self._conn.commit()
+        self._counts = {"success": 0, "failed": 0}
+
+    def record(
+        self,
+        *,
+        stage: str,
+        source_type: str,
+        source_ref: str,
+        target_type: str,
+        target_ref: str | None,
+        status: str = "success",
+        error: str | None = None,
+        record_count: int | None = None,
+    ) -> None:
+        self._lineage.record_transform(
+            self._cur,
+            run_id=self.run_id,
+            stage=stage,
+            source_type=source_type,
+            source_ref=source_ref,
+            target_type=target_type,
+            target_ref=target_ref,
+            record_count=record_count,
+            status=status,
+            error=error,
+        )
+        self._conn.commit()
+        self._counts["success" if status == "success" else "failed"] += 1
+
+    def close(self) -> None:
+        overall = "completed" if self._counts["failed"] == 0 else "completed_with_errors"
+        self._lineage.complete_run(self._cur, self.run_id, overall, **self._counts)
+        self._conn.commit()
+        self._cur.close()
+        self._conn.close()
+
+
 def df_to_parquet_bytes(df) -> bytes:
     """Serialize a DataFrame to Parquet, with a fallback for pyarrow's
     "Expected bytes, got a 'int' object" failure on object columns that mix

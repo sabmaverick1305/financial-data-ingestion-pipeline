@@ -1,0 +1,55 @@
+# matching_thresholds.yaml — the confidence-scoring model for entity
+# matching, both as implemented today and as specified for future work.
+#
+# HONEST BASELINE: this codebase has no fuzzy-string-matching library
+# (verified — no rapidfuzz/thefuzz/python-Levenshtein/difflib usage
+# anywhere in src/ or scripts/, none in pyproject.toml). Every entity match
+# described in domain/resolution/entity_resolution_rules.yaml today is
+# binary: exact word-boundary regex hit (score 1.0) or nothing (score 0.0,
+# no partial credit, no ranked candidates). This file makes that binary
+# model explicit, and specifies thresholds for the day fuzzy matching is
+# actually added, so that addition has a target to implement against
+# instead of inventing thresholds ad hoc.
+
+current_model:
+  type: binary_exact_match
+  match_score: 1.0
+  no_match_score: 0.0
+  applies_to: [amc_name_to_entity_id, scheme_type_vs_mf_scheme_category_namespace_isolation]
+  mechanism: "re.search(r'\\bterm\\b', query) word-boundary regex — see services/ontology_resolver.py's _word_match() and services/entity_resolver.py's resolve_amc_name()/resolve_category()"
+  limitation: >
+    A synonym typo, an unseen phrasing, or an AMC name with no registered
+    synonym produces a hard no-match with no fallback ranking — there is no
+    "closest candidate" to surface, only nothing.
+
+future_model:
+  status: NOT IMPLEMENTED — specification only, for when fuzzy matching is added
+  type: normalized_similarity_score
+  candidate_library: rapidfuzz
+  candidate_algorithm: token_sort_ratio
+  reasoning: >
+    token_sort_ratio (order-independent token comparison) suits this
+    domain's actual noise pattern — AMC/scheme names vary mainly by word
+    order and casing ("Kotak Mutual Fund" vs "Mutual Fund Kotak" is not a
+    realistic case, but "SBI Mutual Fund" vs "SBI MF" and casing drift are),
+    not by character-level typos, so a token-based ratio outperforms a raw
+    edit-distance ratio for this data.
+  thresholds:
+    - band: auto_accept
+      range: [0.92, 1.0]
+      action: "Resolve automatically, same as today's exact-match path — no human review."
+    - band: needs_review
+      range: [0.80, 0.92]
+      action: >
+        Surface as a candidate match but do not auto-resolve — log for
+        manual confirmation (e.g. when a newly-onboarded AMC's amc_name
+        first appears in mf_scheme_master with no taxonomy.yaml entry yet).
+    - band: reject
+      range: [0.0, 0.80]
+      action: "Treat as no match — same behavior as today's binary model's no-match case."
+  entities_in_scope_for_fuzzy_matching:
+    - amc_name_to_entity_id
+    - scheme_name (base_fund_name grouping across plan/option variants — see domain/entity_model/canonical_naming_rules.yaml's parsing_status gap)
+  entities_explicitly_out_of_scope:
+    - scheme_code: "Exact primary-key match only — fuzzy-matching a scheme identifier would be a correctness bug, not a feature."
+    - nav_date: "Exact date match only."

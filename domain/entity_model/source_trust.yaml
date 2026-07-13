@@ -1,0 +1,83 @@
+# source_trust.yaml — which source system is authoritative for which data
+# domain, and how much that trust is actually enforced in code today vs.
+# just asserted here as a design intent.
+#
+# This is written honestly: this codebase does NOT do cross-source
+# validation between AMFI and mfapi.in NAV data today. Where "authoritative"
+# below isn't backed by an actual comparison/reconciliation, it's flagged.
+
+sources:
+  - source_id: amfi
+    label: "AMFI (Association of Mutual Funds in India)"
+    channel: "Daily bulk NAVAll.txt file + amfiindia.com research page PDFs"
+    authoritative_for:
+      - domain: regulatory_documents
+        note: "Primary regulator-adjacent body; monthly/quarterly AUM PDFs are the source of truth for amfi_fund_stats/amfi_amc_stats."
+      - domain: daily_nav_bulk
+        note: >
+          AMFI's NAVAll.txt is the official industry-wide NAV publication.
+          NOT currently cross-checked against mf_nav_history (mfapi-sourced)
+          — the two NAV datasets are ingested and stored independently, with
+          no reconciliation job. See nav_source_conflict gap below.
+    trust_tier: 1
+    verification: "Downloaded directly from amfiindia.com; not third-party mirrored."
+
+  - source_id: mfapi
+    label: "mfapi.in"
+    channel: "Public REST API (api.mfapi.in), third-party aggregator"
+    authoritative_for:
+      - domain: per_scheme_identity
+        note: >
+          The only source with a per-scheme REST API, so this is where
+          mf_ingestion actually gets scheme_code from. CORRECTED (was
+          previously documented as an unverified single-point-of-trust
+          dependency): mfapi.in's scheme_code is NOT independent numbering
+          — it IS AMFI's own "Scheme Code" column from NAVAll.txt, confirmed
+          by direct cross-check (see domain/resolution/entity_resolution_rules.yaml's
+          cross_source_scheme_identity rule). So scheme identity is
+          corroborated by AMFI's bulk file, even though mfapi.in's API is
+          the only way this codebase actually fetches it per-scheme.
+      - domain: per_scheme_nav_history
+        note: "mf_nav_history is entirely mfapi-sourced. See nav_source_conflict gap."
+    trust_tier: 2
+    verification: >
+      Third-party aggregator, not the primary regulator/AMC source. Treated
+      as authoritative here only because it's the sole available per-scheme
+      NAV API — not because it has been cross-validated against AMFI's own
+      NAVAll.txt.
+
+  - source_id: sebi
+    label: "SEBI (via individual AMC websites)"
+    channel: "Per-AMC website scraping (sebi_ingestion) — no SEBI bulk feed exists"
+    authoritative_for:
+      - domain: scheme_information_documents
+        note: >
+          SIDs are the legally authoritative compliance document per scheme,
+          but this pipeline sources them SECOND-HAND from each AMC's own
+          website, not from SEBI directly (SEBI publishes no bulk SID feed).
+          Only 3 of ~80+ AMCs have a working scrape source today
+          (sebi_ingestion/amc_sources.py) and 2 known-major AMCs (HDFC,
+          ICICI Prudential) return 403/404 to scraping.
+    trust_tier: 3
+    verification: >
+      No file_hash/content-identity check exists for sid_document (unlike
+      amfi_document) — idempotency is S3-key-existence only, so a
+      silently-changed SID at the same URL would not be detected as updated.
+
+known_gaps:
+  - gap_id: nav_source_conflict
+    description: >
+      AMFI's NAVAll.txt (bronze/amfi/nav/) and mfapi.in's per-scheme NAV
+      (mf_nav_history) are two independent measurements of the same
+      underlying fact (a scheme's NAV on a date) with no reconciliation.
+      If they disagree, there is no rule in this codebase for which wins —
+      answers/SQL exclusively read mf_nav_history, so mfapi is the de facto
+      (not de jure) source of truth for anything a user actually queries.
+    severity: "medium — silent, not surfaced to users or eval"
+
+  - gap_id: sid_document_no_metadata_table
+    description: >
+      Unlike amfi_document, sid_document has no document_metadata-equivalent
+      row — no processing_status, no file_hash, no publication_date. See
+      entity_types.yaml's sid_document note and lifecycle_statuses.yaml.
+    severity: "low — scaffold is explicitly documented as bronze-only"

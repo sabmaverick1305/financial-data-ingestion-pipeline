@@ -29,6 +29,7 @@ sys.path.insert(0, "src")
 import structlog  # noqa: E402
 from _worker_common import (  # noqa: E402
     SCHEMA_VERSION,
+    LineageContext,
     df_to_parquet_bytes,
     init,
     processed_prefix,
@@ -41,7 +42,7 @@ from financial_pipeline.storage.document_repo import Status  # noqa: E402
 log = structlog.get_logger()
 
 
-def process_one(doc: dict, s3, repo, extractor: TextExtractor) -> bool:
+def process_one(doc: dict, s3, repo, extractor: TextExtractor, lineage: LineageContext) -> bool:
     doc_id = str(doc["document_id"])
     filename = doc.get("file_name", doc_id)
     file_type = doc.get("file_type") or filename.rsplit(".", 1)[-1]
@@ -135,6 +136,14 @@ def process_one(doc: dict, s3, repo, extractor: TextExtractor) -> bool:
             next_status=next_status,
             elapsed_s=round((completed_at - started_at).total_seconds(), 1),
         )
+        lineage.record(
+            stage="bronze_to_silver",
+            source_type="s3",
+            source_ref=raw_key,
+            target_type="s3",
+            target_ref=f"{prefix}/text.json",
+            record_count=len(result.pages),
+        )
         return True
 
     except Exception as exc:
@@ -145,10 +154,19 @@ def process_one(doc: dict, s3, repo, extractor: TextExtractor) -> bool:
         )
         repo.log_stage(doc_id, "text_extraction", "failed", message=str(exc))
         logger.error("text_worker.failed", error=str(exc), new_status=new_status)
+        lineage.record(
+            stage="bronze_to_silver",
+            source_type="s3",
+            source_ref=raw_key,
+            target_type="s3",
+            target_ref=None,
+            status="failed",
+            error=str(exc),
+        )
         return False
 
 
-def run_batch(repo, s3, extractor: TextExtractor, limit: int | None) -> int:
+def run_batch(repo, s3, extractor: TextExtractor, lineage: LineageContext, limit: int | None) -> int:
     docs = repo.claim_documents(
         Status.TEXT_PENDING,
         claim_status=Status.TEXT_PROCESSING,
@@ -160,7 +178,7 @@ def run_batch(repo, s3, extractor: TextExtractor, limit: int | None) -> int:
     print(f"text-worker: processing {len(docs)} document(s)…")
     succeeded = failed = 0
     for doc in docs:
-        ok = process_one(doc, s3, repo, extractor)
+        ok = process_one(doc, s3, repo, extractor, lineage)
         succeeded += ok
         failed += not ok
         print(f"  {'✓' if ok else '✗'}  {doc.get('file_name')}")
@@ -171,21 +189,25 @@ def run_batch(repo, s3, extractor: TextExtractor, limit: int | None) -> int:
 def main(limit: int | None = None, loop: bool = False) -> None:
     repo, s3 = init("text-worker")
     extractor = TextExtractor()
+    lineage = LineageContext("document_text_extraction")
 
-    if loop:
-        print("text-worker: starting in --loop mode (self-drains until queue empty)")
-        total = 0
-        while True:
-            count = run_batch(repo, s3, extractor, limit)
-            total += count
+    try:
+        if loop:
+            print("text-worker: starting in --loop mode (self-drains until queue empty)")
+            total = 0
+            while True:
+                count = run_batch(repo, s3, extractor, lineage, limit)
+                total += count
+                if count == 0:
+                    print(f"text-worker: queue empty after {total} documents. exiting.")
+                    break
+                time.sleep(1)
+        else:
+            count = run_batch(repo, s3, extractor, lineage, limit)
             if count == 0:
-                print(f"text-worker: queue empty after {total} documents. exiting.")
-                break
-            time.sleep(1)
-    else:
-        count = run_batch(repo, s3, extractor, limit)
-        if count == 0:
-            print("No documents pending text extraction.")
+                print("No documents pending text extraction.")
+    finally:
+        lineage.close()
 
 
 if __name__ == "__main__":
