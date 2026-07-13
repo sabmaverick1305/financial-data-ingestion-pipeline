@@ -5,8 +5,8 @@ the query and each chunk (unlike the bi-encoder used in retrieval, which
 encodes them independently). Cross-encoders are slower but significantly
 more accurate at judging relevance.
 
-Model: cross-encoder/ms-marco-MiniLM-L-6-v2
-  - 22 MB, CPU-friendly
+Model: cross-encoder/ms-marco-MiniLM-L-12-v2
+  - 120 MB, CPU-friendly
   - Trained on MS MARCO passage retrieval
   - Outputs a relevance score per (query, passage) pair
 
@@ -20,7 +20,7 @@ import structlog
 
 log = structlog.get_logger()
 
-CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+CROSS_ENCODER_MODEL = "cross-encoder/ms-marco-MiniLM-L-12-v2"
 _ce_cache: dict = {}
 
 

@@ -14,7 +14,7 @@ canonical terms, and related-concept terms for the query.
 
 Why this is worth a second, independent scoring pass rather than folding
 into query expansion alone: ContextRanker's cross-encoder
-(ms-marco-MiniLM-L-6-v2) is a general MS MARCO QA model with no financial
+(ms-marco-MiniLM-L-12-v2) is a general MS MARCO QA model with no financial
 vocabulary — its own docstring notes financial table chunks routinely score
 below its relevance threshold. Query expansion helps retrieval *find* the
 right chunks; this bonus helps reranking *not discard* them once found,
@@ -30,9 +30,9 @@ import re
 from dataclasses import dataclass
 
 from financial_pipeline.semantic.semantic_engine import SemanticEngine, get_engine
+from financial_pipeline.services.ontology_resolver import CanonicalQuery, resolve
 
 from .ontology_expansion import ExpandedQuery, expand
-from .ontology_resolver import CanonicalQuery, resolve
 
 # Per-component weights. Kept modest relative to the cross-encoder's
 # documented -10..+10 range (ranker.py) so the bonus nudges/breaks ties and

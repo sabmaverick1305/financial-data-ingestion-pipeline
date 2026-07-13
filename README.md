@@ -1,6 +1,12 @@
-# AMFI Financial Document Pipeline
+# Financial Intelligence Evaluation Suite (FIES)
 
-End-to-end pipeline for ingesting, processing, indexing, and querying **447 AMFI India financial documents** (2009–2025) — monthly mutual fund repository reports, quarterly journals, and spreadsheets — into a production-grade RAG knowledge base.
+End-to-end pipeline for ingesting, resolving, and querying Indian mutual fund
+data across three independent sources — **AMFI India** (447 PDF/XLS research
+documents 2009–2025, plus the daily NAVAll.txt bulk file), **mfapi.in**
+(37,600+ per-scheme NAV/master records), and **SEBI** (per-AMC Scheme
+Information Documents) — through a single LangGraph-routed question-answering
+layer that picks between unstructured RAG retrieval and structured
+Text-to-SQL depending on the question.
 
 ![Architecture](docs/architecture-v2.png)
 
@@ -9,16 +15,31 @@ End-to-end pipeline for ingesting, processing, indexing, and querying **447 AMFI
 ## What it does
 
 ```
-AMFI India → Ingest → Extract → Chunk → Embed → pgvector
-                                                     ↓
-                                     Hybrid Retrieval (dense + sparse + rerank)
-                                                     ↓
-                                     Augmentation (pre-guardrails → LLM → post-guardrails)
-                                                     ↓
-                                             Grounded Answer + Citations
+                              ┌─ AMFI PDFs/XLS ─→ Extract → Chunk → Embed → pgvector
+                              │
+  Three source systems ──────┼─ AMFI NAVAll.txt ─→ parse → Entity Resolution ─┐
+                              │                                                │
+                              └─ mfapi.in ─────────→ mf_ingestion sync ────────┤
+                                                                                ▼
+                                                            financial_entity_master/
+                                                            _identifier/_relationship
+                                                                                │
+  User question ──→ LangGraph Query Router (graph/) ◄──────────────────────────┘
+        │
+        ├─ factual/regulatory/trend  → Hybrid Retrieval (dense + sparse + rerank) → Augmentation (guardrails → LLM → guardrails)
+        ├─ tabular/aggregate         → Text-to-SQL (Vanna + Claude) → policy-checked SQL → Postgres
+        └─ causal ("why did X...")   → Reasoning Engine (domain/semantic/reasoning_rules.yaml)
+                                                                                │
+                                                                                ▼
+                                                              Grounded Answer + Citations/SQL
 ```
 
-**Result:** Ask natural-language questions about Indian mutual fund data — AUM trends, SEBI regulatory changes, scheme counts, fund lists — and receive grounded answers citing specific AMFI documents with numbered references.
+**Result:** Ask natural-language questions spanning both worlds — "What SEBI
+guidelines affected derivatives trading?" (RAG), "Total AUM of Large Cap
+funds in Dec 2024" (Text-to-SQL), or "Why did AUM increase while net inflow
+decreased for Large Cap funds between 2020 and 2024?" (reasoning engine) —
+and get a grounded answer, correctly routed to the right subsystem, with
+citations or the executed SQL shown.
 
 ---
 
@@ -33,8 +54,10 @@ AMFI India → Ingest → Extract → Chunk → Embed → pgvector
 | **Monitoring** | Amazon CloudWatch |
 | **Scheduling** | Amazon EventBridge |
 | **Embedding model** | `all-MiniLM-L6-v2` (sentence-transformers, 384 dims, CPU) |
-| **Re-ranking** | `cross-encoder/ms-marco-MiniLM-L-6-v2` |
+| **Re-ranking** | `cross-encoder/ms-marco-MiniLM-L-12-v2` |
 | **LLM** | Anthropic Claude (auto-detected from `sk-ant-` key) or OpenAI |
+| **Query routing** | LangGraph `StateGraph` (`graph/`) |
+| **Text-to-SQL** | Vanna.ai + Claude Haiku, ChromaDB-persisted training store |
 | **PDF extraction** | Docling (CPU-only, table structure), PyMuPDF |
 | **Spreadsheets** | pandas + openpyxl + xlrd (magic-byte format detection) |
 | **API** | FastAPI + uvicorn |
@@ -120,6 +143,101 @@ Retrieved chunks
 
 ---
 
+## Structured Data: mfapi.in + AMFI Stats
+
+A second, independent data path alongside the PDF/RAG pipeline: per-scheme
+mutual fund data (NAV history, scheme master, computed performance) from
+mfapi.in, plus AMFI's own aggregate monthly stats tables.
+
+```
+mfapi.in scheme-master (S3) → mf_ingestion/sync.py → mf_scheme_master
+                                       │                mf_nav_history
+                                       │                mf_scheme_sync_status
+                                       ▼
+                          mf_performance/calculator.py → mf_scheme_performance
+                             (returns, CAGR, volatility, 52w high/low —
+                              pure computation, recomputed wholesale per run)
+```
+
+- **`mf_ingestion/sync.py`** — `run_sync()`: reads the latest scheme-master snapshot from S3, fetches each scheme's NAV history from `api.mfapi.in` (thread-pooled, retried on rate-limit/network errors), upserts into Postgres. Scheduled daily via EventBridge → ECS Fargate (`infra/cloudformation/mf-nav-sync.yaml`) — incremental lookback window, idempotent upserts.
+- **`mf_performance/`** — derived, not sourced: `calculator.py` computes returns/CAGR/volatility from NAV history; `run.py` recomputes `mf_scheme_performance` wholesale after each sync.
+- **`amfi_fund_stats`** (2020–2026) / **`amfi_amc_stats`** (2009–2019) — AMFI's own aggregate monthly report tables (category-level AUM/mobilization/redemption), strictly non-overlapping in real data. Populated via `scripts/populate_amfi_stats.py` / `scripts/backfill_amfi_*_stats_from_s3.py`.
+
+---
+
+## Text-to-SQL (`text_to_sql/`)
+
+Structured questions ("Total AUM of Large Cap Fund in Dec 2024") route to a
+[Vanna.ai](https://vanna.ai)-based SQL agent instead of RAG retrieval.
+
+```
+Question → Vanna (Claude Haiku + ChromaDB training store: DDL/docs/examples)
+              → generated SQL
+              → policy layer (SELECT-only · table allowlist · auto LIMIT · date-filter warning)
+              → deterministic period_year/table-mismatch check + one corrective retry
+              → Postgres execution (30s timeout) → markdown answer
+```
+
+- **`vanna_agent.py`** — `build_vanna_agent()` / `ask()`. Every generated query is policy-checked (`_validate_and_prepare`) before execution, including Vanna's own internal "intermediate SQL" disambiguation queries. A response that isn't even an attempted SQL statement (the LLM explaining why a query is out of range) is treated as "no results," not a blocked policy violation.
+- **`scripts/train_vanna.py --reset`** — rebuilds the persisted ChromaDB training store (DDL + docs + question→SQL examples). Training examples are a stronger signal than doc prose alone for steering SQL generation — run after any schema or vocabulary change.
+- Config note: Vanna's `Anthropic_Chat` and `VannaBase` share one `max_tokens` attribute for two different purposes (LLM response length *and* DDL/doc context budget) — `build_vanna_agent()` sets it explicitly to `14000` so the full schema/doc/example context is never silently truncated.
+
+---
+
+## Entity Resolution (`domain/` + `services/`)
+
+The three source systems (AMFI, mfapi.in, SEBI) each name the same
+real-world things — an AMC, a scheme, a category — differently. A
+declarative rule layer plus a resolution pipeline unifies them into one
+identity graph.
+
+```
+domain/semantic/          taxonomy.yaml (canonical AMC/category ids), thesaurus.yaml (synonyms),
+domain/entity_model/      entity_types.yaml, relationship_types.yaml, canonical_naming_rules.yaml
+domain/resolution/        entity_resolution_rules.yaml, matching_thresholds.yaml
+        │  (declarative rules — grounded in real code, not aspirational)
+        ▼
+services/  canonical_name_normalizer.py   scheme_name → base_fund_name/plan/option; normalize_name()
+           entity_resolver.py             resolve_amc_name() / resolve_category() — pattern + synonym matching
+           amfi_category_source.py        scheme_code → AMFI's own NAVAll.txt category (highest-priority signal)
+           entity_store.py                lookup_entity / get_or_create_entity / add_identifier / add_relationship
+           entity_ingestion.py            ingest_scheme_plan() — wires all of the above into one call
+        │
+        ▼
+financial_entity_master (organization/category/scheme/scheme_plan)
+financial_entity_identifier (scheme_code, amc_entity_id, category_taxonomy_id — per source_system)
+financial_entity_relationship (has_plan, manages, belongs_to)
+```
+
+`entity_ingestion.ingest_scheme_plan()` is called for every scheme on every
+`mf_ingestion/sync.py` run — new schemes get a canonical entity, identifier
+mapping, and relationships automatically, using AMFI's own category
+(`amfi_category_source.load_amfi_category_map()`, cached per-process) as the
+highest-confidence signal ahead of mfapi's own `category` field, which is
+unreliable for a majority of rows.
+
+---
+
+## Evaluation Suite (`eval/`)
+
+```bash
+python eval/run_eval.py --phase all   # or: intent | sql | retrieval | answer | guardrail
+```
+
+Five phases against a fixed ground-truth corpus (`eval/corpus/`):
+
+| Phase | Measures |
+|---|---|
+| **intent** | routing/intent-type/metric/scheme-type/year-extraction accuracy |
+| **sql** | parse rate, policy-pass rate, table/column accuracy, row-count accuracy |
+| **retrieval** | hit@8, precision@8, recall@8, MRR, keyword coverage |
+| **answer** | fact coverage, citation presence, hallucination rate, safety compliance |
+| **guardrail** | false positive/negative rate, block-rate by error type, layer accuracy |
+
+`fies/` holds the eval corpus generation machinery (`generator/query_generator.py` compiles questions from `domain/semantic/`'s ontology; `ontology/` defines query capability templates and expected-execution labels).
+
+---
+
 ## Quickstart
 
 ### Prerequisites
@@ -197,7 +315,8 @@ Swagger UI: **http://localhost:8080/docs**
 | `GET` | `/healthz` | Liveness probe |
 | `GET` | `/readyz` | Readiness probe (DB ping) |
 | `POST` | `/api/search` | Hybrid semantic + keyword search |
-| `POST` | `/api/ask` | RAG Q&A with citations + dual guardrails |
+| `POST` | `/api/ask` | Q&A — LangGraph-routed to RAG or Text-to-SQL, with citations + guardrails |
+| `POST` | `/api/feedback` | Record user feedback on a prior `/api/ask` response |
 | `GET` | `/api/documents` | List/filter ingested documents |
 | `GET` | `/api/stats` | Pipeline health and queue depths |
 
@@ -309,10 +428,13 @@ Required GitHub Secrets:
 
 ```
 ├── scripts/
-│   ├── fetch_amfi_research_files.py   # ingestion
+│   ├── fetch_amfi_research_files.py   # AMFI PDF/XLS ingestion
+│   ├── fetch_amfi_nav.py              # AMFI NAVAll.txt fetch → S3 (bronze raw + silver CSV)
 │   ├── process_*_worker.py            # pipeline workers (text/table/ocr/chunk/embed)
 │   ├── run_parallel_orchestrator.py   # ECS task orchestration
 │   ├── reset_stale_claims.py          # ops: claim TTL recovery
+│   ├── train_vanna.py                 # rebuild Vanna's ChromaDB training store
+│   ├── populate_amfi_stats.py         # amfi_fund_stats / amfi_amc_stats population
 │   ├── search.py                      # CLI search interface
 │   └── serve.py                       # API server launcher
 │
@@ -329,13 +451,29 @@ Required GitHub Secrets:
 │   │   ├── pipeline.py                # AugmentationPipeline (7 stages)
 │   │   ├── prompts.py                 # intent-aware prompt templates
 │   │   └── evaluation.py             # QA dataset + metrics
+│   ├── graph/                          # LangGraph query router (RAG vs SQL vs reasoning)
+│   ├── reasoning/                      # causal "why" queries over domain/semantic/reasoning_rules.yaml
+│   ├── text_to_sql/                    # Vanna + Claude SQL agent, policy layer
+│   ├── mf_ingestion/                   # mfapi.in scheme/NAV sync
+│   ├── mf_performance/                 # derived returns/CAGR/volatility
+│   ├── sebi_ingestion/                 # SEBI SID scrape (scaffold-level)
+│   ├── semantic/                       # SemanticEngine — façade over domain/ YAML
+│   ├── services/                       # entity resolution: normalize/resolve/store/ingest
 │   ├── storage/
 │   │   └── document_repo.py           # pgvector search + claim TTL
 │   └── api/
 │       └── main.py                    # FastAPI app
 │
+├── domain/                             # declarative rules: semantic/, entity_model/, resolution/
+├── eval/                               # 5-phase eval suite (intent/sql/retrieval/answer/guardrail)
+├── fies/                               # eval corpus generator + query ontology
+│
 ├── infra/
-│   └── sql/schema.sql                 # pgvector + HNSW indexes
+│   ├── sql/schema.sql                  # pgvector + HNSW indexes
+│   └── cloudformation/                 # EventBridge Scheduler → ECS Fargate task defs
+│       ├── amfi-pipeline.yaml          # PDF processing workers
+│       ├── mf-nav-sync.yaml            # daily mfapi.in incremental sync (deployed, scheduled)
+│       └── amfi-nav-fetch.yaml         # daily AMFI NAVAll.txt fetch (template ready, not yet deployed)
 │
 └── .github/workflows/
     ├── ci.yml
@@ -356,6 +494,10 @@ Required GitHub Secrets:
 **Dual guardrails** — Pre-generation guardrails block investment advice queries *before* the LLM is called (zero tokens spent). Post-generation guardrails catch hallucinated numbers and unsafe financial language in the output.
 
 **Schema versioning** — All S3 artifacts written to `processed/v1/amfi/...`. Consumers can distinguish schemas; `schema_version` column in RDS tracks which version each document used.
+
+**Idempotent entity resolution, not batch-only** — `services/entity_store.py`'s `get_or_create_entity`/`add_identifier`/`add_relationship` are all `ON CONFLICT DO NOTHING` against real unique constraints, so `entity_ingestion.ingest_scheme_plan()` is safe to call once per scheme on every sync run (one psycopg2 connection per worker thread, not per scheme — see `mf_ingestion/sync.py`), not just as a one-off bulk backfill.
+
+**Real evaluation data, not fixtures** — `eval/`'s ground truth is checked against a live Postgres instance (`eval/corpus/expected_results.json`'s `row_count`/`row_count_min`/`row_count_max`), so metric regressions get root-caused against real data boundaries (e.g. `amfi_fund_stats` covers 2020–2026 only, `amfi_amc_stats` 2009–2019 only, zero overlap) rather than assumed to be LLM sampling noise.
 
 ---
 

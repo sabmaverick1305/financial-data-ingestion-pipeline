@@ -29,7 +29,7 @@ except ImportError as exc:  # pragma: no cover - exercised when optional deps ar
 
 log = structlog.get_logger()
 
-# Canonical metric ids (semantic/vocabulary.yaml) that identify a query as
+# Canonical metric ids (domain/semantic/vocabulary.yaml) that identify a query as
 # being about a SPECIFIC scheme's NAV/returns rather than AMFI's aggregate
 # fund_category/AMC statistics. Checked first in is_range_query — a fund-
 # performance query might otherwise also match needs_analytical/tabular and

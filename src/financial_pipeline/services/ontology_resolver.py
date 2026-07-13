@@ -3,7 +3,7 @@
     User Query -> Ontology Resolver -> Canonical Query -> Intent -> Planner
 
 Resolves canonical metric/scheme_type/AMC ids and query-interpretation-rule
-hints from a raw query, using the semantic/ knowledge stack (via
+hints from a raw query, using the domain/semantic/ knowledge stack (via
 semantic_engine.SemanticEngine) as the single source of truth for synonym
 data — the same stack fies/generator/query_generator.py compiles into the
 eval corpus. Previously that synonym data was duplicated by hand across

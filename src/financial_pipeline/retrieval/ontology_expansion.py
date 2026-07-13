@@ -12,7 +12,7 @@
       v
     RRF + rerank
 
-Expansion terms come from the semantic/ stack, via SemanticEngine:
+Expansion terms come from the domain/semantic/ stack, via SemanticEngine:
   - thesaurus.yaml's full metric/scheme_type synonym lists -> synonym terms
   - financial_relationships.yaml (formulas/influenced_by/related_to/indicates)
     -> related-concept terms, e.g. "net inflow" pulls in "funds mobilized" +
@@ -35,8 +35,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from financial_pipeline.semantic.semantic_engine import SemanticEngine, get_engine
-
-from .ontology_resolver import CanonicalQuery, resolve
+from financial_pipeline.services.ontology_resolver import CanonicalQuery, resolve
 
 
 @dataclass

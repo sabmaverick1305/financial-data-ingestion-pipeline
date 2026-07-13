@@ -24,7 +24,7 @@ from typing import Callable
 
 import structlog
 
-from .ontology_resolver import CanonicalQuery, resolve as resolve_ontology
+from financial_pipeline.services.ontology_resolver import CanonicalQuery, resolve as resolve_ontology
 
 log = structlog.get_logger()
 
@@ -1143,7 +1143,7 @@ class QueryAnalyzer:
 
     def _detect_causal_reasoning(self, q: str, intent: QueryIntent) -> None:
         """"Why did X change" queries need the reasoning engine (real
-        computed metric directions matched against semantic/reasoning_rules.yaml),
+        computed metric directions matched against domain/semantic/reasoning_rules.yaml),
         not RAG or SQL alone — AMFI source documents contain no explanatory
         prose (nothing ever states market appreciation caused an AUM move),
         and a raw SQL query can't produce a causal "because" statement by

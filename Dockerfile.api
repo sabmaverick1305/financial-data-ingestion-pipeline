@@ -30,8 +30,8 @@ FROM python:3.13-slim-bookworm AS builder
 
 # gcc + libpq-dev: only needed at compile time for any C-extension wheels
 RUN apt-get update \
- && apt-get install -y --no-install-recommends gcc libpq-dev \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 COPY requirements-api.txt .
@@ -43,26 +43,26 @@ COPY src/ src/
 # --extra-index-url on the second pass ensures the CPU index is consulted for
 # any torch upgrade sentence-transformers might try to trigger.
 RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir --prefix=/install \
-        torch --index-url https://download.pytorch.org/whl/cpu
+    && pip install --no-cache-dir --prefix=/install \
+    torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install all API-server deps; pass the CPU torch index so pip doesn't
 # accidentally pull a CUDA torch as a transitive dep of sentence-transformers.
 RUN pip install --no-cache-dir --prefix=/install \
-        --extra-index-url https://download.pytorch.org/whl/cpu \
-        -r requirements-api.txt
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    -r requirements-api.txt
 
 # Strip top-level CUDA packages (nvidia-*, triton, cuda-python) that sneak in
 # as transitive deps — useless on CPU and cost ~3.5 GB.
 # IMPORTANT: use -path "*/site-packages/<name>" NOT -name "<name>" — the latter
 # would also match torch/cuda/ which torch needs even in CPU mode.
 RUN find /install -maxdepth 6 -type d \( \
-        -path "*/site-packages/nvidia" \
-        -o -path "*/site-packages/triton" \
-        -o -path "*/site-packages/cuda" \
+    -path "*/site-packages/nvidia" \
+    -o -path "*/site-packages/triton" \
+    -o -path "*/site-packages/cuda" \
     \) -exec rm -rf {} + 2>/dev/null; \
     find /install -maxdepth 6 -name "*.dist-info" \( \
-        -path "*/nvidia_*" -o -path "*/triton-*" \
+    -path "*/nvidia_*" -o -path "*/triton-*" \
     \) -exec rm -rf {} + 2>/dev/null; \
     true
 
@@ -83,12 +83,12 @@ ENV SENTENCE_TRANSFORMERS_HOME=/models \
 
 # Download and cache both models used at startup:
 #   all-MiniLM-L6-v2            — 90 MB  — dense retrieval encoder
-#   ms-marco-MiniLM-L-6-v2      — 67 MB  — cross-encoder reranker
+#   ms-marco-MiniLM-L-12-v2     — 120 MB — cross-encoder reranker
 RUN python -c "\
-from sentence_transformers import SentenceTransformer, CrossEncoder; \
-SentenceTransformer('all-MiniLM-L6-v2'); \
-CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
-print('models cached')"
+    from sentence_transformers import SentenceTransformer, CrossEncoder; \
+    SentenceTransformer('all-MiniLM-L6-v2'); \
+    CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2'); \
+    print('models cached')"
 
 
 # ── Stage 3: runtime image ────────────────────────────────────────────────────
@@ -96,8 +96,8 @@ FROM python:3.13-slim-bookworm AS runtime
 
 # libpq5: runtime-only dep for psycopg2-binary (libpq-dev not needed at runtime)
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libpq5 \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
 # All installed packages from builder
 COPY --from=builder /install /usr/local
@@ -114,21 +114,30 @@ COPY --from=model-downloader /models /models
 
 # Non-root user — required for ECS/EC2 security groups and ECR scanning
 RUN groupadd -r appgroup \
- && useradd -r -u 1001 -g appgroup -m -d /home/appuser appuser
+    && useradd -r -u 1001 -g appgroup -m -d /home/appuser appuser
 
 WORKDIR /app
+
+# domain/ (semantic ontology + entity-model + resolution YAML) — this stage's
+# pip install is non-editable (see builder stage), so the installed
+# financial_pipeline package lands under site-packages/, not a source
+# checkout, and semantic_engine.py's default __file__-relative path guess
+# can't find domain/ from there. FIES_DOMAIN_DIR overrides it explicitly.
+COPY --chown=appuser:appgroup domain ./domain
+ENV FIES_DOMAIN_DIR=/app/domain
+
 USER appuser
 
 EXPOSE 8080
 
 # /healthz is instant; start-period covers sentence-transformers model loading
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz').read()"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz').read()"
 
 # --workers 1: each worker loads both ML models (~350 MB); t3.micro has 1 GB RAM.
 # Scale horizontally (more tasks) rather than vertically (more workers per task).
 CMD ["uvicorn", "financial_pipeline.api.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8080", \
-     "--workers", "1", \
-     "--log-level", "warning"]
+    "--host", "0.0.0.0", \
+    "--port", "8080", \
+    "--workers", "1", \
+    "--log-level", "warning"]

@@ -1,25 +1,25 @@
-"""FIES Query Generator — compiles fies/ontology/*.yaml + semantic/*.yaml into
+"""FIES Query Generator — compiles fies/ontology/*.yaml + domain/semantic/*.yaml into
 a versioned query corpus.
 
 Responsibility split:
   fies/ontology/templates.yaml          -> How to ask questions (patterns, variants, placeholders).
   fies/ontology/capabilities.yaml       -> What cognitive capability a template exercises.
   fies/ontology/execution_labels.yaml   -> What route/execution_plan a query should resolve to.
-  semantic/vocabulary.yaml, taxonomy.yaml
+  domain/semantic/vocabulary.yaml, taxonomy.yaml
     -> What concepts exist (canonical metric/scheme_type/AMC ids), via SemanticEngine.
-  semantic/financial_ontology.yaml
+  domain/semantic/financial_ontology.yaml
     -> What those concepts mean (definitions, canonical names) and which
        metric/template-family combinations are meaningful
        (disallowed_template_families), via SemanticEngine.
   query_generator.py (this file) -> Combines all of the above into a VALID benchmark
-                               corpus: expands templates, and uses semantic/financial_ontology.yaml
+                               corpus: expands templates, and uses domain/semantic/financial_ontology.yaml
                                to reject metric/template combinations that are syntactically
                                fine but semantically nonsensical (e.g. "total AUM from 2020
                                to 2024" — AUM is a stock/snapshot metric, summing it over a
                                range is not a meaningful operation).
 
 entities.yaml, metrics.yaml, and the old financial_ontology.yaml previously lived in
-fies/ontology/ — that content has been migrated into semantic/ (the single source of
+fies/ontology/ — that content has been migrated into domain/semantic/ (the single source of
 truth for domain semantics, shared with the live retrieval/reranking/reasoning code).
 fies/ontology/ now only holds benchmark-generation concerns: capabilities, templates,
 execution labels.
@@ -70,7 +70,7 @@ from financial_pipeline.semantic.semantic_engine import (  # noqa: E402
 
 # fies/ontology/ files consumed to build the template pools and validate
 # cross-references. entities.yaml/metrics.yaml/financial_ontology.yaml used
-# to live here too — that domain-semantics content is now in semantic/,
+# to live here too — that domain-semantics content is now in domain/semantic/,
 # sourced via SemanticEngine (see build_lookup_tables).
 SOURCE_FILES = [
     "capabilities.yaml",
@@ -153,7 +153,7 @@ def build_lookup_tables(docs: dict) -> dict:
     routes_by_id = {r["route_id"]: r for r in docs["execution_labels.yaml"]["routes"]}
 
     # Domain semantics (concept ids, canonical names, template-family
-    # constraints) now live in semantic/, not fies/ontology/ — sourced
+    # constraints) now live in domain/semantic/, not fies/ontology/ — sourced
     # through SemanticEngine so this generator and the live retrieval code
     # share one vocabulary. entities_by_group/metrics_by_id are rebuilt in
     # the shape the rest of this file already expects, so _build_pools/
@@ -212,12 +212,12 @@ def validate_cross_references(docs: dict, lookups: dict) -> list[str]:
 
     for entity_id in tv.get("scheme_type", []):
         if not any(e["entity_id"] == entity_id for e in lookups["entities_by_group"].get("scheme_type", [])):
-            problems.append(f"template_variables.scheme_type: {entity_id!r} not defined in semantic/taxonomy.yaml")
+            problems.append(f"template_variables.scheme_type: {entity_id!r} not defined in domain/semantic/taxonomy.yaml")
 
     for pool_name in ("metric", "metric_snapshot"):
         for metric_id in tv.get(pool_name, []):
             if metric_id not in lookups["metrics_by_id"]:
-                problems.append(f"template_variables.{pool_name}: {metric_id!r} not defined in semantic/vocabulary.yaml")
+                problems.append(f"template_variables.{pool_name}: {metric_id!r} not defined in domain/semantic/vocabulary.yaml")
 
     return problems
 
@@ -578,7 +578,7 @@ def generate_corpus(
         "skipped_templates": skipped_templates,
         "source_files": {
             **{f"fies/ontology/{name}": _file_hash(ontology_dir, name) for name in SOURCE_FILES},
-            **{f"semantic/{name}": _file_hash(SEMANTIC_DIR, name) for name in SEMANTIC_LAYER_FILES},
+            **{f"domain/semantic/{name}": _file_hash(SEMANTIC_DIR, name) for name in SEMANTIC_LAYER_FILES},
         },
         "ontology_metric_filtering": metric_filtering,
         "not_generated": [
@@ -616,7 +616,7 @@ def main() -> None:
     if manifest["skipped_templates"]:
         print(f"[query_generator] Skipped (status: unimplemented): {', '.join(manifest['skipped_templates'])}")
     if manifest["ontology_metric_filtering"]:
-        print("[query_generator] semantic/financial_ontology.yaml excluded these metric/template combinations:")
+        print("[query_generator] domain/semantic/financial_ontology.yaml excluded these metric/template combinations:")
         for key, excluded in manifest["ontology_metric_filtering"].items():
             print(f"  {key:<35} excluded: {', '.join(excluded)}")
 

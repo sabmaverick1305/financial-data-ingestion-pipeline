@@ -9,7 +9,7 @@ plain GET, most likely bot detection or content that's only reachable via a
 JS-rendered client-side fetch, neither of which PageScraper's static-HTML/
 Next.js-RSC extraction can currently reach.
 
-amc_entity_id matches semantic/taxonomy.yaml's amcs: entity_id, so a synced
+amc_entity_id matches domain/semantic/taxonomy.yaml's amcs: entity_id, so a synced
 SID's AMC can be cross-referenced against the same ontology used elsewhere
 (mf_scheme_master.amc_name, the AMFI PDF pipeline's AMC recognition).
 """
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class AMCSidSource:
-    amc_entity_id: str  # matches semantic/taxonomy.yaml's amcs: entity_id
+    amc_entity_id: str  # matches domain/semantic/taxonomy.yaml's amcs: entity_id
     amc_name: str
     page_url: str
     note: str = ""

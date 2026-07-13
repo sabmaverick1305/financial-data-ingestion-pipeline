@@ -73,7 +73,7 @@ def build_graph(
     reasoning:
         ReasoningNodeFactory answering causal "why did X change" queries by
         matching real computed metric directions against
-        semantic/reasoning_rules.yaml. If None, a default instance is
+        domain/semantic/reasoning_rules.yaml. If None, a default instance is
         created using factory's repo (same DB, no extra dependency to wire).
     checkpointer:
         A LangGraph BaseCheckpointSaver (e.g. storage/checkpointer.py's

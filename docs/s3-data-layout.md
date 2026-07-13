@@ -55,7 +55,7 @@ bronze/
       — Scheme Information Document PDFs, scraped per-AMC (SEBI has no
         single bulk SID feed). Written by
         src/financial_pipeline/sebi_ingestion/sync.py (`pipeline
-        sebi-sid-sync`). amc_entity_id matches semantic/taxonomy.yaml's
+        sebi-sid-sync`). amc_entity_id matches domain/semantic/taxonomy.yaml's
         amcs: entity_id. See sebi_ingestion/amc_sources.py for the current
         AMC registry (3 confirmed-working sources as of this writing —
         extend as more AMCs are added).

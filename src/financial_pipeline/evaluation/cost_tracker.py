@@ -28,7 +28,7 @@ PRICING: dict[str, dict[str, float]] = {
     "gpt-4.1":                     {"input": 0.002,   "output": 0.008},
     # Embedding (per 1K tokens, output = 0)
     "all-MiniLM-L6-v2":            {"input": 0.0,     "output": 0.0},   # self-hosted, free
-    "cross-encoder/ms-marco-MiniLM-L-6-v2": {"input": 0.0, "output": 0.0},
+    "cross-encoder/ms-marco-MiniLM-L-12-v2": {"input": 0.0, "output": 0.0},
 }
 
 

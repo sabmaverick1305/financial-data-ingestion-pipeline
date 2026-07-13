@@ -33,7 +33,7 @@ from financial_pipeline.text_to_sql.vanna_agent import build_vanna_agent
 
 def _mf_scheme_category_doc() -> str:
     """Build the mf_scheme_master.category reference doc from
-    semantic/taxonomy.yaml's mf_scheme_categories at train-time, so it
+    domain/semantic/taxonomy.yaml's mf_scheme_categories at train-time, so it
     can't drift out of sync with the ontology like a hand-copied list would.
     """
     eng = get_engine()
@@ -62,7 +62,11 @@ _DOCS = [
     (
         "amfi_fund_stats table",
         "The amfi_fund_stats table stores one row per (period_year, period_month, fund_category). "
-        "It is populated from AMFI monthly reports (2009–2026). "
+        "CRITICAL, verified against live data: it ONLY has rows for period_year 2020 through 2026 — "
+        "NOT 2009 onwards. There is zero row overlap with amfi_amc_stats (2009-2019). "
+        "If a question's year(s) are ALL before 2020, this is the WRONG table — use amfi_amc_stats "
+        "instead (see its own doc entry). If the question's years span both eras (e.g. 2015 to 2022), "
+        "you need a UNION of both tables — see 'amfi_amc_stats table (pre-2020 legacy)' below. "
         "period_year is an integer (e.g. 2024). period_month is 1–12. "
         "fund_category is the full AMFI name (e.g. 'Large Cap Fund', 'Mid Cap Fund', 'ELSS'). "
         "All money columns (funds_mobilized, redemption, net_inflow, aum, avg_aum) are in crore INR (₹). "
@@ -99,7 +103,13 @@ _DOCS = [
     ),
     (
         "amfi_amc_stats table (pre-2020 legacy)",
-        "The amfi_amc_stats table stores pre-2020 AMFI monthly report data (2009–2019). "
+        "The amfi_amc_stats table stores pre-2020 AMFI monthly report data. "
+        "CRITICAL, verified against live data: it ONLY has rows for period_year 2009 through 2019 — "
+        "NOT beyond. There is zero row overlap with amfi_fund_stats (2020-2026). "
+        "If a question's year(s) are ALL 2020 or later, this is the WRONG table — use amfi_fund_stats "
+        "instead. A query against amfi_amc_stats with period_year >= 2020 (or amfi_fund_stats with "
+        "period_year < 2020) will silently return zero rows, not an error — always check the year(s) "
+        "in the question against this boundary before picking a table. "
         "It has one row per (period_year, period_month, scheme_type). "
         "scheme_type values: 'Income', 'Infrastructure Debt Fund', 'Equity', 'Balanced', "
         "'Liquid/Money Market', 'Gilt', 'ELSS - Equity', 'Gold ETF', 'Other ETFs', "
@@ -345,6 +355,20 @@ _EXAMPLES = [
         "WHERE period_year BETWEEN 2019 AND 2024 "
         "GROUP BY period_year ORDER BY period_year;",
     ),
+    (
+        # Deliberately mirrors "What was the total industry AUM in December
+        # 2015?" below, same "total industry AUM" phrasing, so the year
+        # range is the only discriminating signal between the two tables —
+        # without this pair, few-shot retrieval anchors on the phrase alone
+        # and pulls amfi_amc_stats even when every filtered year is 2020+
+        # (verified: this exact collision made "Total industry AUM by year
+        # from 2020 to 2026" pick amfi_amc_stats deterministically, on every
+        # retry, even with an explicit correction hint appended).
+        "Total industry AUM by year from 2020 to 2026",
+        "SELECT period_year, SUM(aum) AS total_industry_aum FROM amfi_fund_stats "
+        "WHERE period_year BETWEEN 2020 AND 2026 "
+        "GROUP BY period_year ORDER BY period_year;",
+    ),
     # ── Vocabulary demonstration examples ──────────────────────────────────────
     (
         "How much amount was invested in Large Cap Fund in 2023?",
@@ -396,6 +420,12 @@ _EXAMPLES = [
         "What is the corpus (AUM) of index funds in December 2024?",
         "SELECT aum AS corpus_crore FROM amfi_fund_stats "
         "WHERE fund_category = 'Index Funds' AND period_year = 2024 AND period_month = 12;",
+    ),
+    (
+        "Show net inflow and redemption for Gold ETF in each month of 2023",
+        "SELECT period_month, net_inflow, redemption FROM amfi_fund_stats "
+        "WHERE fund_category = 'GOLD ETF' AND period_year = 2023 "
+        "ORDER BY period_month;",
     ),
     (
         "How much money came in versus went out for all equity funds in 2024?",

@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AMFI NAVAll.txt daily fetch (scripts/fetch_amfi_nav.py).
+  Flow: EventBridge Scheduler → ECS Fargate task (amfi-nav-fetch-worker) →
+  fetches portal.amfiindia.com's NAVAll.txt, uploads raw text to
+  bronze/amfi/nav/{date}/ and a parsed CSV to silver/amfi/nav_csv/{date}/.
+  This is the data source services/amfi_category_source.py's
+  load_amfi_category_map() reads (the latest bronze/amfi/nav/ snapshot) to
+  give mf_ingestion/sync.py's entity resolution AMFI's own authoritative
+  scheme category, instead of relying only on mfapi.in's own unreliable
+  category field — see domain/resolution/entity_resolution_rules.yaml's
+  category_resolution_with_scheme_name_fallback rule.
+  Scheduled to run before mf-nav-sync.yaml's daily incremental sync (see
+  ScheduleExpression below) so that job's entity resolution reads a same-day
+  snapshot, not a stale one — before this template existed, fetch_amfi_nav.py
+  was a manual-only script and the AMFI category signal was never refreshed.
+  Reuses the existing amfi-doc-processor image, ECS cluster, and IAM roles —
+  same pattern as mf-nav-sync.yaml.
+
+Parameters:
+
+  EcsClusterName:
+    Type: String
+    Default: weather-agent-cluster
+    Description: Existing ECS cluster (shared with the AMFI PDF pipeline and mf-nav-sync workers).
+
+  EcrImage:
+    Type: String
+    Description: Full ECR image URI (repo:tag) to run — must contain scripts/fetch_amfi_nav.py.
+
+  TaskRoleArn:
+    Type: String
+    Default: arn:aws:iam::468895762981:role/amfi-doc-processor-task-role
+    Description: Existing task role — already grants s3:GetObject/PutObject/ListBucket on mf-finance-kb.
+
+  ExecutionRoleArn:
+    Type: String
+    Default: arn:aws:iam::468895762981:role/amfi-ecs-execution-role
+    Description: Existing ECS task execution role (ECR pull + CloudWatch Logs).
+
+  Subnet:
+    Type: String
+    Default: subnet-089bc3cd1c8760332
+
+  SecurityGroup:
+    Type: String
+    Default: sg-0eecd839abfcf4daa
+
+  S3Bucket:
+    Type: String
+    Default: mf-finance-kb
+
+  ScheduleExpression:
+    Type: String
+    Default: "cron(30 3 * * ? *)"
+    Description: >
+      Daily fetch. Default = 09:00 IST (03:30 UTC) — 30 minutes ahead of
+      mf-nav-sync.yaml's 09:30 IST daily incremental sync, so that job's
+      per-scheme entity resolution reads a fresh same-day NAVAll.txt
+      snapshot rather than yesterday's.
+
+# ---------------------------------------------------------------------------
+Resources:
+
+  AmfiNavFetchTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: amfi-nav-fetch-worker
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      Cpu: "256"
+      Memory: "512"
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      TaskRoleArn: !Ref TaskRoleArn
+      ExecutionRoleArn: !Ref ExecutionRoleArn
+      ContainerDefinitions:
+        - Name: amfi-nav-fetch
+          Image: !Ref EcrImage
+          Essential: true
+          # Dockerfile's ENTRYPOINT is ["python"] — do not repeat "python"
+          # here (see mf-nav-sync.yaml's same note).
+          Command:
+            - scripts/fetch_amfi_nav.py
+          Environment:
+            - Name: S3_BUCKET
+              Value: !Ref S3Bucket
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/amfi-doc-processor
+              awslogs-create-group: "true"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: amfi-nav-fetch-worker
+
+  SchedulerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-scheduler-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+      Policies:
+        - PolicyName: RunAmfiNavFetchTask
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource: !Ref AmfiNavFetchTaskDefinition
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !Ref TaskRoleArn
+                  - !Ref ExecutionRoleArn
+
+  AmfiNavFetchDailySchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      Name: !Sub "${AWS::StackName}-daily-fetch"
+      Description: "Daily AMFI NAVAll.txt fetch -> S3 (bronze raw + silver parsed CSV)."
+      ScheduleExpression: !Ref ScheduleExpression
+      ScheduleExpressionTimezone: Asia/Kolkata
+      FlexibleTimeWindow:
+        Mode: "OFF"
+      State: ENABLED
+      Target:
+        Arn: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${EcsClusterName}"
+        RoleArn: !GetAtt SchedulerExecutionRole.Arn
+        RetryPolicy:
+          MaximumRetryAttempts: 1
+          MaximumEventAgeInSeconds: 3600
+        EcsParameters:
+          TaskDefinitionArn: !Ref AmfiNavFetchTaskDefinition
+          LaunchType: FARGATE
+          NetworkConfiguration:
+            AwsvpcConfiguration:
+              Subnets: [!Ref Subnet]
+              SecurityGroups: [!Ref SecurityGroup]
+              AssignPublicIp: ENABLED
+
+# ---------------------------------------------------------------------------
+Outputs:
+
+  TaskDefinitionArn:
+    Value: !Ref AmfiNavFetchTaskDefinition
+    Export:
+      Name: !Sub "${AWS::StackName}-taskdef"
+
+  ScheduleName:
+    Value: !Ref AmfiNavFetchDailySchedule
+
+  ClusterName:
+    Value: !Ref EcsClusterName

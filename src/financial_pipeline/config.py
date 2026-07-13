@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     bedrock_region: str = "us-east-1"
     bedrock_model_id: str = "anthropic.claude-haiku-4-5-20251001-v1:0"
 
-    # Ontology-driven retrieval query expansion (semantic/thesaurus.yaml +
+    # Ontology-driven retrieval query expansion (domain/semantic/thesaurus.yaml +
     # financial_relationships.yaml, via SemanticEngine). Additive RRF arm —
     # set ENABLE_ONTOLOGY_RETRIEVAL=false to fall back to pre-expansion behavior exactly.
     enable_ontology_retrieval: bool = True
@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # ENABLE_ONTOLOGY_RERANKING=false to fall back to pure cross-encoder order.
     enable_ontology_reranking: bool = True
 
-    # Causal "why did X change" reasoning engine (semantic/reasoning_rules.yaml
+    # Causal "why did X change" reasoning engine (domain/semantic/reasoning_rules.yaml
     # matched against real computed metric directions — see graph/nodes_reasoning.py).
     # Set ENABLE_REASONING_ENGINE=false to route causal queries through the
     # standard tabular/RAG path instead (pre-this-feature behavior).

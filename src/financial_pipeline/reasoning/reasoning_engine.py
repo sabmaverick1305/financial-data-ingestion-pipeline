@@ -1,4 +1,4 @@
-"""Reasoning Engine — evaluates semantic/reasoning_rules.yaml against real
+"""Reasoning Engine — evaluates domain/semantic/reasoning_rules.yaml against real
 computed metric directions to answer causal "why" queries.
 
     "Why did AUM increase while net inflow decreased for Large Cap funds
@@ -108,7 +108,7 @@ def _condition_matches(cond: dict, directions: dict[str, str], spikes: dict[str,
 
 
 def evaluate(observations: dict[str, MetricObservation]) -> ReasoningResult:
-    """Match computed metric directions against semantic/reasoning_rules.yaml.
+    """Match computed metric directions against domain/semantic/reasoning_rules.yaml.
     `observations` keys are metric_ids (e.g. "aum", "net_inflow")."""
     eng = get_engine()
     directions = {mid: obs.direction() for mid, obs in observations.items()}

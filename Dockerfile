@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 COPY src ./src
 COPY scripts ./scripts
+COPY domain ./domain
 
 # CPU-only torch + torchvision from the same index — avoids pulling several GB
 # of unused CUDA/NVIDIA packages (we only run Docling on CPU), and avoids an
@@ -22,6 +23,10 @@ ENV PYTHONUNBUFFERED=1
 ENV TOKENIZERS_PARALLELISM=false
 ENV OMP_NUM_THREADS=1
 ENV HF_HOME=/app/.cache/huggingface
+# Explicit even though semantic_engine.py's parents[3] default would also
+# resolve to /app/domain for this editable-install layout — set here so a
+# future WORKDIR/layout change can't silently break domain/ resolution.
+ENV FIES_DOMAIN_DIR=/app/domain
 
 # Pre-download sentence-transformers model at build time so the embed-worker
 # starts instantly without a runtime download (~90 MB, cached in image layer).
