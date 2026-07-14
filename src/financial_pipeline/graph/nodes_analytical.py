@@ -898,12 +898,32 @@ class AnalyticalNodeFactory:
         if numeric_rows:
             years = [yr for yr, _, _, _ in numeric_rows]
             values = [val for _, val, _, _ in numeric_rows]
+            # Trend direction compares the first vs. last chronological year
+            # (numeric_rows is built from `sorted(year_results.keys())` above),
+            # not the min/max magnitude — "ranged from X to Y" alone doesn't
+            # say whether the metric rose or fell over the period, which the
+            # word "trend" in a query like "show the AUM trend" is actually
+            # asking for.
+            first_year, first_val = years[0], values[0]
+            last_year, last_val = years[-1], values[-1]
+            if last_val > first_val:
+                trend_word = "an upward trend (growth)"
+            elif last_val < first_val:
+                trend_word = "a downward trend (decline)"
+            else:
+                trend_word = "a flat trend (no change)"
+            pct_change = f"{(last_val - first_val) / first_val * 100:+.1f}%" if first_val else "n/a"
+            trend_line = (
+                f"This reflects {trend_word} over the period, a {pct_change} change "
+                f"from ₹{first_val:.2f} crore in {first_year} to ₹{last_val:.2f} crore in {last_year}."
+            )
             if is_stock:
                 highest_year, highest_val, _, _ = max(numeric_rows, key=lambda t: t[1])
                 lowest_year, lowest_val, _, _ = min(numeric_rows, key=lambda t: t[1])
                 lines.extend([
                     "",
                     f"Across the available years, average monthly {metric_label} ranged from ₹{lowest_val:.2f} crore in {lowest_year} to ₹{highest_val:.2f} crore in {highest_year}.",
+                    trend_line,
                     f"Year-end values are shown separately in the table. Missing years: {missing if missing else 'none'}.",
                 ])
             else:
@@ -912,6 +932,7 @@ class AnalyticalNodeFactory:
                 lines.extend([
                     "",
                     f"Annual totals ranged from ₹{lowest_val:.2f} crore in {lowest_year} to ₹{highest_val:.2f} crore in {highest_year}.",
+                    trend_line,
                     f"Missing years: {missing if missing else 'none'}.",
                 ])
         else:

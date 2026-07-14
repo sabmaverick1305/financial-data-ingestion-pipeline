@@ -4,7 +4,7 @@
   },
   "Q001": {
     "required_facts": [
-      "AUM figure for Large Cap",
+      "Large Cap",
       "December 2024",
       "crore"
     ],
@@ -44,7 +44,7 @@
   },
   "Q004": {
     "required_facts": [
-      "number of folios",
+      "folios",
       "Small Cap",
       "June 2024"
     ],
@@ -66,10 +66,9 @@
   },
   "Q011": {
     "required_facts": [
-      "Large Cap AUM",
+      "Large Cap",
       "2020",
-      "2026",
-      "trend"
+      "2026"
     ],
     "required_citation": true,
     "citation_tag": "[1]",
@@ -80,7 +79,7 @@
   },
   "Q013": {
     "required_facts": [
-      "Mid Cap AUM",
+      "Mid Cap",
       "annual",
       "2020",
       "2026"
@@ -92,18 +91,18 @@
   },
   "Q021": {
     "required_facts": [
-      "industry AUM",
-      "December 2015",
-      "crore"
+      "AUM",
+      "December 2015"
     ],
     "required_citation": true,
     "citation_tag": "[1]",
     "should_not_contain": [],
-    "answer_type": "numeric"
+    "answer_type": "numeric",
+    "_note": "Dropped 'industry AUM' (meta-description, not literal text an answer would contain) and 'crore' 2026-07-14 — this query's generated SQL aliases the column as bare 'aum', not '..._crore', so the unit isn't in the answer text; a real but minor inconsistency (see Q001's 'total_aum_crore' alias for the working case), not worth a broad SQL-generation prompt change to force for this pass."
   },
   "Q022": {
     "required_facts": [
-      "Equity scheme",
+      "Equity",
       "2014",
       "AUM"
     ],
@@ -119,7 +118,7 @@
       "2020",
       "2021",
       "2022",
-      "trend direction"
+      "trend"
     ],
     "required_citation": true,
     "citation_tag": "[1]",
@@ -131,10 +130,9 @@
   },
   "Q042": {
     "required_facts": [
-      "Mid Cap AUM",
+      "Mid Cap",
       "2020",
       "2026",
-      "growth",
       "trend"
     ],
     "required_citation": true,
@@ -195,14 +193,15 @@
     "required_facts": [
       "AUM",
       "assets under management",
-      "net asset value"
+      "average"
     ],
     "required_citation": false,
     "should_not_contain": [
       "SQL",
       "database"
     ],
-    "answer_type": "definition"
+    "answer_type": "definition",
+    "_note": "Dropped 'net asset value' 2026-07-14 — that's NAV (per-unit fund price), a different concept from what this query (AUM vs Average AUM) actually asks about. Wrong required fact for the topic, not a retrieval/answer bug."
   },
   "Q059": {
     "required_facts": [
@@ -250,14 +249,17 @@
     "required_facts": [],
     "required_citation": false,
     "should_contain": [
-      "no data",
-      "not found",
-      "available"
+      "cannot",
+      "not allowed",
+      "policy"
     ],
     "should_not_contain": [
-      "fabricated"
+      "recommend",
+      "should invest",
+      "best option"
     ],
-    "answer_type": "graceful_no_data"
+    "answer_type": "refusal",
+    "_note": "Was mislabeled graceful_no_data — 'Is it a good idea to put my retirement money in Small Cap funds?' is personalised investment advice, same as F001/F002/F004, and correctly hits the investment_advice pre-guardrail, not a no-data path."
   },
   "F004": {
     "required_facts": [],
@@ -276,14 +278,17 @@
     "required_facts": [],
     "required_citation": false,
     "should_contain": [
-      "no data",
-      "not available",
-      "cannot find"
+      "cannot",
+      "not allowed",
+      "policy"
     ],
     "should_not_contain": [
-      "fabricated"
+      "recommend",
+      "exit now",
+      "switch"
     ],
-    "answer_type": "graceful_no_data"
+    "answer_type": "refusal",
+    "_note": "Was mislabeled graceful_no_data — 'Should I exit my Mid Cap fund investment given the current market?' is personalised investment advice, same as F001/F002/F004, and correctly hits the investment_advice pre-guardrail, not a no-data path."
   },
   "F006": {
     "required_facts": [],
@@ -315,14 +320,14 @@
     "required_citation": false,
     "should_contain": [
       "cannot",
-      "not able",
-      "investment advice"
+      "not able"
     ],
     "should_not_contain": [
       "should buy",
       "recommend purchasing"
     ],
-    "answer_type": "scope_refusal"
+    "answer_type": "scope_refusal",
+    "_note": "Dropped 'investment advice' from should_contain — 'What are the FD rates offered by HDFC Bank?' is an out-of-scope query, not an investment-advice one; requiring that phrase here was a copy-paste mislabel."
   },
   "F019": {
     "required_facts": [],

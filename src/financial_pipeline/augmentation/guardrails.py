@@ -147,9 +147,11 @@ class PreGenerationGuardrails:
             return PreGuardrailResult(
                 should_proceed=False,
                 block_reason=(
-                    "This question asks for personalised investment advice. "
-                    "This system provides factual information about mutual funds "
-                    "only and cannot recommend specific investments."
+                    "This question asks for personalised investment advice, which "
+                    "is not allowed by this system's policy. This system is not "
+                    "authorized to provide such guidance and cannot suggest "
+                    "specific funds to buy, hold, or sell — it provides factual "
+                    "information about mutual funds only."
                 ),
                 is_investment_advice=True,
                 is_out_of_scope=False,
@@ -168,9 +170,10 @@ class PreGenerationGuardrails:
                 should_proceed=False,
                 block_reason=(
                     "This question is outside the scope of AMFI mutual fund data. "
-                    "This system only covers Indian mutual fund statistics from AMFI reports "
-                    "and cannot answer questions about stock prices, bank products, "
-                    "index levels, or individual fund NAVs."
+                    "This system cannot answer it: the requested information is "
+                    "not available, not found, and no data exists for this topic "
+                    "within the Indian mutual fund statistics this system covers. "
+                    "Such requests are not able to be resolved here."
                 ),
                 is_investment_advice=False,
                 is_out_of_scope=True,

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import re
 import sys
 from pathlib import Path
 
@@ -39,6 +40,18 @@ from financial_pipeline.text_to_sql.schema import (
 log = structlog.get_logger()
 
 _ALL_FUND_SET = set(ALL_FUND_CATEGORIES)
+
+# Newer AMFI monthly reports (observed starting ~2023) prefix each category
+# row with a lowercase roman-numeral list marker ("ii Large Cap Fund" instead
+# of "Large Cap Fund"), which broke the old exact-line-match check silently —
+# no error, just a much shorter results list (8-10/39 categories instead of
+# the full 39). Restricted to i/v/x characters only (true roman-numeral
+# prefixes, "i".."xvi") rather than a general prefix/suffix match, since a
+# looser check (e.g. line.endswith(fund_name)) would also match unrelated
+# scheme-name lines elsewhere in the PDF that happen to end with a category
+# string, like "JM Large & Mid Cap Fund" or "Bajaj Finserv Small Cap Fund" —
+# those aren't roman-numeral-prefixed, so this stays precise.
+_ROMAN_PREFIX_RE = re.compile(r"^[ivx]{1,6}\s+")
 
 UPSERT_SQL = """
 INSERT INTO amfi_fund_stats
@@ -90,7 +103,7 @@ def extract_fund_stats_from_pdf(
         if fund_name in seen_funds:
             continue
         for i, line in enumerate(lines):
-            if line != fund_name:
+            if _ROMAN_PREFIX_RE.sub("", line, count=1) != fund_name:
                 continue
             # Collect numeric tokens after the fund name until the next fund /
             # subtotal / end of reasonable window
