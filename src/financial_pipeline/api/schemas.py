@@ -50,6 +50,8 @@ class AskRequest(BaseModel):
     category: Literal["monthly", "quarterly", "unknown"] | None = None
     top_k: int = Field(default=8, ge=1, le=20)
     model: str | None = Field(default=None, description="Override LLM model for this request")
+    user_name: str | None = Field(default=None, max_length=200, description="Beta tester identity, for query_log linkage")
+    user_email: str | None = Field(default=None, max_length=320, description="Beta tester identity, for query_log linkage")
 
 
 class Source(BaseModel):

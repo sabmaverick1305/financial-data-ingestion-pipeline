@@ -1,8 +1,69 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from __future__ import annotations
+
+import json
+import os
+
+import structlog
+from pydantic.fields import FieldInfo
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+
+log = structlog.get_logger()
+
+
+class SecretsManagerSource(PydanticBaseSettingsSource):
+    """Loads settings from a single AWS Secrets Manager secret — a JSON object
+    whose keys match Settings field names (e.g. {"postgres_url": "...",
+    "openai_api_key": "..."}). Only active when SECRETS_MANAGER_SECRET_ID is
+    set; otherwise a no-op, so local dev via .env is unaffected. Read via
+    os.environ directly (not a Settings field) since this source runs before
+    Settings itself is constructed.
+    """
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[object, str, bool]:
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, object]:
+        secret_id = os.environ.get("SECRETS_MANAGER_SECRET_ID", "")
+        if not secret_id:
+            return {}
+        try:
+            import boto3
+
+            client = boto3.client("secretsmanager", region_name=os.environ.get("AWS_REGION", "ap-south-1"))
+            raw = client.get_secret_value(SecretId=secret_id)["SecretString"]
+            return json.loads(raw)
+        except Exception as exc:
+            log.warning("secrets_manager_load_failed", secret_id=secret_id, error=str(exc))
+            return {}
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        # Priority, highest first: explicit kwargs > real process/ECS env vars
+        # > AWS Secrets Manager > .env file > class defaults. This lets a
+        # deploy target stop passing secrets as plaintext env vars in favor
+        # of one Secrets Manager secret, without any other code changes.
+        return (
+            init_settings,
+            env_settings,
+            SecretsManagerSource(settings_cls),
+            dotenv_settings,
+            file_secret_settings,
+        )
 
     # Database
     database_url: str = "sqlite:///./pipeline.db"
@@ -18,6 +79,14 @@ class Settings(BaseSettings):
 
     # Pipeline
     batch_size: int = 1000
+
+    # Parser Engine shadow-routing (observation only — see
+    # processing/parser_engine_integration.py and parser_composition_root.py).
+    # PyMuPDF stays the authoritative extractor; this only runs ParserRouter
+    # alongside it for comparison telemetry. Off by default: sampling >0 means
+    # Docling conversions run synchronously on a fraction of ingestion calls.
+    parser_shadow_routing_sample_rate: float = 0.0
+    parser_shadow_routing_execute: bool = False
 
     # AWS / S3
     aws_access_key_id: str = ""
@@ -67,7 +136,7 @@ class Settings(BaseSettings):
     api_cors_origins: str = "*"
 
     # LangSmith tracing
-    langsmith_api_key: str = ""   # set LANGSMITH_API_KEY in .env
+    langsmith_api_key: str = ""  # set LANGSMITH_API_KEY in .env
     langchain_project: str = "amfi-pipeline"
     langchain_tracing_v2: bool = False  # set LANGCHAIN_TRACING_V2=true in .env to enable
 

@@ -58,7 +58,7 @@ citations or the executed SQL shown.
 | **LLM** | Anthropic Claude (auto-detected from `sk-ant-` key) or OpenAI |
 | **Query routing** | LangGraph `StateGraph` (`graph/`) |
 | **Text-to-SQL** | Vanna.ai + Claude Haiku, ChromaDB-persisted training store |
-| **PDF extraction** | Docling (CPU-only, table structure), PyMuPDF |
+| **PDF extraction** | Docling (CPU-only, table structure), PyMuPDF — both wrapped by a parser-agnostic engine (`fies_parser/`, see below) |
 | **Spreadsheets** | pandas + openpyxl + xlrd (magic-byte format detection) |
 | **API** | FastAPI + uvicorn |
 | **CI/CD** | GitHub Actions |
@@ -96,6 +96,31 @@ uploaded → text_extracted → tables_extracted → processed → embedded
                                                               ↓
                                                         (queryable)
 ```
+
+---
+
+## Parser Engine (`fies_parser/`)
+
+A parser-agnostic execution boundary sitting *underneath* `processing/extractor.py`, so PyMuPDF, Docling, and any future parser (LlamaParse, etc.) all return the same normalized shape instead of leaking parser-specific objects into chunking/indexing.
+
+```
+SourceDocument → ParseRequest → ParserEngine → ParserRegistry → ParserAdapter → ParserCandidate
+```
+
+- **`engine/`** — `ParserEngine` runs one registered adapter: resolves it from `ParserRegistry`, computes a deterministic `configuration_hash` (SHA-256 over parser name/version/config), stamps a `parser_run_id`, times execution, and runs the result through `CandidateValidator` (structural checks only — duplicate ids, dangling page cross-references, degenerate bounding boxes; **not** financial-value validation). All failures are typed (`UnknownParserError`, `InvalidPageSelectionError`, `ParserExecutionError`, `InvalidCandidateError`, `NoParserAvailableError`, ...) — never a bare `Exception`.
+- **`adapters/`** — `PyMuPDFAdapter` (fast text/layout, one-based page selection, `tables=[]`) and `DoclingAdapter` (layout-aware, table extraction preserving raw string values like `3,41,201.50` unnormalized, optional OCR mode). Each declares `ParserCapabilities` (mime types, `supports_tables`/`supports_ocr`/`supports_page_selection`).
+- **`canonical/`** — parser-independent output: `CandidateElement` (title/heading/paragraph/table/list/footnote/image/caption/formula/unknown), `CandidateTable`, `CandidatePage`, bundled into a `ParserCandidate` with execution metrics and warnings.
+- **`preflight/`** — `DocumentProfiler`/`PageProfiler` cheaply sniff a PDF with PyMuPDF *before* a full parse (page count, text-layer ratio, PyMuPDF's built-in `find_tables()`/`get_drawings()` as a non-ML "likely has tables" signal) — sniffing, not parsing, so it sits outside the adapter contract.
+- **`routing/`** — `DefaultRoutingPolicy` picks a parser from a `DocumentProfile` + each adapter's capabilities (scanned → OCR-capable parser; likely-tables → table-capable parser; otherwise the fastest text parser), `ParserRouter` wires `Preflight → RoutingPolicy → ParserEngine`, and `RoutingTelemetry`/`ShadowRouter` record decisions and run routing *alongside* the real extraction for comparison — sampled, best-effort, never affecting the real result.
+
+**Current status — PyMuPDF is still the sole authoritative extractor in production.** `processing/parser_engine_integration.py` routes `TextExtractor`'s PDF path through `ParserEngine` (pinned to `pymupdf`, not `ParserRouter`) and maps the resulting `ParserCandidate` back into the legacy `ExtractResult` shape via `LegacyExtractResultMapper`, so `chunker.py` and the table/embed workers are unaffected. `processing/parser_composition_root.py` registers both adapters together for **shadow-routing only** — off by default, enabled via:
+```env
+PARSER_SHADOW_ROUTING_SAMPLE_RATE=0.1   # fraction of calls to shadow-route (0.0 = disabled)
+PARSER_SHADOW_ROUTING_EXECUTE=false     # true = actually run the routed parser, not just decide
+```
+`ParserRouter` becomes the real call site only after `scripts/benchmark_parser_routing.py` has been run against representative AMFI/SEBI documents (`--input-dir path/to/pdfs --execute`) and `DefaultRoutingPolicy` tuned against those results — there's no representative PDF corpus checked into this repo yet, so that tuning hasn't happened. Fallback execution (auto-retrying a different parser on failure) is a deliberately separate, not-yet-built layer.
+
+Tests: `tests/unit/fies_parser/` (registry, engine, both adapters, validator, preflight, routing, shadow routing, telemetry) plus `tests/unit/test_parser_engine_integration.py` and `test_parser_composition_root.py` for the `financial_pipeline` integration side.
 
 ---
 
@@ -406,6 +431,11 @@ OPENAI_MODEL=gpt-4o
 API_HOST=0.0.0.0
 API_PORT=8080
 API_TOP_K=8
+
+# Parser Engine shadow-routing (observation only, off by default — see
+# "Parser Engine (fies_parser/)" section above)
+PARSER_SHADOW_ROUTING_SAMPLE_RATE=0.0
+PARSER_SHADOW_ROUTING_EXECUTE=false
 ```
 
 ---
@@ -434,14 +464,24 @@ Required GitHub Secrets:
 │   ├── run_parallel_orchestrator.py   # ECS task orchestration
 │   ├── reset_stale_claims.py          # ops: claim TTL recovery
 │   ├── train_vanna.py                 # rebuild Vanna's ChromaDB training store
+│   ├── benchmark_parser_routing.py    # ParserRouter routing/quality benchmark (see fies_parser section)
 │   ├── populate_amfi_stats.py         # amfi_fund_stats / amfi_amc_stats population
 │   ├── search.py                      # CLI search interface
 │   └── serve.py                       # API server launcher
 │
+├── src/fies_parser/                    # parser-agnostic engine (SourceDocument → ParserCandidate)
+│   ├── engine/                         # ParserEngine, ParserRegistry, typed exceptions, CandidateValidator
+│   ├── adapters/                       # PyMuPDFAdapter, DoclingAdapter — only place parser libs get imported
+│   ├── canonical/                      # CandidateElement/Table/Page/Candidate — parser-independent models
+│   ├── preflight/                      # DocumentProfiler/PageProfiler — cheap pre-parse sniffing
+│   └── routing/                        # RoutingPolicy, ParserRouter, ShadowRouter, telemetry
+│
 ├── src/financial_pipeline/
 │   ├── processing/
-│   │   ├── extractor.py               # PyMuPDF + Docling extractors
-│   │   └── chunker.py                 # sliding-window chunker
+│   │   ├── extractor.py                    # PyMuPDF + Docling extractors (PDF path now delegates to fies_parser)
+│   │   ├── parser_engine_integration.py    # ParserEngine ↔ legacy ExtractResult bridge (pinned pymupdf)
+│   │   ├── parser_composition_root.py      # both adapters registered together — shadow-routing only
+│   │   └── chunker.py                      # sliding-window chunker
 │   ├── retrieval/
 │   │   ├── hybrid.py                  # 5-stage HybridRetriever
 │   │   ├── query_understanding.py     # intent detection (no LLM)
@@ -498,6 +538,8 @@ Required GitHub Secrets:
 **Idempotent entity resolution, not batch-only** — `services/entity_store.py`'s `get_or_create_entity`/`add_identifier`/`add_relationship` are all `ON CONFLICT DO NOTHING` against real unique constraints, so `entity_ingestion.ingest_scheme_plan()` is safe to call once per scheme on every sync run (one psycopg2 connection per worker thread, not per scheme — see `mf_ingestion/sync.py`), not just as a one-off bulk backfill.
 
 **Real evaluation data, not fixtures** — `eval/`'s ground truth is checked against a live Postgres instance (`eval/corpus/expected_results.json`'s `row_count`/`row_count_min`/`row_count_max`), so metric regressions get root-caused against real data boundaries (e.g. `amfi_fund_stats` covers 2020–2026 only, `amfi_amc_stats` 2009–2019 only, zero overlap) rather than assumed to be LLM sampling noise.
+
+**Parser Engine as a separate package, not a `financial_pipeline` submodule** — `fies_parser/` is a sibling package specifically so it *cannot* import routing/chunking/validation code; `financial_pipeline` depends on it, never the reverse. New parsers (Docling done, LlamaParse next) implement one small `ParserAdapter` ABC and register under a name — `ParserEngine`/`ParserRouter` never change. Cutover from the legacy PyMuPDF-direct path is staged deliberately: pinned engine call → shadow-routing telemetry → benchmark-driven policy tuning → real `ParserRouter` cutover → fallback execution, in that order, so routing decisions are never trusted before they're measured against real documents.
 
 ---
 

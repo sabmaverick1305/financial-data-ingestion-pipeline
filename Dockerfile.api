@@ -1,9 +1,12 @@
 # ── Dockerfile.api — AMFI Financial Agent (API server only) ──────────────────
 #
-# Three-stage build:
-#   1. builder        — installs API Python deps into /install
-#   2. model-downloader — downloads sentence-transformers models into /models
-#   3. runtime        — lean final image (~900 MB); no build tools, non-root
+# Four-stage build:
+#   1. frontend-builder — npm ci + build the web/ beta UI (Vite/React) into static assets
+#   2. builder        — installs API Python deps into /install
+#   3. model-downloader — downloads sentence-transformers models into /models
+#   4. runtime        — lean final image (~900 MB); no build tools, non-root;
+#                        serves the built frontend assets same-origin via
+#                        FastAPI's StaticFiles mount (see api/main.py)
 #
 # Build:
 #   docker build -f Dockerfile.api -t amfi-api:latest .
@@ -11,7 +14,10 @@
 # Run locally (inject secrets via --env-file):
 #   docker run --rm -p 8080:8080 --env-file .env.docker amfi-api:latest
 #
-# Required env vars at runtime (never bake into image):
+# Required env vars at runtime (never bake into image). Either set these
+# directly, or set SECRETS_MANAGER_SECRET_ID to a JSON secret holding them
+# (see config.py's SecretsManagerSource) — recommended for deployed
+# environments over passing secrets as plaintext container env vars:
 #   POSTGRES_URL          postgresql+psycopg2://user:pass@host:5432/db
 #   OPENAI_API_KEY        sk-ant-...  (Anthropic key — despite the name; see config.py)
 #   OPENAI_MINI_API_KEY   sk-...  (real OpenAI key — routes intent extraction +
@@ -21,11 +27,23 @@
 #   LANGSMITH_API_KEY     lsv2_pt_...
 #   LANGCHAIN_TRACING_V2  true
 #   LANGCHAIN_PROJECT     amfi-pipeline
-#   AWS_ACCESS_KEY_ID     (for CloudWatch metrics — optional)
-#   AWS_SECRET_ACCESS_KEY (for CloudWatch metrics — optional)
+#   AWS_ACCESS_KEY_ID     (for CloudWatch metrics — optional; omit to use the task's IAM role)
+#   AWS_SECRET_ACCESS_KEY (for CloudWatch metrics — optional; omit to use the task's IAM role)
+#   SECRETS_MANAGER_SECRET_ID  (optional — id/ARN of a Secrets Manager secret
+#                                providing any of the above as JSON)
 
 
-# ── Stage 1: install Python dependencies ─────────────────────────────────────
+# ── Stage 1: build the beta web UI ───────────────────────────────────────────
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+
+# ── Stage 2: install Python dependencies ─────────────────────────────────────
 FROM python:3.13-slim-bookworm AS builder
 
 # gcc + libpq-dev: only needed at compile time for any C-extension wheels
@@ -71,7 +89,7 @@ RUN find /install -maxdepth 6 -type d \( \
 RUN pip install --no-cache-dir --no-deps --prefix=/install .
 
 
-# ── Stage 2: pre-download ML models ──────────────────────────────────────────
+# ── Stage 3: pre-download ML models ──────────────────────────────────────────
 # Runs from the builder's installed packages so torch/sentence-transformers
 # are not downloaded a second time.
 FROM python:3.13-slim-bookworm AS model-downloader
@@ -91,7 +109,7 @@ RUN python -c "\
     print('models cached')"
 
 
-# ── Stage 3: runtime image ────────────────────────────────────────────────────
+# ── Stage 4: runtime image ────────────────────────────────────────────────────
 FROM python:3.13-slim-bookworm AS runtime
 
 # libpq5: runtime-only dep for psycopg2-binary (libpq-dev not needed at runtime)
@@ -125,6 +143,13 @@ WORKDIR /app
 # can't find domain/ from there. FIES_DOMAIN_DIR overrides it explicitly.
 COPY --chown=appuser:appgroup domain ./domain
 ENV FIES_DOMAIN_DIR=/app/domain
+
+# Beta web UI static build — served same-origin by api/main.py's StaticFiles
+# mount at "/" (mounted last, after all /api/* routes, so it only catches
+# unmatched paths). FIES_WEB_DIST_DIR tells main.py exactly where to find it
+# (same reason FIES_DOMAIN_DIR exists — see api/main.py's comment).
+COPY --from=frontend-builder --chown=appuser:appgroup /web/dist ./web/dist
+ENV FIES_WEB_DIST_DIR=/app/web/dist
 
 USER appuser
 

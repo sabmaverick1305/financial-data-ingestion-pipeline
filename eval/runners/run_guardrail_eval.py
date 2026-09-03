@@ -31,6 +31,37 @@ def _get_vanna():
     return _vanna_instance
 
 
+def _build_graph_with_sql():
+    """Mirrors api/main.py's graph construction (factory + analytical + sql).
+    Without the sql factory, any guardrail case that production routes to
+    Vanna/SQL silently degrades to a RAG-only answer here instead — that's
+    the gap that made F009/F023 score low fact_coverage even after the
+    has_identified_fund guardrail fix, since the block itself was gone but
+    this harness had no way to give the same real answer production does.
+    fund_performance/reasoning aren't wired here because api/main.py doesn't
+    wire them into the production graph either — matching current reality,
+    not the full graph module's capability.
+    """
+    from financial_pipeline.graph import build_graph, NodeFactory, AnalyticalNodeFactory
+    from financial_pipeline.graph.nodes_sql import SQLNodeFactory
+    from financial_pipeline.retrieval.retriever import Retriever
+    from financial_pipeline.storage.document_repo import DocumentRepository
+    from financial_pipeline.config import settings
+
+    repo = DocumentRepository(settings.postgres_url)
+    retriever = Retriever(repo, settings.embed_model)
+    factory = NodeFactory(repo=repo, retriever=retriever)
+    analytical = AnalyticalNodeFactory(repo=repo)
+
+    sql_factory = None
+    try:
+        sql_factory = SQLNodeFactory(vanna=_get_vanna())
+    except Exception as exc:
+        log.warning("guardrail.sql_factory_unavailable", error=str(exc))
+
+    return build_graph(factory, analytical=analytical, sql=sql_factory)
+
+
 def _run_pipeline_with_guard_context(query: str, label: dict) -> dict:
     """Run pipeline and capture guardrail-relevant state."""
     import re
@@ -63,16 +94,7 @@ def _run_pipeline_with_guard_context(query: str, label: dict) -> dict:
                 result["blocked_at_layer"] = "sql_timeout"
         except ModuleNotFoundError as exc:
             log.warning("guardrail.sql_unavailable", error=str(exc))
-            from financial_pipeline.graph import build_graph, NodeFactory, AnalyticalNodeFactory
-            from financial_pipeline.retrieval.retriever import Retriever
-            from financial_pipeline.storage.document_repo import DocumentRepository
-            from financial_pipeline.config import settings
-
-            repo = DocumentRepository(settings.postgres_url)
-            retriever = Retriever(repo, settings.embed_model)
-            factory = NodeFactory(repo=repo, retriever=retriever)
-            analytical = AnalyticalNodeFactory(repo=repo)
-            graph = build_graph(factory, analytical=analytical)
+            graph = _build_graph_with_sql()
             final_state = graph.invoke({"query": query})
             response = final_state.get("response", {})
             result["answer"] = response.get("answer", "")
@@ -81,8 +103,17 @@ def _run_pipeline_with_guard_context(query: str, label: dict) -> dict:
     else:
         try:
             from financial_pipeline.augmentation.guardrails import PreGenerationGuardrails
+            from financial_pipeline.retrieval.query_understanding import QueryAnalyzer
 
-            pre = PreGenerationGuardrails().check(query, [], "factual")
+            # Mirrors graph/nodes.py's analyze_query: run intent extraction
+            # first so has_identified_fund reflects the same signal
+            # production uses (amc_names populated by stage1, no embed_fn/
+            # generator needed) — otherwise this eval path tests a stricter,
+            # unrealistic guardrail than what users actually hit.
+            intent = QueryAnalyzer().analyze(query)
+            pre = PreGenerationGuardrails().check(
+                query, [], "factual", has_identified_fund=bool(intent.amc_names),
+            )
             if not pre.should_proceed:
                 result["answer"] = pre.block_reason
                 result["blocked_at_layer"] = "pre_guardrail"
@@ -92,15 +123,7 @@ def _run_pipeline_with_guard_context(query: str, label: dict) -> dict:
                     result["hard_blocked"] = True
                 return result
 
-            from financial_pipeline.graph import build_graph, NodeFactory, AnalyticalNodeFactory
-            from financial_pipeline.retrieval.retriever import Retriever
-            from financial_pipeline.storage.document_repo import DocumentRepository
-            from financial_pipeline.config import settings
-            repo = DocumentRepository(settings.postgres_url)
-            retriever = Retriever(repo, settings.embed_model)
-            factory = NodeFactory(repo=repo, retriever=retriever)
-            analytical = AnalyticalNodeFactory(repo=repo)
-            graph = build_graph(factory, analytical=analytical)
+            graph = _build_graph_with_sql()
             final_state = graph.invoke({"query": query})
             response = final_state.get("response", {})
             result["answer"] = response.get("answer", "")

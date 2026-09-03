@@ -12,8 +12,10 @@
 #
 # Prerequisites:
 #   aws CLI configured with credentials that can create/describe CloudFormation,
-#   ECS, IAM, and EventBridge Scheduler resources; POSTGRES_URL available in
-#   the environment (e.g. via `set -a && source .env && set +a`) for `deploy`.
+#   ECS, IAM, Secrets Manager, and EventBridge Scheduler resources. The Postgres
+#   URL is read from the fies/postgres-url Secrets Manager secret (see
+#   PostgresUrlSecretArn in mf-nav-sync.yaml) — update that secret directly if
+#   the DB connection string changes; nothing to set locally for `deploy`.
 
 set -euo pipefail
 
@@ -41,8 +43,10 @@ done
 _aws() { aws --region "$REGION" "$@"; }
 
 cmd_deploy() {
-  : "${POSTGRES_URL:?POSTGRES_URL must be set in the environment}"
   echo "▶ Deploying stack '${STACK_NAME}' in ${REGION} with image ${IMAGE}…"
+  # Postgres URL now comes from the fies/postgres-url Secrets Manager secret
+  # (PostgresUrlSecretArn parameter, defaulted in the template) rather than a
+  # plaintext POSTGRES_URL env var — nothing to pass here anymore.
 
   if _aws cloudformation describe-stacks --stack-name "$STACK_NAME" >/dev/null 2>&1; then
     _aws cloudformation update-stack \
@@ -50,8 +54,7 @@ cmd_deploy() {
       --template-body "file://${TEMPLATE}" \
       --capabilities CAPABILITY_NAMED_IAM \
       --parameters \
-          ParameterKey=EcrImage,ParameterValue="$IMAGE" \
-          ParameterKey=PostgresUrl,ParameterValue="$POSTGRES_URL"
+          ParameterKey=EcrImage,ParameterValue="$IMAGE"
     _aws cloudformation wait stack-update-complete --stack-name "$STACK_NAME"
   else
     _aws cloudformation create-stack \
@@ -60,7 +63,6 @@ cmd_deploy() {
       --capabilities CAPABILITY_NAMED_IAM \
       --parameters \
           ParameterKey=EcrImage,ParameterValue="$IMAGE" \
-          ParameterKey=PostgresUrl,ParameterValue="$POSTGRES_URL" \
       --tags Key=Project,Value=financial-pipeline Key=Component,Value=mf-nav-sync
     _aws cloudformation wait stack-create-complete --stack-name "$STACK_NAME"
   fi

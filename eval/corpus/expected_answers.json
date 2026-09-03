@@ -387,16 +387,13 @@
     "answer_type": "graceful_no_data"
   },
   "F023": {
-    "required_facts": [],
-    "required_citation": false,
-    "should_contain": [
-      "not available",
-      "outside",
-      "scope"
-    ],
-    "should_not_contain": [
+    "required_facts": [
+      "HDFC",
       "NAV"
     ],
-    "answer_type": "graceful_no_data"
+    "required_citation": true,
+    "citation_tag": "[1]",
+    "should_not_contain": [],
+    "answer_type": "numeric_or_table"
   }
 }

@@ -189,6 +189,48 @@ class FinancialVanna(ChromaDB_VectorStore, Anthropic_Chat):
         ChromaDB_VectorStore.__init__(self, config=config)
         Anthropic_Chat.__init__(self, config=config)
 
+    def submit_prompt(self, prompt, **kwargs) -> str:
+        """Same as vanna.anthropic.Anthropic_Chat.submit_prompt, except the
+        system message is sent as a cached content block. The system message
+        is the DDL + documentation corpus (~4-5K tokens) that Vanna rebuilds
+        on every call — it's effectively identical across questions since
+        the small training corpus here means top-k retrieval returns nearly
+        the same set every time — so without caching it's re-billed at full
+        input price on every single SQL generation call.
+        """
+        if prompt is None:
+            raise Exception("Prompt is None")
+        if len(prompt) == 0:
+            raise Exception("Prompt is empty")
+
+        system_message = ""
+        no_system_prompt = []
+        for prompt_message in prompt:
+            if prompt_message["role"] == "system":
+                system_message = prompt_message["content"]
+            else:
+                no_system_prompt.append(prompt_message)
+
+        response = self.client.messages.create(
+            model=self.config["model"],
+            messages=no_system_prompt,
+            system=[{
+                "type": "text",
+                "text": system_message,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+        )
+        log.debug(
+            "vanna.submit_prompt",
+            model=self.config["model"],
+            input_tokens=response.usage.input_tokens,
+            cache_creation_input_tokens=response.usage.cache_creation_input_tokens,
+            cache_read_input_tokens=response.usage.cache_read_input_tokens,
+        )
+        return response.content[0].text
+
 
 def build_vanna_agent(
     anthropic_api_key: str,

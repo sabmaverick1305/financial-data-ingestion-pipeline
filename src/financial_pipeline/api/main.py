@@ -27,12 +27,14 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import structlog
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from langchain_core.runnables import RunnableConfig
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -57,6 +59,7 @@ from financial_pipeline.api.schemas import (
     Source,
 )
 from financial_pipeline.evaluation.observability import RequestTrace, emitter, ls_feedback
+from financial_pipeline.feedback.triage import triage_row
 from financial_pipeline.graph import build_graph, NodeFactory, AnalyticalNodeFactory
 from financial_pipeline.config import settings
 from financial_pipeline.retrieval.pipeline import RetrievalPipeline
@@ -498,6 +501,14 @@ def ask(req: AskRequest, background_tasks: BackgroundTasks) -> AskResponse:
                 citations_count=resp_dict.get("retrieval_count", 0),
                 latency_ms=latency or int((time.time() - t0) * 1000),
                 blocked=bool(g.get("blocked", False)),
+                block_reason=g.get("block_reason"),
+                hallucination_risk=g.get("hallucination_risk"),
+                faithfulness_score=(fs if (fs := g.get("faithfulness_score")) is not None else None),
+                citation_valid=g.get("citation_valid"),
+                number_consistent=g.get("number_consistent"),
+                abstention_detected=g.get("abstention_detected"),
+                user_name=req.user_name,
+                user_email=req.user_email,
             )
         except Exception as exc:
             log.warning("api.query_log_write_failed", error=str(exc), query_id=query_id)
@@ -559,6 +570,25 @@ def feedback(req: FeedbackRequest) -> FeedbackResponse:
         raise HTTPException(404, f"query_id {query_id!r} not found.")
 
     log.info("api.feedback_recorded", query_id=query_id, rating=req.rating)
+
+    # Automated triage — cheap, rule-based (no LLM/network call), so it runs
+    # inline rather than as a background task. A failure here must not turn
+    # an already-recorded feedback submission into an error response.
+    try:
+        row = _state.query_log.fetch_row(query_id)
+        if row is not None:
+            result = triage_row(row)
+            _state.query_log.save_triage(
+                query_id=query_id,
+                category=result.category,
+                priority=result.priority,
+                reason=result.reason,
+            )
+            log.info("api.feedback_triaged", query_id=query_id,
+                     category=result.category, priority=result.priority)
+    except Exception as exc:
+        log.warning("api.feedback_triage_failed", query_id=query_id, error=str(exc))
+
     return FeedbackResponse(query_id=query_id, recorded=True)
 
 
@@ -648,3 +678,25 @@ def stats() -> PipelineStats:
         llm_model=f"{settings.llm_provider}/{settings.active_llm_model}",
         llm_configured=rag.is_llm_configured(),
     )
+
+
+# ── Beta web UI ────────────────────────────────────────────────────────────
+# Serves web/'s Vite build as static files, same-origin with the API — no
+# separate deployable. Mounted last, at "/", so every route above still
+# takes priority; html=True makes unmatched paths fall back to index.html
+# for the SPA's client-side routing. Guarded on the directory existing so
+# backend-only local dev (no `npm run build` yet) keeps working unchanged.
+#
+# FIES_WEB_DIST_DIR overrides the path explicitly — same reason
+# FIES_DOMAIN_DIR exists: Dockerfile.api's pip install is non-editable, so
+# this file's __file__ resolves under site-packages/, not the repo, and the
+# relative guess below can't find web/dist from there.
+_WEB_DIST = Path(
+    os.environ.get("FIES_WEB_DIST_DIR")
+    or (Path(__file__).resolve().parents[3] / "web" / "dist")
+)
+if _WEB_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=str(_WEB_DIST), html=True), name="web")
+    log.info("api.web_ui_mounted", path=str(_WEB_DIST))
+else:
+    log.warning("api.web_ui_not_built", path=str(_WEB_DIST))

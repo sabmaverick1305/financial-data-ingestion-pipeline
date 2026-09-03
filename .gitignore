@@ -13,6 +13,9 @@ build/
 venv/
 env/
 
+# Frontend (web/)
+web/node_modules/
+
 # Environment
 .env
 

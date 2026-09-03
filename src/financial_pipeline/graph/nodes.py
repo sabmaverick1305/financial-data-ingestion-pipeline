@@ -116,7 +116,14 @@ class NodeFactory:
 
         # Early policy gate: check advice/OOS before any retrieval.
         # Passes empty citations — only the pattern checks run (no source-count check).
-        pre_check = self._pre_guard.check(question=query, citations=[], intent_type=intent.intent_type)
+        # has_identified_fund: a named AMC means a per-scheme NAV lookup is
+        # answerable via fund_performance_sql, so the ambiguous-NAV OOS
+        # patterns shouldn't block it — see guardrails.py's
+        # _AMBIGUOUS_NAV_PATTERNS comment.
+        pre_check = self._pre_guard.check(
+            question=query, citations=[], intent_type=intent.intent_type,
+            has_identified_fund=bool(intent.amc_names),
+        )
 
         log.info("node.analyze_query",
                  intent=intent.intent_type,
@@ -605,6 +612,7 @@ class NodeFactory:
             question=state.get("query", ""),
             citations=citations,
             intent_type=intent_t,
+            has_identified_fund=bool(intent.amc_names) if intent else False,
         )
         blocked = not result.should_proceed
         log.info("node.pre_guardrail", blocked=blocked,

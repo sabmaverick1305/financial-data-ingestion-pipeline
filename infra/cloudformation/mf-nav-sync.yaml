@@ -37,10 +37,14 @@ Parameters:
     Type: String
     Default: sg-0eecd839abfcf4daa
 
-  PostgresUrl:
+  PostgresUrlSecretArn:
     Type: String
-    NoEcho: true
-    Description: SQLAlchemy Postgres URL (same DB as the AMFI PDF pipeline workers).
+    Default: arn:aws:secretsmanager:us-east-1:468895762981:secret:fies/postgres-url-LduXEf
+    Description: >
+      ARN of the Secrets Manager secret holding the Postgres URL (same DB as
+      the AMFI PDF pipeline workers). Replaces the old plaintext PostgresUrl
+      parameter — the task definition now pulls this via ECS Secrets
+      injection instead of a plaintext container env var.
 
   S3Bucket:
     Type: String
@@ -112,9 +116,10 @@ Resources:
                   max_workers=settings.mfapi_max_workers,
               )
               print("performance:", perf_result)
-          Environment:
+          Secrets:
             - Name: POSTGRES_URL
-              Value: !Ref PostgresUrl
+              ValueFrom: !Ref PostgresUrlSecretArn
+          Environment:
             - Name: S3_BUCKET
               Value: !Ref S3Bucket
             - Name: AWS_REGION
@@ -126,6 +131,26 @@ Resources:
               awslogs-create-group: "true"
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: mf-nav-sync-worker
+
+  # Grants the shared ECS execution role permission to read the Postgres URL
+  # secret at container start (ECS Secrets injection). ExecutionRoleArn is an
+  # existing role passed by reference, not created by this stack, so this is
+  # a standalone policy attachment rather than an inline Role policy. The
+  # same role is reused by the 5 AMFI doc-processing worker task definitions
+  # (amfi-{text,table,ocr,chunk,embed}-worker), so this one grant covers all
+  # of them too.
+  ExecutionRoleSecretsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: read-postgres-url-secret
+      Roles:
+        - !Select [1, !Split ["/", !Ref ExecutionRoleArn]]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: secretsmanager:GetSecretValue
+            Resource: !Ref PostgresUrlSecretArn
 
   SchedulerExecutionRole:
     Type: AWS::IAM::Role

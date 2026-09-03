@@ -136,6 +136,25 @@ _DOCS = [
         "Pre-2020 data uses broad categories; post-2020 granular categories are in amfi_fund_stats."
     ),
     (
+        "AMC-specific AUM/mobilization queries — NOT SUPPORTED",
+        "amfi_fund_stats and amfi_amc_stats have NO amc_name or fund-house column. "
+        "aum, funds_mobilized, redemption, net_inflow, avg_aum, and aum_pct in these "
+        "two tables are INDUSTRY-WIDE totals per fund_category/scheme_type, aggregated "
+        "across every AMC — there is no way to filter or break these down by a specific "
+        "AMC/fund house (e.g. 'SBI', 'HDFC', 'ICICI', 'Axis') in either table. "
+        "CRITICAL, verified against a live failure: if a question asks for AUM, funds "
+        "mobilized, redemption, net inflow, or avg_aum for a SPECIFIC AMC (e.g. 'AUM of "
+        "SBI Large Cap Fund', 'HDFC's ELSS AUM'), do NOT silently drop the AMC name from "
+        "the WHERE clause and return the fund_category-wide industry total instead — that "
+        "answers a different, broader question than what was asked and misleadingly "
+        "presents an industry-wide figure as if it were AMC-specific. In this situation, "
+        "per response guideline 3, explain that AMC-level AUM/mobilization is not "
+        "available in this dataset rather than generating SQL that drops the AMC filter. "
+        "(mf_scheme_master has amc_name and mf_scheme_performance has per-scheme data, but "
+        "neither tracks AUM — only NAV and returns. Per-AMC or per-scheme AUM does not "
+        "exist anywhere in this database.)"
+    ),
+    (
         "business vocabulary and synonyms",
         "Column synonyms — always map these business terms to the exact column names shown:\n"
         "\n"

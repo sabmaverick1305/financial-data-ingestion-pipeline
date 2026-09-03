@@ -78,17 +78,32 @@ _ADVICE_PATTERNS = [
     r"\bwould you (recommend|suggest)\b",
 ]
 
-# Check 2b — Out-of-scope queries: topics outside AMFI mutual fund data
-# (stock prices, index levels, bank products, individual fund NAV, crypto markets)
+# Check 2b — Out-of-scope queries: topics genuinely outside AMFI mutual fund
+# data (stock prices, index levels, bank products, crypto markets). Always
+# blocked regardless of what else the question mentions.
 _OUT_OF_SCOPE_PATTERNS = [
     r"\b(current\s+)?(stock|share|equity)\s+price\b",
     # No trailing \b — matches "performed", "performance", "returned", etc.
     r"\b(nifty|sensex)\b.{0,30}(perform|return|level|point|rose|fell|gain|loss|today)",
     r"\b(fd|fixed deposit)\s+rates?\b",
-    r"\bcurrent\s+nav\b",
-    r"\bnav\b.{0,40}\btoday\b",
     # No leading \b on second group — matches "investment", "trending", etc.
     r"\bcryptocurren(cy|cies)\b.{0,30}(invest|trend|market|perform)",
+]
+
+# "current NAV" / "NAV ... today" phrasing — deliberately kept separate from
+# _OUT_OF_SCOPE_PATTERNS above. This was originally written to block
+# individual fund NAV lookups on the assumption mutual funds have no
+# same-day NAV (true — NAVs publish T+1) and that this system had no way to
+# answer a named-fund NAV question at all. Neither holds once a specific
+# AMC/scheme is identified: mf_scheme_performance.latest_nav (via the
+# fund_performance_sql route) answers exactly "what's SBI Large Cap Fund's
+# latest NAV" correctly. Verified false positive: "What is the NAV of SBI
+# Large cap fund today?" — intent extraction already resolves
+# amc_names=['SBI'], but this pattern hard-blocked it before routing ever
+# got a chance to use that. Only applied when has_identified_fund is False.
+_AMBIGUOUS_NAV_PATTERNS = [
+    r"\bcurrent\s+nav\b",
+    r"\bnav\b.{0,40}\btoday\b",
 ]
 
 # Check 2 — Unsupported claim indicators in the question itself
@@ -135,6 +150,7 @@ class PreGenerationGuardrails:
         question: str,
         citations: list,  # list[Citation]
         intent_type: str = "default",
+        has_identified_fund: bool = False,
     ) -> PreGuardrailResult:
 
         warnings: list[str] = []
@@ -164,6 +180,8 @@ class PreGenerationGuardrails:
 
         # ── Check 2b: Out-of-scope detection ──────────────────────────
         is_oos = any(re.search(p, q) for p in _OUT_OF_SCOPE_PATTERNS)
+        if not is_oos and not has_identified_fund:
+            is_oos = any(re.search(p, q) for p in _AMBIGUOUS_NAV_PATTERNS)
         if is_oos:
             log.warning("pre_guardrail.out_of_scope_detected", q=question[:80])
             return PreGuardrailResult(

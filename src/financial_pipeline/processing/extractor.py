@@ -192,50 +192,18 @@ class TextExtractor:
                 doc.close()
 
     def _extract_pdf_with_pymupdf(self, raw: bytes, has_text: bool) -> ExtractResult:
-        import pymupdf
+        from financial_pipeline.processing.parser_engine_integration import extract_pdf_via_parser_engine
 
-        doc = None
-        pages: list[dict] = []
+        result = extract_pdf_via_parser_engine(raw, has_text_layer=has_text)
 
-        try:
-            doc = pymupdf.open(stream=raw, filetype="pdf")
-            metadata = dict(doc.metadata or {})
+        log.info(
+            "text_extractor.pdf_pymupdf_done",
+            pages=len(result.pages),
+            chars=len(result.full_text),
+            rss_mb=round(_rss_mb(), 1),
+        )
 
-            for index in range(len(doc)):
-                page = doc[index]
-                text = page.get_text("text") or ""
-
-                pages.append(
-                    {
-                        "page": index + 1,
-                        "text": text.strip(),
-                    }
-                )
-
-            full_text = "\n\n".join(p["text"] for p in pages if p["text"])
-            markdown = full_text
-
-            log.info(
-                "text_extractor.pdf_pymupdf_done",
-                pages=len(pages),
-                chars=len(full_text),
-                rss_mb=round(_rss_mb(), 1),
-            )
-
-            return ExtractResult(
-                pages=pages,
-                tables=[],
-                full_text=full_text,
-                markdown=markdown,
-                metadata=metadata,
-                has_text_layer=has_text,
-                figures=[],
-                extraction_engine="pymupdf",
-            )
-
-        finally:
-            if doc:
-                doc.close()
+        return result
 
     def _extract_spreadsheet(self, raw: bytes, ext: str) -> ExtractResult:
         # AMFI serves some files with a .xls extension whose content is
