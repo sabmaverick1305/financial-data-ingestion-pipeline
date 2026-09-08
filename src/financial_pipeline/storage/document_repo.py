@@ -764,6 +764,144 @@ class DocumentRepository:
             rows = conn.execute(text(sql), params).mappings().all()
         return [dict(r) for r in rows]
 
+    def bind_document_identity(
+        self,
+        *,
+        document_id: str,
+        scheme_family_key: str,
+        scheme_code: str | None = None,
+        resolution_source: str,
+        resolution_confidence: float = 1.0,
+    ) -> None:
+        """Persist an authoritative document-to-scheme identity mapping."""
+        with self._engine.begin() as conn:
+            conn.execute(
+                text("""
+                    INSERT INTO document_scheme_identity (
+                        document_id,
+                        scheme_family_key,
+                        scheme_code,
+                        resolution_source,
+                        resolution_confidence
+                    )
+                    VALUES (
+                        CAST(:document_id AS uuid),
+                        :scheme_family_key,
+                        :scheme_code,
+                        :resolution_source,
+                        :resolution_confidence
+                    )
+                    ON CONFLICT (document_id, scheme_family_key)
+                    DO UPDATE SET
+                        scheme_code = COALESCE(EXCLUDED.scheme_code, document_scheme_identity.scheme_code),
+                        resolution_source = EXCLUDED.resolution_source,
+                        resolution_confidence = EXCLUDED.resolution_confidence,
+                        updated_at = NOW()
+                """),
+                {
+                    "document_id": document_id,
+                    "scheme_family_key": scheme_family_key,
+                    "scheme_code": scheme_code,
+                    "resolution_source": resolution_source,
+                    "resolution_confidence": resolution_confidence,
+                },
+            )
+
+    def find_semantic_evidence(
+        self,
+        *,
+        fund_names: list[str],
+        accepted_document_types: list[str] | tuple[str, ...],
+        content_terms: list[str] | tuple[str, ...],
+        require_all_terms: bool = False,
+    ) -> dict[str, list[str]]:
+        """Return authoritative document IDs satisfying a semantic evidence requirement."""
+        if not fund_names:
+            return {}
+
+        params: dict[str, object] = {
+            "fund_names": fund_names,
+            "document_types": list(accepted_document_types),
+        }
+        term_filters: list[str] = []
+        for index, term in enumerate(content_terms):
+            key = f"term_{index}"
+            params[key] = f"%{term.lower()}%"
+            term_filters.append(
+                f"EXISTS (SELECT 1 FROM document_chunks dc "
+                f"WHERE dc.document_id = dm.document_id "
+                f"AND LOWER(dc.text) LIKE :{key})"
+            )
+
+        if term_filters:
+            joiner = " AND " if require_all_terms else " OR "
+            semantic_filter = "AND (" + joiner.join(term_filters) + ")"
+        else:
+            semantic_filter = ""
+
+        sql = f"""
+            SELECT DISTINCT
+                dsi.scheme_family_key,
+                CAST(dm.document_id AS text) AS document_id
+            FROM document_scheme_identity dsi
+            JOIN document_metadata dm
+              ON dm.document_id = dsi.document_id
+            WHERE dsi.scheme_family_key = ANY(:fund_names)
+              AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)
+              AND dm.processing_status IN ('embedded', 'indexed')
+              {semantic_filter}
+            ORDER BY dsi.scheme_family_key, document_id
+        """
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(sql), params).mappings().all()
+
+        result: dict[str, list[str]] = {name: [] for name in fund_names}
+        for row in rows:
+            result[str(row["scheme_family_key"])].append(str(row["document_id"]))
+        return {
+            name: list(dict.fromkeys(document_ids))
+            for name, document_ids in result.items()
+        }
+
+    def semantic_documentary_coverage(
+        self,
+        *,
+        fund_names: list[str],
+        requirement_keys: list[str] | tuple[str, ...],
+    ) -> dict[str, dict]:
+        """Evaluate semantic evidence coverage over authoritative document identities."""
+        from financial_pipeline.documentary.evidence_policy import REQUIREMENT_BY_KEY
+
+        coverage: dict[str, dict] = {
+            name: {"by_requirement": {}, "missing_requirements": []}
+            for name in fund_names
+        }
+        for key in requirement_keys:
+            requirement = REQUIREMENT_BY_KEY[key]
+            matches = self.find_semantic_evidence(
+                fund_names=fund_names,
+                accepted_document_types=requirement.accepted_document_types,
+                content_terms=requirement.content_terms,
+                require_all_terms=getattr(requirement, "match_mode", "any") == "all",
+            )
+            for fund_name in fund_names:
+                document_ids = matches.get(fund_name, [])
+                coverage[fund_name]["by_requirement"][key] = {
+                    "covered": bool(document_ids),
+                    "document_ids": document_ids,
+                    "accepted_document_types": list(requirement.accepted_document_types),
+                    "content_terms": list(requirement.content_terms),
+                }
+                if not document_ids:
+                    coverage[fund_name]["missing_requirements"].append(key)
+
+        total = max(1, len(requirement_keys))
+        for fund_name, item in coverage.items():
+            missing = item["missing_requirements"]
+            item["coverage_ratio"] = (len(requirement_keys) - len(missing)) / total
+            item["covered"] = not missing
+        return coverage
+
     def resolve_document_identity(
         self,
         *,
