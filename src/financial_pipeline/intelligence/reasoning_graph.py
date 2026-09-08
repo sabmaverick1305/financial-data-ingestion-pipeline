@@ -13,7 +13,7 @@ from enum import StrEnum
 from financial_pipeline.intelligence.evidence import EvidenceEvaluator
 from financial_pipeline.intelligence.executor import ResearchExecutor
 from financial_pipeline.intelligence.harness import ReasoningHarness
-from financial_pipeline.intelligence.mock_planner import MockPlanner
+from financial_pipeline.intelligence.planner_protocol import ResearchPlanner
 from financial_pipeline.intelligence.reasoning_loop import ReasoningLoop
 from financial_pipeline.intelligence.reasoning_state import ReasoningState
 from financial_pipeline.intelligence.replan import EvidenceReplanner
@@ -38,7 +38,7 @@ class ReasoningGraph:
     def __init__(
         self,
         *,
-        planner: MockPlanner,
+        planner: ResearchPlanner,
         executor: ResearchExecutor,
         evaluator: EvidenceEvaluator,
         replanner: EvidenceReplanner,
@@ -52,8 +52,10 @@ class ReasoningGraph:
         plan, requirements = self._planner.plan(query)
 
         visited.append(GraphNode.EXECUTE_AND_EVALUATE)
+        state = ReasoningState(query=query)
+        state.llm_calls += self._planner.llm_calls_used
         state = self._loop.run(
-            state=ReasoningState(query=query),
+            state=state,
             initial_plan=plan,
             requirements=requirements,
         )
