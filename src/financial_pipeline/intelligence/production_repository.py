@@ -122,24 +122,55 @@ class ReasoningProductionRepository:
     ) -> dict[str, list[dict]]:
         if not categories:
             return {}
-        result: dict[str, list[dict]] = {}
+        sql = """
+            WITH requested AS (
+                SELECT unnest(CAST(:categories AS text[])) AS requested_category
+            ),
+            ranked AS (
+                SELECT
+                    r.requested_category,
+                    m.scheme_code,
+                    m.scheme_name,
+                    m.amc_name,
+                    m.category,
+                    p.return_1y,
+                    p.return_3y_cagr,
+                    p.return_5y_cagr,
+                    p.return_10y_cagr,
+                    p.rolling_volatility,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY r.requested_category
+                        ORDER BY p.return_3y_cagr DESC NULLS LAST
+                    ) AS rn
+                FROM requested r
+                JOIN mf_scheme_master m
+                  ON LOWER(COALESCE(m.category, ''))
+                     LIKE ('%' || LOWER(r.requested_category) || '%')
+                JOIN mf_scheme_performance p
+                  ON p.scheme_code = m.scheme_code
+                WHERE m.is_active = TRUE
+            )
+            SELECT *
+            FROM ranked
+            WHERE rn <= :limit
+            ORDER BY requested_category, rn
+        """
         with self._engine.connect() as conn:
-            for category in categories:
-                rows = conn.execute(text("""
-                    SELECT m.scheme_code, m.scheme_name, m.amc_name, m.category,
-                           p.return_1y, p.return_3y_cagr, p.return_5y_cagr,
-                           p.return_10y_cagr, p.rolling_volatility
-                    FROM mf_scheme_master m
-                    JOIN mf_scheme_performance p ON p.scheme_code=m.scheme_code
-                    WHERE m.is_active=TRUE
-                      AND LOWER(COALESCE(m.category, '')) LIKE LOWER(:category_pattern)
-                    ORDER BY p.return_3y_cagr DESC NULLS LAST
-                    LIMIT :limit
-                """), {
-                    "category_pattern": f"%{category}%",
+            rows = conn.execute(
+                text(sql),
+                {
+                    "categories": categories,
                     "limit": limit_per_category,
-                }).mappings().all()
-                result[str(category)] = [dict(row) for row in rows]
+                },
+            ).mappings().all()
+
+        result: dict[str, list[dict]] = {str(category): [] for category in categories}
+        for row in rows:
+            requested_category = str(row["requested_category"])
+            item = dict(row)
+            item.pop("requested_category", None)
+            item.pop("rn", None)
+            result.setdefault(requested_category, []).append(item)
         return result
 
     def peer_performance(self, *, category: str, limit: int = 100) -> list[dict]:
