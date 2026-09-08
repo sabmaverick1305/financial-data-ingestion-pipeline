@@ -17,7 +17,7 @@
     "scheme_family_key": "bandhan small cap fund",
     "scheme_code": null,
     "provider": "Bandhan Mutual Fund",
-    "source_page_url": "https://bandhanmutual.com/downloads/factsheets",
+    "source_page_url": "https://cmsnew.bandhanmutual.com/bandhan-small-cap-fund/",
     "authoritative_domain": "bandhanmutual.com"
   },
   {
@@ -89,14 +89,34 @@
     "scheme_code": null,
     "provider": "Bank of India Mutual Fund",
     "source_page_url": "https://www.boimf.in/products/equity-funds/bank-of-india-small-cap-fund",
-    "authoritative_domain": "boimf.in"
+    "authoritative_domain": "boimf.in",
+    "source_page_urls": [
+      "https://www.boimf.in/products/equity-funds/bank-of-india-small-cap-fund",
+      "https://www.boimf.in/investor-corner"
+    ],
+    "direct_documents": [
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.boimf.in/docs/default-source/investorcorner/factsheets/factsheet-january-2024.pdf?sfvrsn=20de342d_6",
+        "file_name": "boi-mf-factsheet-january-2024.pdf",
+        "title": "Bank of India Mutual Fund Factsheet January 2024"
+      }
+    ]
   },
   {
     "scheme_family_key": "whiteoak capital mid cap fund",
     "scheme_code": null,
     "provider": "WhiteOak Capital Mutual Fund",
     "source_page_url": "https://www.whiteoakamc.com/",
-    "authoritative_domain": "whiteoakamc.com"
+    "authoritative_domain": "whiteoakamc.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://uatcontent.whiteoakamc.com/whiteoak_capital_mid_cap_fund_sid_8c36bddeec.pdf",
+        "file_name": "whiteoak-capital-mid-cap-fund-sid.pdf",
+        "title": "WhiteOak Capital Mid Cap Fund Scheme Information Document"
+      }
+    ]
   },
   {
     "scheme_family_key": "icici prudential large and mid cap fund",
@@ -104,5 +124,53 @@
     "provider": "ICICI Prudential Mutual Fund",
     "source_page_url": "https://digitalfactsheet.icicipruamc.com/fact/icici-prudential-large-and-mid-cap-fund.php",
     "authoritative_domain": "icicipruamc.com"
+  },
+  {
+    "scheme_family_key": "bandhan small cap fund",
+    "scheme_code": null,
+    "provider": "Bandhan Mutual Fund",
+    "authoritative_domain": "portal.amfiindia.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://portal.amfiindia.com/spages/12077.pdf",
+        "file_name": "bandhan-small-cap-fund-sid.pdf",
+        "title": "Bandhan Small Cap Fund Scheme Information Document"
+      }
+    ]
+  },
+  {
+    "scheme_family_key": "whiteoak capital mid cap fund",
+    "scheme_code": null,
+    "provider": "WhiteOak Capital Mutual Fund",
+    "authoritative_domain": "portal.amfiindia.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://portal.amfiindia.com/spages/13138.pdf",
+        "file_name": "whiteoak-capital-mid-cap-fund-amfi-sid.pdf",
+        "title": "WhiteOak Capital Mid Cap Fund Scheme Information Document"
+      }
+    ]
+  },
+  {
+    "scheme_family_key": "icici prudential large and mid cap fund",
+    "scheme_code": null,
+    "provider": "ICICI Prudential Mutual Fund",
+    "authoritative_domain": "portal.amfiindia.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://portal.amfiindia.com/spages/129.pdf",
+        "file_name": "icici-prudential-large-and-mid-cap-fund-sid.pdf",
+        "title": "ICICI Prudential Large & Mid Cap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://portal.amfiindia.com/spages/SSD_129.pdf",
+        "file_name": "icici-prudential-large-and-mid-cap-fund-summary.pdf",
+        "title": "ICICI Prudential Large & Mid Cap Fund Scheme Summary Document"
+      }
+    ]
   }
 ]
