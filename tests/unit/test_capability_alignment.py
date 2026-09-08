@@ -55,3 +55,19 @@ def test_alignment_defaults_when_all_planner_metrics_are_unsupported():
     )
     action = CapabilitySemanticAligner(_registry()).align(plan).actions[0]
     assert action.metrics == ("volatility","sharpe_ratio","max_drawdown")
+
+
+def test_alignment_is_noop_for_capability_without_contract():
+    registry = CapabilityRegistry()
+    registry.register(ActionType.FETCH_PERFORMANCE, lambda action: None)
+    plan = ResearchPlan(
+        objective="legacy mock",
+        actions=(
+            ResearchAction(
+                ActionType.FETCH_PERFORMANCE,
+                metrics=("return_1y",),
+            ),
+        ),
+    )
+    aligned = CapabilitySemanticAligner(registry).align(plan)
+    assert aligned.actions[0].metrics == ("return_1y",)
