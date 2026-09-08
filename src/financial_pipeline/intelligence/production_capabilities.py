@@ -440,6 +440,22 @@ class ProductionCapabilityPack:
                 str(query),
                 document_ids=covered_document_ids,
             )
+        elif coverage:
+            # Identity resolution has already searched persisted mappings,
+            # metadata and indexed chunk content. Repeating document discovery
+            # here cannot improve recall; preserve the verified coverage result.
+            from financial_pipeline.retrieval.rag import RAGResponse
+            response = RAGResponse(
+                query=str(query),
+                answer=(
+                    "Requested fund-specific documentary evidence is not "
+                    "resolved in the indexed corpus."
+                ),
+                sources=[],
+                model="",
+                latency_ms=0,
+                retrieval_count=0,
+            )
         elif document_search_names and hasattr(self.rag_pipeline, "ask_documentary"):
             response = self.rag_pipeline.ask_documentary(
                 str(query),
