@@ -50,7 +50,7 @@ def main() -> None:
         planner=planner,
         executor=ResearchExecutor(registry, harness),
         evaluator=EvidenceEvaluator(),
-        replanner=EvidenceReplanner(),
+        replanner=EvidenceReplanner(registry),
         harness=harness,
     )
 
