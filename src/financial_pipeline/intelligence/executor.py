@@ -29,7 +29,11 @@ class ResearchExecutor:
                 plan_id=plan.plan_id,
                 action_id=action.action_id,
                 action_type=action.action_type.value,
-                payload={"rationale": action.rationale, "metrics": list(action.metrics)},
+                payload={
+                    "rationale": action.rationale,
+                    "metrics": list(action.metrics),
+                    "evidence_types": list(action.evidence_types),
+                },
             )
             self._harness.validate_action(state, action)
             state.tool_calls += 1
