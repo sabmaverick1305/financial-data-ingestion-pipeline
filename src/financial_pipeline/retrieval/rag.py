@@ -188,6 +188,28 @@ class RAGPipeline:
             retrieval_count=len(chunks),
         )
 
+    def documentary_coverage(
+        self,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...],
+    ) -> dict[str, dict]:
+        return self._retriever.documentary_coverage(
+            fund_names=fund_names,
+            required_document_types=document_types,
+        )
+
+    def documentary_ingestion_backlog(
+        self,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...],
+    ) -> list[dict]:
+        return self._retriever.documentary_ingestion_backlog(
+            fund_names=fund_names,
+            required_document_types=document_types,
+        )
+
     def is_llm_configured(self) -> bool:
         return bool(settings.openai_api_key)
 
