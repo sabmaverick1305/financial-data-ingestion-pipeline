@@ -68,3 +68,10 @@ def test_discovery_filters_non_beta_fund_families():
         "invesco india midcap fund",
     }
     assert result.result["beta_universe_enabled"] is True
+
+
+def test_closed_beta_policy_normalizes_mid_cap_spelling_variant():
+    policy = ClosedBetaUniversePolicy.default()
+    assert policy.allows("invesco india mid cap fund") is True
+    assert policy.allows("Invesco India Midcap Fund") is True
+    assert policy.canonicalize("invesco india mid cap fund") == "invesco india midcap fund"
