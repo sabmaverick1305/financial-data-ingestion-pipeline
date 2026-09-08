@@ -55,6 +55,9 @@ class ResearchExecutor:
                     "evidence_refs": list(observation.evidence_refs),
                     "tradeoff_reason": observation.tradeoff_reason,
                     "error": observation.error,
+                    "failure_domain": observation.failure_domain,
+                    "retryable": observation.retryable,
+                    "replannable": observation.replannable,
                 },
             )
 
