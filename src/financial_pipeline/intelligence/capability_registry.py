@@ -60,6 +60,13 @@ class CapabilityRegistry:
         except KeyError as exc:
             raise KeyError(f"no capability registered for: {action_type}") from exc
 
+    def supported_metrics(self, action_type: ActionType) -> tuple[str, ...] | None:
+        """Return canonical metrics advertised by a capability contract."""
+        capability = self.get(action_type)
+        if capability.contract is None:
+            return None
+        return capability.contract.supported_metrics
+
     def execute(self, action: ResearchAction) -> ActionObservation:
         capability = self.get(action.action_type)
         try:
