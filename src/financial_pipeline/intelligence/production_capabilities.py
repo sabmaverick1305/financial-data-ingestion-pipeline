@@ -351,19 +351,34 @@ class ProductionCapabilityPack:
         if self.rag_pipeline is None:
             raise RuntimeError("RAG pipeline is not configured")
         query = action.parameters.get("query") or " ".join((*action.metrics, *action.evidence_types))
-        response = self.rag_pipeline.ask(str(query))
-        refs = tuple(f"verified:rag:{source.get('document_id', source.get('source', index))}" for index, source in enumerate(response.sources))
+        candidate_names = list(action.parameters.get("candidate_names") or [])
+        if candidate_names and hasattr(self.rag_pipeline, "ask_documentary"):
+            response = self.rag_pipeline.ask_documentary(
+                str(query),
+                fund_names=candidate_names,
+                document_types=list(action.evidence_types),
+            )
+        else:
+            response = self.rag_pipeline.ask(str(query))
+        refs = tuple(
+            f"verified:rag:{source.get('document_id', source.get('source', index))}"
+            for index, source in enumerate(response.sources)
+        )
         valid, reason = self._documentary_validator.validate(
             answer=response.answer,
             sources=response.sources,
             requested=action.evidence_types,
         )
+        if not response.sources and candidate_names:
+            valid = False
+            reason = "fund-specific documentary evidence is not indexed in the current corpus"
         return CapabilityResult(
             result={
                 "scope": "document",
                 "answer": response.answer,
                 "sources": response.sources,
                 "evidence_valid": valid,
+                "candidate_names": candidate_names,
             },
             evidence_refs=refs,
             status=ActionStatus.SUCCEEDED if valid else ActionStatus.PARTIAL,
