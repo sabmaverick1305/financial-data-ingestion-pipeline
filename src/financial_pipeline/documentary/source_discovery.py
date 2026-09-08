@@ -8,6 +8,10 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 
+class AuthoritativeSourceDiscoveryError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class DiscoveredAuthoritativeDocument:
     url: str
@@ -88,8 +92,27 @@ class AuthoritativeSourcePageDiscoverer:
         ):
             raise ValueError("source page must be HTTPS on the authoritative domain")
 
-        response = httpx.get(source_page_url, timeout=30, follow_redirects=True)
-        response.raise_for_status()
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/151.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-IN,en;q=0.9",
+        }
+        try:
+            response = httpx.get(
+                source_page_url,
+                timeout=30,
+                follow_redirects=True,
+                headers=headers,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise AuthoritativeSourceDiscoveryError(
+                f"official source page could not be fetched: {source_page_url}: {exc}"
+            ) from exc
 
         parser = _AnchorParser()
         parser.feed(response.text)
