@@ -167,6 +167,27 @@ class DocumentRepository:
             """)
             )
 
+            conn.execute(
+                text("""
+                CREATE TABLE IF NOT EXISTS document_scheme_identity (
+                    document_id UUID NOT NULL REFERENCES document_metadata(document_id) ON DELETE CASCADE,
+                    scheme_family_key TEXT NOT NULL,
+                    scheme_code TEXT,
+                    resolution_source TEXT NOT NULL,
+                    resolution_confidence DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (document_id, scheme_family_key)
+                )
+            """)
+            )
+            conn.execute(
+                text("""
+                CREATE INDEX IF NOT EXISTS idx_document_scheme_identity_family
+                ON document_scheme_identity (scheme_family_key, document_id)
+            """)
+            )
+
         self._log.info("db.tables_ready")
 
     # ------------------------------------------------------------------
@@ -743,6 +764,163 @@ class DocumentRepository:
             rows = conn.execute(text(sql), params).mappings().all()
         return [dict(r) for r in rows]
 
+    def resolve_document_identity(
+        self,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...] = (),
+    ) -> dict[str, list[str]]:
+        """Resolve and persist document identity for scheme-family keys.
+
+        Resolution order:
+        1. Existing document_scheme_identity mapping.
+        2. Metadata title/file-name match.
+        3. Indexed chunk-content match for legacy documents whose filenames are generic.
+
+        The content fallback is used only to establish identity; RAG still runs over
+        the resolved document IDs using the normal hybrid retrieval path.
+        """
+        if not fund_names:
+            return {}
+
+        expanded_types = self._expand_document_types(document_types)
+        type_filter = ""
+        params: dict[str, object] = {}
+        if expanded_types:
+            params["document_types"] = expanded_types
+            type_filter = (
+                "AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)"
+            )
+
+        values = []
+        for index, fund_name in enumerate(fund_names):
+            params[f"fund_{index}"] = fund_name
+            values.append(f"(:fund_{index})")
+
+        # Existing persisted identities.
+        sql_existing = f"""
+            WITH requested(fund_name) AS (
+                VALUES {', '.join(values)}
+            )
+            SELECT requested.fund_name, CAST(dsi.document_id AS text) AS document_id
+            FROM requested
+            JOIN document_scheme_identity dsi
+              ON dsi.scheme_family_key = requested.fund_name
+            JOIN document_metadata dm
+              ON dm.document_id = dsi.document_id
+            WHERE dm.processing_status IN ('embedded', 'indexed')
+              {type_filter}
+        """
+        with self._engine.connect() as conn:
+            existing_rows = conn.execute(text(sql_existing), params).mappings().all()
+
+        resolved: dict[str, list[str]] = {name: [] for name in fund_names}
+        for row in existing_rows:
+            resolved[str(row["fund_name"])].append(str(row["document_id"]))
+
+        unresolved = [name for name in fund_names if not resolved[name]]
+        if not unresolved:
+            return {name: list(dict.fromkeys(ids)) for name, ids in resolved.items()}
+
+        unresolved_params: dict[str, object] = {}
+        unresolved_values = []
+        for index, fund_name in enumerate(unresolved):
+            unresolved_params[f"fund_{index}"] = fund_name
+            unresolved_values.append(f"(:fund_{index})")
+        if expanded_types:
+            unresolved_params["document_types"] = expanded_types
+
+        # Metadata + chunk-content fallback in one query. Chunk content catches
+        # legacy assets such as monthly/factsheet PDFs with generic filenames.
+        sql_fallback = f"""
+            WITH requested(fund_name) AS (
+                VALUES {', '.join(unresolved_values)}
+            ),
+            metadata_matches AS (
+                SELECT DISTINCT
+                    requested.fund_name,
+                    dm.document_id,
+                    'metadata'::text AS resolution_source,
+                    0.95::double precision AS confidence
+                FROM requested
+                JOIN document_metadata dm
+                  ON (
+                      LOWER(COALESCE(dm.title, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
+                      OR LOWER(COALESCE(dm.file_name, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
+                      OR to_tsvector(
+                            'english',
+                            COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')
+                         ) @@ plainto_tsquery('english', requested.fund_name)
+                  )
+                WHERE dm.processing_status IN ('embedded', 'indexed')
+                  {type_filter}
+            ),
+            content_matches AS (
+                SELECT DISTINCT
+                    requested.fund_name,
+                    dc.document_id,
+                    'content_fts'::text AS resolution_source,
+                    0.85::double precision AS confidence
+                FROM requested
+                JOIN document_chunks dc
+                  ON to_tsvector('english', dc.text)
+                     @@ plainto_tsquery('english', requested.fund_name)
+                JOIN document_metadata dm
+                  ON dm.document_id = dc.document_id
+                WHERE dm.processing_status IN ('embedded', 'indexed')
+                  {type_filter}
+            )
+            SELECT * FROM metadata_matches
+            UNION
+            SELECT * FROM content_matches
+        """
+        with self._engine.connect() as conn:
+            fallback_rows = conn.execute(
+                text(sql_fallback),
+                unresolved_params,
+            ).mappings().all()
+
+        if fallback_rows:
+            with self._engine.begin() as conn:
+                conn.execute(
+                    text("""
+                        INSERT INTO document_scheme_identity (
+                            document_id,
+                            scheme_family_key,
+                            resolution_source,
+                            resolution_confidence
+                        )
+                        VALUES (
+                            CAST(:document_id AS uuid),
+                            :scheme_family_key,
+                            :resolution_source,
+                            :resolution_confidence
+                        )
+                        ON CONFLICT (document_id, scheme_family_key)
+                        DO UPDATE SET
+                            resolution_source = EXCLUDED.resolution_source,
+                            resolution_confidence = GREATEST(
+                                document_scheme_identity.resolution_confidence,
+                                EXCLUDED.resolution_confidence
+                            ),
+                            updated_at = NOW()
+                    """),
+                    [
+                        {
+                            "document_id": str(row["document_id"]),
+                            "scheme_family_key": str(row["fund_name"]),
+                            "resolution_source": str(row["resolution_source"]),
+                            "resolution_confidence": float(row["confidence"]),
+                        }
+                        for row in fallback_rows
+                    ],
+                )
+
+        for row in fallback_rows:
+            resolved[str(row["fund_name"])].append(str(row["document_id"]))
+
+        return {name: list(dict.fromkeys(ids)) for name, ids in resolved.items()}
+
     @staticmethod
     def _expand_document_types(
         document_types: list[str] | tuple[str, ...],
@@ -770,50 +948,50 @@ class DocumentRepository:
         document_types: list[str] | tuple[str, ...] = (),
         limit: int = 500,
     ) -> list[dict]:
-        """Resolve fund documentary metadata in one indexed database round trip.
-
-        Returns the matched fund name and canonical metadata type so coverage,
-        backlog construction and RAG filtering all share the same resolver.
-        """
+        """Resolve fund documentary metadata using persisted scheme identity."""
         if not fund_names:
             return []
 
-        params: dict[str, object] = {"limit": limit}
-        values: list[str] = []
-        for index, name in enumerate(fund_names):
-            params[f"fund_{index}"] = name
-            values.append(f"(:fund_{index})")
+        identities = self.resolve_document_identity(
+            fund_names=fund_names,
+            document_types=document_types,
+        )
+        document_ids = list(dict.fromkeys(
+            document_id
+            for ids in identities.values()
+            for document_id in ids
+        ))
+        if not document_ids:
+            return []
 
+        expanded_types = self._expand_document_types(document_types)
+        params: dict[str, object] = {
+            "document_ids": document_ids,
+            "limit": limit,
+        }
         type_filter = ""
-        if document_types:
-            params["document_types"] = self._expand_document_types(document_types)
+        if expanded_types:
+            params["document_types"] = expanded_types
             type_filter = (
                 "AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)"
             )
 
         sql = f"""
-            WITH requested(fund_name) AS (
-                VALUES {', '.join(values)}
-            )
-            SELECT DISTINCT
-                requested.fund_name,
+            SELECT
+                dsi.scheme_family_key AS fund_name,
                 CAST(dm.document_id AS text) AS document_id,
                 LOWER(REPLACE(dm.document_type, ' ', '_')) AS document_type
-            FROM requested
+            FROM document_scheme_identity dsi
             JOIN document_metadata dm
-              ON (
-                  LOWER(COALESCE(dm.title, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
-                  OR LOWER(COALESCE(dm.file_name, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
-                  OR to_tsvector(
-                        'english',
-                        COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')
-                     ) @@ plainto_tsquery('english', requested.fund_name)
-              )
-            WHERE dm.processing_status IN ('embedded', 'indexed')
+              ON dm.document_id = dsi.document_id
+            WHERE CAST(dm.document_id AS text) = ANY(:document_ids)
+              AND dsi.scheme_family_key = ANY(:fund_names)
+              AND dm.processing_status IN ('embedded', 'indexed')
               {type_filter}
-            ORDER BY requested.fund_name, document_type, document_id
+            ORDER BY dsi.scheme_family_key, document_type, document_id
             LIMIT :limit
         """
+        params["fund_names"] = fund_names
         with self._engine.connect() as conn:
             rows = conn.execute(text(sql), params).mappings().all()
         return [dict(row) for row in rows]
