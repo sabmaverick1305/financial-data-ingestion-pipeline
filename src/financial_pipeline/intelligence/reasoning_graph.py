@@ -16,6 +16,7 @@ from financial_pipeline.intelligence.harness import ReasoningHarness
 from financial_pipeline.intelligence.metric_routing import MetricOwnershipRouter
 from financial_pipeline.intelligence.investment_eligibility import InvestmentEligibilityPolicy
 from financial_pipeline.intelligence.plan_dependencies import PlanDependencyResolver
+from financial_pipeline.intelligence.capability_alignment import CapabilitySemanticAligner
 from financial_pipeline.intelligence.confidence import ConfidenceScorer
 from financial_pipeline.intelligence.answer_synthesis import AnswerSynthesizer
 from financial_pipeline.intelligence.fund_ranking import FundRanker
@@ -56,6 +57,7 @@ class ReasoningGraph:
         self._metric_router = MetricOwnershipRouter()
         self._eligibility = InvestmentEligibilityPolicy()
         self._dependency_resolver = PlanDependencyResolver()
+        self._capability_aligner = CapabilitySemanticAligner(executor._registry)
         self._confidence = ConfidenceScorer()
         self._synthesizer = AnswerSynthesizer()
         self._ranker = FundRanker()
@@ -67,6 +69,7 @@ class ReasoningGraph:
         plan, requirements = self._planner.plan(query)
         plan = self._metric_router.route(plan)
         plan, mandate = self._eligibility.apply(query, plan)
+        plan = self._capability_aligner.align(plan)
         plan = self._dependency_resolver.order(plan)
 
         visited.append(GraphNode.EXECUTE_AND_EVALUATE)
