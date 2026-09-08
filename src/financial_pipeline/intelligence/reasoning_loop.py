@@ -76,7 +76,11 @@ class ReasoningLoop:
                     ),
                     None,
                 )
-                if latest is not None and latest.replannable is False:
+                if (
+                    latest is not None
+                    and latest.replannable is False
+                    and latest.failure_domain == "configuration"
+                ):
                     non_replannable.append(latest)
 
             if non_replannable:
