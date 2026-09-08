@@ -7,6 +7,18 @@ class ReasoningProductionRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
+    def discover_categories(self) -> list[str]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT DISTINCT category
+                FROM mf_scheme_master
+                WHERE is_active = TRUE
+                  AND category IS NOT NULL
+                  AND BTRIM(category) <> ''
+                ORDER BY category
+            """)).all()
+        return [str(row[0]) for row in rows]
+
     def discover_funds(self, *, category: str | None = None, limit: int = 20) -> list[dict]:
         where = "WHERE m.is_active = TRUE"
         params: dict[str, object] = {"limit": limit}
