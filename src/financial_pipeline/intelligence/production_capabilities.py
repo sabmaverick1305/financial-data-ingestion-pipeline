@@ -416,17 +416,31 @@ class ProductionCapabilityPack:
         )
         coverage = {}
         backlog = []
+        covered_document_ids: list[str] = []
         if document_search_names and hasattr(self.rag_pipeline, "documentary_coverage"):
             coverage = self.rag_pipeline.documentary_coverage(
                 fund_names=document_search_names,
                 document_types=list(action.evidence_types),
             )
-            backlog = self.rag_pipeline.documentary_ingestion_backlog(
-                fund_names=document_search_names,
-                document_types=list(action.evidence_types),
-            )
+            # Build the backlog from the already-resolved coverage. Do not repeat
+            # the same metadata search merely to report missing evidence.
+            for fund_name, item in coverage.items():
+                for document_type in item.get("missing_document_types", []):
+                    backlog.append({
+                        "fund_name": fund_name,
+                        "document_type": document_type,
+                        "reason": "required documentary evidence not indexed",
+                    })
+                for type_item in item.get("by_type", {}).values():
+                    covered_document_ids.extend(type_item.get("document_ids", []))
+            covered_document_ids = list(dict.fromkeys(covered_document_ids))
 
-        if document_search_names and hasattr(self.rag_pipeline, "ask_documentary"):
+        if covered_document_ids and hasattr(self.rag_pipeline, "ask_documentary_ids"):
+            response = self.rag_pipeline.ask_documentary_ids(
+                str(query),
+                document_ids=covered_document_ids,
+            )
+        elif document_search_names and hasattr(self.rag_pipeline, "ask_documentary"):
             response = self.rag_pipeline.ask_documentary(
                 str(query),
                 fund_names=document_search_names,
