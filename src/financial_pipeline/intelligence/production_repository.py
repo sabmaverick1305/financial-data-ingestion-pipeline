@@ -77,6 +77,64 @@ class ReasoningProductionRepository:
                 break
         return filtered
 
+    def discover_funds_many(
+        self,
+        *,
+        categories: list[str],
+        limit: int = 20,
+    ) -> list[dict]:
+        """Discover a pooled candidate set for canonical categories in one round trip."""
+        if not categories:
+            return self.discover_funds(category=None, limit=limit)
+
+        # Match the source taxonomy once in SQL, then canonicalize/quality-gate in Python.
+        patterns = [f"%{category}%" for category in categories]
+        scan_limit = max(limit * 6, 60)
+        sql = """
+            SELECT m.scheme_code, m.scheme_name, m.amc_name, m.category, m.scheme_type,
+                   p.latest_nav, p.latest_nav_date, p.return_1y, p.return_3y_cagr,
+                   p.return_5y_cagr, p.return_10y_cagr, p.rolling_volatility
+            FROM mf_scheme_master m
+            JOIN mf_scheme_performance p ON p.scheme_code = m.scheme_code
+            WHERE m.is_active = TRUE
+              AND m.category IS NOT NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM unnest(CAST(:patterns AS text[])) AS pat
+                  WHERE LOWER(m.category) LIKE LOWER(pat)
+              )
+            ORDER BY p.return_3y_cagr DESC NULLS LAST,
+                     p.return_1y DESC NULLS LAST,
+                     m.scheme_name ASC
+            LIMIT :limit
+        """
+        with self._engine.connect() as conn:
+            rows = [
+                dict(row)
+                for row in conn.execute(
+                    text(sql),
+                    {"patterns": patterns, "limit": scan_limit},
+                ).mappings().all()
+            ]
+
+        allowed = set(categories)
+        filtered: list[dict] = []
+        for row in rows:
+            raw_category = str(row.get("category") or "")
+            canonical = self._categories.canonicalize(raw_category)
+            if canonical not in allowed:
+                continue
+            row["raw_category"] = raw_category
+            row["category"] = canonical
+            quality = self._quality.validate_candidate(row)
+            if not quality.valid:
+                continue
+            row["data_quality"] = {"valid": True, "issues": []}
+            filtered.append(row)
+            if len(filtered) >= limit:
+                break
+        return filtered
+
     def nav_history_many(self, scheme_codes: list[str]) -> dict[str, list[tuple]]:
         if not scheme_codes:
             return {}
