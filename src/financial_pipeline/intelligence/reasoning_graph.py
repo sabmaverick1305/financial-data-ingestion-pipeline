@@ -57,7 +57,7 @@ class ReasoningGraph:
         self._metric_router = MetricOwnershipRouter()
         self._eligibility = InvestmentEligibilityPolicy()
         self._dependency_resolver = PlanDependencyResolver()
-        self._capability_aligner = CapabilitySemanticAligner(executor._registry)
+        self._capability_aligner = CapabilitySemanticAligner(executor.registry)
         self._confidence = ConfidenceScorer()
         self._synthesizer = AnswerSynthesizer()
         self._ranker = FundRanker()
