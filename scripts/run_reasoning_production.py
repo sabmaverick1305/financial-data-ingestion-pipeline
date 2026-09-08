@@ -13,6 +13,7 @@ sys.path.insert(0, "src")
 from financial_pipeline.augmentation.generator import AnswerGenerator
 from financial_pipeline.config import settings
 from financial_pipeline.intelligence.evidence import EvidenceEvaluator
+from financial_pipeline.intelligence.closed_beta_policy import ClosedBetaUniversePolicy
 from financial_pipeline.documentary.evidence_policy import DEFAULT_BETA_REQUIREMENTS
 from financial_pipeline.intelligence.executor import ResearchExecutor
 from financial_pipeline.intelligence.harness import HarnessLimits, ReasoningHarness
@@ -50,6 +51,7 @@ def main() -> None:
     pack = ProductionCapabilityPack(
         repository=production_repo,
         rag_pipeline=rag_pipeline,
+        beta_universe_policy=ClosedBetaUniversePolicy.default(),
     )
     registry = build_production_registry(pack)
 
