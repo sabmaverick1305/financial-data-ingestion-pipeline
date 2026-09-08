@@ -58,6 +58,8 @@ class ActionStateBinder:
                     params["category"] = categories[0]
 
         if action.action_type is ActionType.RETRIEVE_EVIDENCE:
+            if candidate_names:
+                params["candidate_names"] = candidate_names[:10]
             if "query" not in params and candidate_names:
                 requested = " ".join(action.evidence_types)
                 names = "; ".join(candidate_names[:5])
