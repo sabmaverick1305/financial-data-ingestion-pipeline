@@ -30,6 +30,8 @@ class MetricOwnershipRouter:
             action = replace(action, metrics=tuple(dict.fromkeys(local)))
             if action.action_type is ActionType.COMPARE_PEERS and not action.metrics:
                 action = replace(action, metrics=("percentile_rank", "peer_outperformance"))
+            if action.action_type is ActionType.COMPUTE_RETURNS and not action.metrics:
+                action = replace(action, metrics=("total_return_3y", "annualized_return"))
             self._merge_action(buckets, order, action)
         return ResearchPlan(objective=plan.objective, actions=tuple(buckets[t] for t in order), assumptions=plan.assumptions, plan_id=plan.plan_id)
 
