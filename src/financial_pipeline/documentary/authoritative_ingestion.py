@@ -91,6 +91,7 @@ class AuthoritativeFundDocumentIngestor:
             file_hash=file_hash,
             title=document.title,
             file_type=extension,
+            publication_date=document.publication_date,
         )
         self._repository.bind_document_identity(
             document_id=document_id,
