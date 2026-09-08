@@ -77,13 +77,13 @@ class LLMPlanner:
             {"role": "user", "content": f"User query: {query}"},
         ]
         payload = self._generate_payload(messages)
+        plan = self._build_plan(query, payload)
 
-        actions = tuple(self._parse_action(item) for item in payload.get("actions", []))
-        plan = ResearchPlan(
-            objective=str(payload.get("objective") or query),
-            actions=actions,
-            assumptions=tuple(str(item) for item in payload.get("assumptions", [])),
-        )
+        missing = self._policy.missing_required_actions(query, plan)
+        if missing and self._llm_calls_used < 2:
+            payload = self._repair_policy_plan(query, messages, missing)
+            plan = self._build_plan(query, payload)
+
         self._policy.validate_plan(query, plan)
 
         requested_requirements = tuple(
@@ -147,6 +147,48 @@ class LLMPlanner:
             "planner returned invalid or truncated JSON after retry"
         ) from last_error
 
+    def _repair_policy_plan(
+        self,
+        query: str,
+        messages: list[dict],
+        missing: tuple[ActionType, ...],
+    ) -> dict[str, Any]:
+        missing_names = ", ".join(action.value for action in missing)
+        repair_messages = [
+            *messages,
+            {
+                "role": "user",
+                "content": (
+                    "The previous plan violated FIES planner policy. "
+                    f"It omitted these required actions: {missing_names}. "
+                    "Regenerate the complete plan, including every omitted action. "
+                    "Return compact valid JSON only; no markdown or explanation."
+                ),
+            },
+        ]
+        result = self._generator.generate(
+            repair_messages,
+            intent_type="factual",
+            max_tokens=2800,
+        )
+        self._llm_calls_used += 1
+        raw = re.sub(r"```(?:json)?\s*|\s*```", "", result.answer.strip()).strip()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("planner policy repair returned invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("planner policy repair output must be a JSON object")
+        return payload
+
+    @staticmethod
+    def _build_plan(query: str, payload: dict[str, Any]) -> ResearchPlan:
+        actions = tuple(LLMPlanner._parse_action(item) for item in payload.get("actions", []))
+        return ResearchPlan(
+            objective=str(payload.get("objective") or query),
+            actions=actions,
+            assumptions=tuple(str(item) for item in payload.get("assumptions", [])),
+        )
     @staticmethod
     def _parse_action(item: dict[str, Any]) -> ResearchAction:
         return ResearchAction(
