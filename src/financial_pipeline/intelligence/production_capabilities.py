@@ -69,6 +69,10 @@ class ProductionCapabilityPack:
             evidence_refs=tuple(dict.fromkeys(refs)),
         )
 
+    def returns(self, action: ResearchAction) -> CapabilityResult:
+        """Deterministic return capability over persisted scheme performance."""
+        return self.performance(action)
+
     def risk(self, action: ResearchAction) -> CapabilityResult:
         scheme_codes = action.parameters.get("scheme_codes")
         scheme_code = action.parameters.get("scheme_code")
