@@ -68,6 +68,8 @@ class ReasoningGraph:
 
         visited.append(GraphNode.EXECUTE_AND_EVALUATE)
         state = ReasoningState(query=query)
+        state.investment_mandate = mandate.mandate.value
+        state.eligible_categories = list(mandate.eligible_categories)
         state.llm_calls += self._planner.llm_calls_used
         state = self._loop.run(
             state=state,
