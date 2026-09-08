@@ -32,6 +32,8 @@ def test_live_metric_variants_normalize_before_contract_validation() -> None:
     assert ontology.canonicalize("return_1yr") == "return_1y"
     assert ontology.canonicalize("return_3yr") == "return_3y_cagr"
     assert ontology.canonicalize("return_5yr") == "return_5y_cagr"
+    assert ontology.canonicalize("return_3y") == "return_3y_cagr"
+    assert ontology.canonicalize("return_5y") == "return_5y_cagr"
     assert ontology.canonicalize("aum_current") == "aum"
     assert ontology.canonicalize("inflow_1yr") == "net_inflow"
     assert ontology.canonicalize("return_rank") == "percentile_rank"
