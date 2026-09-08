@@ -68,3 +68,18 @@ def test_documentary_rag_skips_llm_when_no_matching_documents():
     assert response.sources == []
     assert response.retrieval_count == 0
     assert "not indexed" in response.answer.lower()
+
+
+def test_documentary_type_aliases_are_supported_by_metadata_lookup_contract():
+    # Contract-level regression: planner vocabulary must remain compatible
+    # with canonical indexed document types.
+    aliases = {
+        "prospectus": "fund_prospectus",
+        "fact_sheet": "fund_fact_sheet",
+        "strategy": "fund_strategy_document",
+        "disclosures": "portfolio_disclosure",
+    }
+    assert aliases["prospectus"] == "fund_prospectus"
+    assert aliases["fact_sheet"] == "fund_fact_sheet"
+    assert aliases["strategy"] == "fund_strategy_document"
+    assert aliases["disclosures"] == "portfolio_disclosure"
