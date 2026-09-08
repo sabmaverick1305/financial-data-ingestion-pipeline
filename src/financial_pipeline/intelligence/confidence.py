@@ -12,6 +12,7 @@ class ConfidenceScore:
     contradiction_penalty: float
     replan_penalty: float
     soft_evidence_penalty: float
+    candidate_quality: float
 
 class ConfidenceScorer:
     def score(self, state: ReasoningState, *, required_dimensions: int = 9) -> ConfidenceScore:
@@ -31,17 +32,27 @@ class ConfidenceScorer:
             )
             else 0.8
         )
+
         freshness = 1.0
         contradiction_penalty = 0.0
         replan_penalty = min(0.2, state.replan_count * 0.05)
         soft_evidence_penalty = min(0.24, len(set(state.soft_evidence_gaps)) * 0.08)
+
+        decisions = list(state.candidate_decisions.values())
+        if decisions:
+            passed = sum(1 for decision in decisions if decision.get("eligible_for_ranking"))
+            candidate_quality = passed / len(decisions)
+        else:
+            candidate_quality = 0.0
+
         score = max(
             0.0,
             min(
                 1.0,
-                coverage * 0.55
-                + source_quality * 0.25
-                + freshness * 0.20
+                coverage * 0.40
+                + source_quality * 0.20
+                + freshness * 0.10
+                + candidate_quality * 0.30
                 - contradiction_penalty
                 - replan_penalty
                 - soft_evidence_penalty,
@@ -55,4 +66,5 @@ class ConfidenceScorer:
             contradiction_penalty,
             replan_penalty,
             soft_evidence_penalty,
+            candidate_quality,
         )
