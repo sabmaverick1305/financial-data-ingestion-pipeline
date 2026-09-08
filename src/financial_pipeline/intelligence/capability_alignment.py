@@ -82,6 +82,8 @@ class CapabilitySemanticAligner:
 
         capability = self._registry.get(action.action_type)
         contract = capability.contract
+        if contract is None:
+            return action
         supported = contract.supported_metrics
         if supported is None:
             return action
