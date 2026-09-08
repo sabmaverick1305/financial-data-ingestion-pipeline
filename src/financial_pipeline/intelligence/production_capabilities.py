@@ -7,6 +7,7 @@ from typing import Any
 from financial_pipeline.intelligence.capability_registry import CapabilityResult
 from financial_pipeline.intelligence.research_plan import ActionStatus, ResearchAction
 from financial_pipeline.intelligence.documentary_validation import DocumentaryEvidenceValidator
+from financial_pipeline.intelligence.scheme_family import SchemeFamilyPolicy
 
 class ProductionCapabilityPack:
     def __init__(self, *, repository=None, rag_pipeline=None, risk_free_rate: float = 0.065) -> None:
@@ -14,6 +15,7 @@ class ProductionCapabilityPack:
         self.rag_pipeline = rag_pipeline
         self.risk_free_rate = risk_free_rate
         self._documentary_validator = DocumentaryEvidenceValidator()
+        self._scheme_families = SchemeFamilyPolicy()
 
     def _repo(self):
         if self.repository is None:
@@ -44,10 +46,10 @@ class ProductionCapabilityPack:
         limit = int(action.parameters.get("limit", 20))
 
         if category:
-            rows = self._repo().discover_funds(category=category, limit=limit)
+            rows = self._repo().discover_funds(category=category, limit=max(limit * 3, limit))
         elif eligible:
             categories = list(dict.fromkeys(str(value) for value in eligible))
-            per_category = max(3, math.ceil(limit / max(1, len(categories))))
+            per_category = max(6, math.ceil((limit * 3) / max(1, len(categories))))
             pooled = []
             for eligible_category in categories:
                 pooled.extend(
@@ -61,7 +63,7 @@ class ProductionCapabilityPack:
                 code = str(row.get("scheme_code") or "")
                 if code:
                     deduped[code] = row
-            rows = list(deduped.values())
+            rows = self._scheme_families.deduplicate(list(deduped.values()))
             rows.sort(
                 key=lambda row: (
                     float(row.get("return_3y_cagr") or float("-inf")),
@@ -71,7 +73,17 @@ class ProductionCapabilityPack:
             )
             rows = rows[:limit]
         else:
-            rows = self._repo().discover_funds(category=None, limit=limit)
+            rows = self._repo().discover_funds(category=None, limit=max(limit * 3, limit))
+
+        rows = self._scheme_families.deduplicate(rows)
+        rows.sort(
+            key=lambda row: (
+                float(row.get("return_3y_cagr") or float("-inf")),
+                float(row.get("return_1y") or float("-inf")),
+            ),
+            reverse=True,
+        )
+        rows = rows[:limit]
 
         if not rows:
             raise ValueError("no production fund candidates passed mandate and data-quality gates")
