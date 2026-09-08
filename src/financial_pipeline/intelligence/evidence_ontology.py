@@ -33,7 +33,7 @@ _ALIASES: dict[str, str] = {
     "filing": "regulatory_filing",
     "filings": "regulatory_filing",
     "disclosure": "regulatory_filing",
-    "disclosures": "portfolio_disclosure",
+    "disclosures": "regulatory_filing",
     "sebi filing": "regulatory_filing",
     "sebi filings": "regulatory_filing",
     "disclosure": "regulatory_filing",
