@@ -89,3 +89,80 @@ def test_contract_fails_without_calling_handler_when_all_metrics_are_unsupported
     assert observation.error == "unsupported capability metrics"
     assert "morningstar_rating" in observation.tradeoff_reason
     assert "fund_quality_score" in observation.tradeoff_reason
+
+
+def test_metric_ontology_normalizes_natural_financial_language() -> None:
+    registry = CapabilityRegistry()
+    seen: list[tuple[str, ...]] = []
+
+    def handler(action: ResearchAction):
+        seen.append(action.metrics)
+        return CapabilityResult(result={"ok": True}, evidence_refs=("verified:performance",))
+
+    registry.register(
+        ActionType.FETCH_PERFORMANCE,
+        handler,
+        contract=CapabilityContract(
+            supported_metrics=("return_1y", "return_3y_cagr", "return_5y_cagr"),
+        ),
+    )
+
+    observation = registry.execute(
+        ResearchAction(
+            ActionType.FETCH_PERFORMANCE,
+            metrics=("1-year return", "3-year return", "5-year return"),
+        )
+    )
+
+    assert observation.status is ActionStatus.SUCCEEDED
+    assert seen == [("return_1y", "return_3y_cagr", "return_5y_cagr")]
+
+
+def test_metric_ontology_keeps_genuinely_unsupported_concepts_visible() -> None:
+    registry = CapabilityRegistry()
+    registry.register(
+        ActionType.RETRIEVE_EVIDENCE,
+        lambda action: CapabilityResult(result={"ok": True}),
+        contract=CapabilityContract(supported_metrics=("expense_ratio",)),
+    )
+
+    observation = registry.execute(
+        ResearchAction(
+            ActionType.RETRIEVE_EVIDENCE,
+            metrics=("expense ratio", "credit quality"),
+        )
+    )
+
+    assert observation.status is ActionStatus.PARTIAL
+    assert observation.tradeoff_reason == (
+        "unsupported metrics omitted by capability contract: credit quality"
+    )
+
+
+def test_metric_ontology_normalizes_flow_aum_and_peer_language() -> None:
+    cases = (
+        (ActionType.FETCH_FLOWS, ("net_inflow", "flow_trend"), ("net inflows", "flow trend")),
+        (ActionType.FETCH_AUM, ("aum", "aum_trend"), ("total AUM", "AUM trend")),
+        (
+            ActionType.COMPARE_PEERS,
+            ("percentile_rank", "peer_outperformance"),
+            ("return ranking", "relative performance"),
+        ),
+    )
+
+    for action_type, supported, requested in cases:
+        registry = CapabilityRegistry()
+        seen: list[tuple[str, ...]] = []
+
+        def handler(action: ResearchAction):
+            seen.append(action.metrics)
+            return CapabilityResult(result={"ok": True})
+
+        registry.register(
+            action_type,
+            handler,
+            contract=CapabilityContract(supported_metrics=supported),
+        )
+        observation = registry.execute(ResearchAction(action_type, metrics=requested))
+        assert observation.status is ActionStatus.SUCCEEDED
+        assert seen == [supported]
