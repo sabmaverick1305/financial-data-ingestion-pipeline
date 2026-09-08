@@ -25,6 +25,7 @@ class ActionStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    PARTIAL = "partial"
     FAILED = "failed"
     SKIPPED = "skipped"
 
@@ -55,4 +56,5 @@ class ActionObservation:
     status: ActionStatus
     result: Any = None
     evidence_refs: tuple[str, ...] = ()
+    tradeoff_reason: str | None = None
     error: str | None = None
