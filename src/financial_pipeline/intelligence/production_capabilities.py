@@ -22,22 +22,71 @@ class ProductionCapabilityPack:
 
     def discover_categories(self, action: ResearchAction) -> CapabilityResult:
         categories = self._repo().discover_categories()
+        eligible = action.parameters.get("eligible_categories")
+        if eligible:
+            allowed = set(str(value) for value in eligible)
+            categories = [category for category in categories if category in allowed]
         return CapabilityResult(
-            result={"scope": "scheme_category", "categories": categories},
-            evidence_refs=("verified:postgres:mf_scheme_master",),
+            result={
+                "scope": "scheme_category",
+                "categories": categories,
+                "mandate": action.parameters.get("mandate"),
+            },
+            evidence_refs=(
+                "verified:postgres:mf_scheme_master",
+                "verified:deterministic:investment_mandate",
+            ),
         )
 
     def discover_funds(self, action: ResearchAction) -> CapabilityResult:
         category = action.parameters.get("category") or action.category
+        eligible = action.parameters.get("eligible_categories")
         limit = int(action.parameters.get("limit", 20))
-        rows = self._repo().discover_funds(category=category, limit=limit)
+
+        if category:
+            rows = self._repo().discover_funds(category=category, limit=limit)
+        elif eligible:
+            categories = list(dict.fromkeys(str(value) for value in eligible))
+            per_category = max(3, math.ceil(limit / max(1, len(categories))))
+            pooled = []
+            for eligible_category in categories:
+                pooled.extend(
+                    self._repo().discover_funds(
+                        category=eligible_category,
+                        limit=per_category,
+                    )
+                )
+            deduped = {}
+            for row in pooled:
+                code = str(row.get("scheme_code") or "")
+                if code:
+                    deduped[code] = row
+            rows = list(deduped.values())
+            rows.sort(
+                key=lambda row: (
+                    float(row.get("return_3y_cagr") or float("-inf")),
+                    float(row.get("return_1y") or float("-inf")),
+                ),
+                reverse=True,
+            )
+            rows = rows[:limit]
+        else:
+            rows = self._repo().discover_funds(category=None, limit=limit)
+
         if not rows:
-            raise ValueError("no production fund candidates passed the data-quality gate")
+            raise ValueError("no production fund candidates passed mandate and data-quality gates")
+
         return CapabilityResult(
-            result={"scope": "scheme", "funds": rows},
+            result={
+                "scope": "scheme",
+                "funds": rows,
+                "mandate": action.parameters.get("mandate"),
+                "eligible_categories": list(eligible or ([category] if category else [])),
+            },
             evidence_refs=(
                 "verified:postgres:mf_scheme_master",
                 "verified:postgres:mf_scheme_performance",
+                "verified:deterministic:investment_mandate",
                 "verified:deterministic:data_quality_gate",
             ),
         )
