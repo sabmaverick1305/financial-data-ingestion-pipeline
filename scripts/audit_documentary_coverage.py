@@ -64,9 +64,10 @@ def main() -> None:
     print(json.dumps({
         "fund_count": len(coverage),
         "required_document_types": args.types,
-        "coverage_ratio": sum(ratios) / len(ratios) if ratios else 0.0,
-        "strict_documentary_ready": strict_ready,
+        "coverage_ratio": sum(semantic_ratios) / len(semantic_ratios) if semantic_ratios else 0.0,
         "semantic_documentary_ready": semantic_ready,
+        "physical_document_type_coverage_ratio": sum(ratios) / len(ratios) if ratios else 0.0,
+        "physical_document_type_ready": strict_ready,
         "semantic_requirements": list(DEFAULT_BETA_REQUIREMENTS),
         "semantic_coverage": semantic_coverage,
         "fully_covered_funds": sum(1 for item in coverage.values() if item["covered"]),
