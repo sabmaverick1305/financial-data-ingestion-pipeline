@@ -57,6 +57,8 @@ class ReasoningLoop:
                     "satisfied": [d.value for d in evaluation.satisfied],
                     "missing": [d.value for d in evaluation.missing],
                     "failed": [d.value for d in evaluation.failed],
+                    "partial": [d.value for d in evaluation.partial],
+                    "tradeoffs": list(evaluation.tradeoffs),
                 },
             )
             if evaluation.is_sufficient:
