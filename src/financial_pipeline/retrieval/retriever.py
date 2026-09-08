@@ -174,6 +174,28 @@ class Retriever:
             limit=limit,
         )
 
+    def documentary_coverage(
+        self,
+        *,
+        fund_names: list[str],
+        required_document_types: list[str] | tuple[str, ...],
+    ) -> dict[str, dict]:
+        return self._repo.documentary_coverage(
+            fund_names=fund_names,
+            required_document_types=required_document_types,
+        )
+
+    def documentary_ingestion_backlog(
+        self,
+        *,
+        fund_names: list[str],
+        required_document_types: list[str] | tuple[str, ...],
+    ) -> list[dict]:
+        return self._repo.documentary_ingestion_backlog(
+            fund_names=fund_names,
+            required_document_types=required_document_types,
+        )
+
     def get_context_chunks(
         self,
         query: str,
