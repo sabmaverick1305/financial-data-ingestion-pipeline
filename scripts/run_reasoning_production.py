@@ -16,6 +16,7 @@ from financial_pipeline.intelligence.evidence import EvidenceEvaluator
 from financial_pipeline.intelligence.executor import ResearchExecutor
 from financial_pipeline.intelligence.harness import HarnessLimits, ReasoningHarness
 from financial_pipeline.intelligence.llm_planner import LLMPlanner
+from financial_pipeline.intelligence.observability import ReasoningObservability
 from financial_pipeline.intelligence.production_capabilities import ProductionCapabilityPack
 from financial_pipeline.intelligence.production_registry import build_production_registry
 from financial_pipeline.intelligence.production_repository import ReasoningProductionRepository
@@ -173,6 +174,10 @@ def main() -> None:
     for name, passed in gates.items():
         print(f"{name}={'PASS' if passed else 'FAIL'}")
     print(f"overall={'GO' if all(gates.values()) else 'NO-GO'}")
+
+    print("\n=== OBSERVABILITY SNAPSHOT ===")
+    snapshot = ReasoningObservability().snapshot(state)
+    print(json.dumps(snapshot.to_dict(), indent=2, default=str))
 
     print("\n=== FINAL ANSWER ===")
     print(state.final_answer)
