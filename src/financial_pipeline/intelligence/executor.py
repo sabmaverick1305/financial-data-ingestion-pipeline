@@ -7,12 +7,14 @@ from financial_pipeline.intelligence.harness import ReasoningHarness
 from financial_pipeline.intelligence.reasoning_state import ReasoningState
 from financial_pipeline.intelligence.research_plan import ActionStatus, ResearchPlan
 from financial_pipeline.intelligence.reasoning_trace import ReasoningTraceEventType
+from financial_pipeline.intelligence.state_binding import ActionStateBinder
 
 
 class ResearchExecutor:
     def __init__(self, registry: CapabilityRegistry, harness: ReasoningHarness) -> None:
         self._registry = registry
         self._harness = harness
+        self._binder = ActionStateBinder()
 
     @property
     def registry(self) -> CapabilityRegistry:
@@ -22,6 +24,7 @@ class ResearchExecutor:
         state.set_plan(plan)
 
         for action in plan.actions:
+            action = self._binder.bind(state, action)
             assert state.trace is not None
             state.trace.record(
                 ReasoningTraceEventType.ACTION_STARTED,
