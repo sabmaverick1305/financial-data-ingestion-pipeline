@@ -64,7 +64,7 @@ class RAGPipeline:
         self._retriever = retriever
         self._ctx = ContextBuilder()
         self._top_k = top_k or settings.api_top_k
-        self._model = llm_model or settings.openai_model
+        self._model = llm_model or settings.active_llm_model
         self._stream = stream
         self._client = None  # lazy init
 
