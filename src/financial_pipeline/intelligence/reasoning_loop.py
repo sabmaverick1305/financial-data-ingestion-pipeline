@@ -58,6 +58,8 @@ class ReasoningLoop:
                     "missing": [d.value for d in evaluation.missing],
                     "failed": [d.value for d in evaluation.failed],
                     "partial": [d.value for d in evaluation.partial],
+                    "soft_missing": [d.value for d in evaluation.soft_missing],
+                    "soft_failed": [d.value for d in evaluation.soft_failed],
                     "tradeoffs": list(evaluation.tradeoffs),
                 },
             )
@@ -102,6 +104,12 @@ class ReasoningLoop:
                     },
                 )
                 return state
+
+            state.evidence_tradeoffs = list(evaluation.tradeoffs)
+            state.soft_evidence_gaps = [
+                *(dimension.value for dimension in evaluation.soft_missing),
+                *(dimension.value for dimension in evaluation.soft_failed),
+            ]
 
             if evaluation.is_sufficient:
                 state.trace.record(
