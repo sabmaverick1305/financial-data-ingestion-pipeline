@@ -156,6 +156,15 @@ _ALIASES: dict[str, str] = {
     "std deviation": "volatility",
     "std deviation returns": "volatility",
     "fund age": "fund_age",
+    "return 1yr": "return_1y",
+    "return 3yr": "return_3y_cagr",
+    "return 5yr": "return_5y_cagr",
+    "return 10yr": "return_10y_cagr",
+    "aum current": "aum",
+    "inflow 1yr": "net_inflow",
+    "return rank": "percentile_rank",
+    "risk rank": "percentile_rank",
+    "sharpe rank": "percentile_rank",
 }
 
 
