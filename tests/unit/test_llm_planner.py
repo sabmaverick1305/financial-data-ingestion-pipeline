@@ -80,15 +80,20 @@ def test_llm_planner_rejects_invented_action() -> None:
         LLMPlanner(FakeGenerator(payload)).plan("Give me some of the best mutual funds to invest in 2026")
 
 
-def test_llm_planner_rejects_flagship_plan_with_missing_required_action() -> None:
+def test_llm_planner_completes_missing_flagship_action_without_second_llm_call() -> None:
     payload = _flagship_payload()
     payload["actions"] = [
         action for action in payload["actions"]
         if action["action_type"] != "check_contradictions"
     ]
 
-    with pytest.raises(ValueError, match="omitted required flagship actions"):
-        LLMPlanner(FakeGenerator(payload)).plan("Give me some of the best mutual funds to invest in 2026")
+    generator = FakeGenerator(payload)
+    planner = LLMPlanner(generator)
+    plan, _ = planner.plan("Give me some of the best mutual funds to invest in 2026")
+
+    assert ActionType.CHECK_CONTRADICTIONS in {action.action_type for action in plan.actions}
+    assert planner.llm_calls_used == 1
+    assert generator.calls == 1
 
 
 class TruncatedThenValidGenerator:
