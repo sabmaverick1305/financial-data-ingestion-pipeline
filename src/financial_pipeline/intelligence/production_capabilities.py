@@ -304,11 +304,23 @@ class ProductionCapabilityPack:
             metric = "return_3y_cagr"
 
         groups = []
-        for current_category in categories:
-            peers = self._repo().peer_performance(
-                category=str(current_category),
-                limit=int(action.parameters.get("peer_limit", 100)),
+        repo = self._repo()
+        peer_limit = int(action.parameters.get("peer_limit", 100))
+        if hasattr(repo, "peer_performance_many"):
+            peer_map = repo.peer_performance_many(
+                categories=[str(value) for value in categories],
+                limit_per_category=peer_limit,
             )
+        else:
+            peer_map = {
+                str(value): repo.peer_performance(
+                    category=str(value),
+                    limit=peer_limit,
+                )
+                for value in categories
+            }
+        for current_category in categories:
+            peers = peer_map.get(str(current_category), [])
             ranked = [dict(row) for row in peers if row.get(metric) is not None]
             ranked.sort(
                 key=lambda row: float(row[metric]),
