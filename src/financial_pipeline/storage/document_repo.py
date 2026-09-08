@@ -941,6 +941,149 @@ class DocumentRepository:
             expanded.extend(aliases.get(normalized, (normalized,)))
         return list(dict.fromkeys(expanded))
 
+    def diagnose_documentary_resolution(
+        self,
+        *,
+        fund_names: list[str],
+        required_document_types: list[str] | tuple[str, ...],
+    ) -> dict[str, dict]:
+        """Explain why requested documentary evidence is not resolving.
+
+        Diagnosis distinguishes:
+        - resolved: indexed identity exists for a required type;
+        - wrong_document_type: fund appears in indexed documents, but not under required types;
+        - not_indexed: matching documents exist but are not embedded/indexed yet;
+        - identity_unresolved: required-type indexed docs exist, but fund identity does not match;
+        - missing_from_corpus: no document evidence for the fund could be found.
+        """
+        if not fund_names:
+            return {}
+
+        required_aliases = set(self._expand_document_types(required_document_types))
+        params: dict[str, object] = {}
+        values: list[str] = []
+        for index, fund_name in enumerate(fund_names):
+            params[f"fund_{index}"] = fund_name
+            values.append(f"(:fund_{index})")
+
+        sql = f"""
+            WITH requested(fund_name) AS (
+                VALUES {', '.join(values)}
+            ),
+            identity_hits AS (
+                SELECT
+                    requested.fund_name,
+                    dm.document_type,
+                    dm.processing_status,
+                    CAST(dm.document_id AS text) AS document_id,
+                    'identity'::text AS match_source
+                FROM requested
+                JOIN document_scheme_identity dsi
+                  ON dsi.scheme_family_key = requested.fund_name
+                JOIN document_metadata dm
+                  ON dm.document_id = dsi.document_id
+            ),
+            metadata_hits AS (
+                SELECT DISTINCT
+                    requested.fund_name,
+                    dm.document_type,
+                    dm.processing_status,
+                    CAST(dm.document_id AS text) AS document_id,
+                    'metadata'::text AS match_source
+                FROM requested
+                JOIN document_metadata dm
+                  ON (
+                      LOWER(COALESCE(dm.title, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
+                      OR LOWER(COALESCE(dm.file_name, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
+                  )
+            ),
+            content_hits AS (
+                SELECT DISTINCT
+                    requested.fund_name,
+                    dm.document_type,
+                    dm.processing_status,
+                    CAST(dm.document_id AS text) AS document_id,
+                    'content'::text AS match_source
+                FROM requested
+                JOIN document_chunks dc
+                  ON to_tsvector('english', dc.text)
+                     @@ plainto_tsquery('english', requested.fund_name)
+                JOIN document_metadata dm
+                  ON dm.document_id = dc.document_id
+            )
+            SELECT * FROM identity_hits
+            UNION
+            SELECT * FROM metadata_hits
+            UNION
+            SELECT * FROM content_hits
+            ORDER BY fund_name, document_type, processing_status, document_id
+        """
+        with self._engine.connect() as conn:
+            rows = [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
+
+        by_fund: dict[str, list[dict]] = {name: [] for name in fund_names}
+        for row in rows:
+            by_fund[str(row["fund_name"])].append(row)
+
+        diagnosis: dict[str, dict] = {}
+        for fund_name in fund_names:
+            hits = by_fund[fund_name]
+            indexed_required = [
+                row for row in hits
+                if str(row["document_type"]).lower().replace(" ", "_") in required_aliases
+                and row["processing_status"] in ("embedded", "indexed")
+            ]
+            required_not_indexed = [
+                row for row in hits
+                if str(row["document_type"]).lower().replace(" ", "_") in required_aliases
+                and row["processing_status"] not in ("embedded", "indexed")
+            ]
+            indexed_other_type = [
+                row for row in hits
+                if str(row["document_type"]).lower().replace(" ", "_") not in required_aliases
+                and row["processing_status"] in ("embedded", "indexed")
+            ]
+
+            identity_required = [
+                row for row in indexed_required if row["match_source"] == "identity"
+            ]
+            if identity_required:
+                reason = "resolved"
+            elif indexed_required:
+                reason = "identity_unresolved"
+            elif required_not_indexed:
+                reason = "not_indexed"
+            elif indexed_other_type:
+                reason = "wrong_document_type"
+            else:
+                reason = "missing_from_corpus"
+
+            diagnosis[fund_name] = {
+                "reason": reason,
+                "resolved_required_document_ids": list(dict.fromkeys(
+                    str(row["document_id"]) for row in identity_required
+                )),
+                "required_type_hits": [
+                    {
+                        "document_id": str(row["document_id"]),
+                        "document_type": str(row["document_type"]),
+                        "processing_status": str(row["processing_status"]),
+                        "match_source": str(row["match_source"]),
+                    }
+                    for row in indexed_required + required_not_indexed
+                ],
+                "other_type_hits": [
+                    {
+                        "document_id": str(row["document_id"]),
+                        "document_type": str(row["document_type"]),
+                        "processing_status": str(row["processing_status"]),
+                        "match_source": str(row["match_source"]),
+                    }
+                    for row in indexed_other_type
+                ],
+            }
+        return diagnosis
+
     def find_document_matches(
         self,
         *,
