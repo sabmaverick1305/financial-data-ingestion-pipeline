@@ -20,6 +20,7 @@ class AuthoritativeFundDocument:
     provider: str
     source: str
     source_url: str
+    authoritative_domain: str
     document_type: str
     file_name: str
     title: str | None = None
@@ -112,6 +113,14 @@ class AuthoritativeFundDocumentIngestor:
         parsed = urlparse(document.source_url)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError("authoritative source URL must use HTTPS")
+        allowed = document.authoritative_domain.lower().strip()
+        hostname = (parsed.hostname or "").lower()
+        if not allowed or not (
+            hostname == allowed or hostname.endswith("." + allowed)
+        ):
+            raise ValueError(
+                f"source URL host {hostname!r} does not match authoritative domain {allowed!r}"
+            )
         if not document.scheme_family_key.strip():
             raise ValueError("scheme_family_key is required")
         if not document.provider.strip():
