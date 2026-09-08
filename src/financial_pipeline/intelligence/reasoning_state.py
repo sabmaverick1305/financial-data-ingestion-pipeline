@@ -22,6 +22,7 @@ class ReasoningState:
     llm_calls: int = 0
     replan_count: int = 0
     final_answer: str | None = None
+    confidence_score: float | None = None
     abstention_reason: str | None = None
     trace: ReasoningTrace | None = None
 
