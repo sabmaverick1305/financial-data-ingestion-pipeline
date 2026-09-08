@@ -37,6 +37,7 @@ class ResearchAction:
     category: str | None = None
     metrics: tuple[str, ...] = ()
     evidence_types: tuple[str, ...] = ()
+    checks: tuple[str, ...] = ()
     rationale: str | None = None
     parameters: dict[str, Any] = field(default_factory=dict)
     action_id: str = field(default_factory=lambda: uuid4().hex)
