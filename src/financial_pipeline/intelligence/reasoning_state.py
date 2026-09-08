@@ -8,6 +8,7 @@ from financial_pipeline.intelligence.research_plan import (
     ActionObservation,
     ResearchPlan,
 )
+from financial_pipeline.intelligence.reasoning_trace import ReasoningTrace
 
 
 @dataclass
@@ -22,6 +23,11 @@ class ReasoningState:
     replan_count: int = 0
     final_answer: str | None = None
     abstention_reason: str | None = None
+    trace: ReasoningTrace | None = None
+
+    def __post_init__(self) -> None:
+        if self.trace is None:
+            self.trace = ReasoningTrace(query=self.query)
 
     def set_plan(self, plan: ResearchPlan) -> None:
         self.plan = plan
