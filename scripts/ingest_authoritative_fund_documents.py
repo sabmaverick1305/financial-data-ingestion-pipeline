@@ -26,7 +26,10 @@ from pathlib import Path
 sys.path.insert(0, "src")
 
 from financial_pipeline.config import settings
-from financial_pipeline.intelligence.closed_beta_policy import ClosedBetaUniversePolicy
+from financial_pipeline.intelligence.closed_beta_policy import (
+    ClosedBetaUniversePolicy,
+    canonical_beta_family_key,
+)
 from financial_pipeline.documentary.authoritative_ingestion import (
     AuthoritativeFundDocument,
     AuthoritativeFundDocumentIngestor,
@@ -58,10 +61,13 @@ def main() -> None:
         policy = ClosedBetaUniversePolicy.default()
         filtered = []
         for item in payload:
-            if policy.allows(str(item.get("scheme_family_key") or "")):
-                filtered.append(item)
+            raw_key = str(item.get("scheme_family_key") or "")
+            if policy.allows(raw_key):
+                normalized_item = dict(item)
+                normalized_item["scheme_family_key"] = canonical_beta_family_key(raw_key)
+                filtered.append(normalized_item)
             else:
-                skipped.append(str(item.get("scheme_family_key") or ""))
+                skipped.append(raw_key)
         payload = filtered
 
     repository = DocumentRepository(settings.postgres_url)
