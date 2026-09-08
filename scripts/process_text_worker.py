@@ -122,9 +122,16 @@ def process_one(doc: dict, s3, repo, extractor: TextExtractor, lineage: LineageC
             completed_at=completed_at,
         )
 
+        # Authoritative fund PDFs are evidence-first documents. PyMuPDF text
+        # extraction is sufficient for semantic RAG indexing, so do not force
+        # them through the expensive Docling table/OCR stage when a usable text
+        # layer already exists. This keeps the beta corpus deterministic and
+        # removes an unnecessary indexing dependency.
+        is_authoritative_fund_document = raw_key.startswith("bronze/fund_documents/")
         next_status = (
             Status.TABLES_EXTRACTED
             if file_type.lower() in ("xls", "xlsx", "html", "htm")
+            or (is_authoritative_fund_document and result.has_text_layer)
             else Status.TEXT_EXTRACTED
         )
         repo.update_status(
