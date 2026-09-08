@@ -90,15 +90,23 @@ class CapabilityRegistry:
                 )
                 if requested_any and not executable_any:
                     rejected = ", ".join((*unsupported_metrics, *unsupported_evidence))
+                    metric_only = bool(action.metrics) and not action.evidence_types and not unsupported_evidence
+                    evidence_only = bool(action.evidence_types) and not action.metrics and not unsupported_metrics
+                    if metric_only:
+                        reason = "capability contract rejected all requested metrics: " + rejected
+                        error = "unsupported capability metrics"
+                    elif evidence_only:
+                        reason = "capability contract rejected all requested evidence types: " + rejected
+                        error = "unsupported capability evidence types"
+                    else:
+                        reason = "capability contract rejected all requested semantics: " + rejected
+                        error = "unsupported capability semantics"
                     return ActionObservation(
                         action_id=action.action_id,
                         action_type=action.action_type,
                         status=ActionStatus.FAILED,
-                        tradeoff_reason=(
-                            "capability contract rejected all requested semantics: "
-                            + rejected
-                        ),
-                        error="unsupported capability semantics",
+                        tradeoff_reason=reason,
+                        error=error,
                     )
 
             raw_result = capability.handler(executable_action)
