@@ -43,7 +43,7 @@ def _upsert_sid_metadata(cur, *, amc_slug: str, amc_entity_id, url: str, key: st
         INSERT INTO document_metadata
             (source, provider, document_type, s3_raw_key, original_url,
              file_name, file_size_bytes, file_hash, amc_entity_id)
-        VALUES ('sebi_sid', %s, 'sid', %s, %s, %s, %s, %s, %s)
+        VALUES ('sebi_sid', %s, 'scheme_information_document', %s, %s, %s, %s, %s, %s)
         ON CONFLICT (file_name) DO UPDATE SET
             s3_raw_key = EXCLUDED.s3_raw_key,
             file_size_bytes = EXCLUDED.file_size_bytes,
