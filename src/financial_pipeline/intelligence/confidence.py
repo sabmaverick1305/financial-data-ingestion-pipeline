@@ -11,15 +11,48 @@ class ConfidenceScore:
     freshness: float
     contradiction_penalty: float
     replan_penalty: float
+    soft_evidence_penalty: float
 
 class ConfidenceScorer:
     def score(self, state: ReasoningState, *, required_dimensions: int = 9) -> ConfidenceScore:
-        successful = sum(1 for o in state.observations if o.status.value == "succeeded")
-        unique_success = len({o.action_type for o in state.observations if o.status.value == "succeeded"})
+        unique_success = len({
+            o.action_type
+            for o in state.observations
+            if o.status.value == "succeeded"
+        })
         coverage = min(1.0, unique_success / max(1, required_dimensions))
-        source_quality = 1.0 if all((not o.evidence_refs) or all(r.startswith("verified:") for r in o.evidence_refs) for o in state.observations) else 0.8
+        successful = [o for o in state.observations if o.status.value == "succeeded"]
+        source_quality = (
+            1.0
+            if all(
+                (not observation.evidence_refs)
+                or all(ref.startswith("verified:") for ref in observation.evidence_refs)
+                for observation in successful
+            )
+            else 0.8
+        )
         freshness = 1.0
         contradiction_penalty = 0.0
         replan_penalty = min(0.2, state.replan_count * 0.05)
-        score = max(0.0, min(1.0, coverage * 0.55 + source_quality * 0.25 + freshness * 0.20 - contradiction_penalty - replan_penalty))
-        return ConfidenceScore(score, coverage, source_quality, freshness, contradiction_penalty, replan_penalty)
+        soft_evidence_penalty = min(0.24, len(set(state.soft_evidence_gaps)) * 0.08)
+        score = max(
+            0.0,
+            min(
+                1.0,
+                coverage * 0.55
+                + source_quality * 0.25
+                + freshness * 0.20
+                - contradiction_penalty
+                - replan_penalty
+                - soft_evidence_penalty,
+            ),
+        )
+        return ConfidenceScore(
+            score,
+            coverage,
+            source_quality,
+            freshness,
+            contradiction_penalty,
+            replan_penalty,
+            soft_evidence_penalty,
+        )
