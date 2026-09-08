@@ -28,6 +28,7 @@ _CORE = (
     "Flexi Cap",
     "Multi Cap",
     "Mid Cap",
+    "Small Cap",
 )
 _AGGRESSIVE = (
     "Large & Mid Cap",
