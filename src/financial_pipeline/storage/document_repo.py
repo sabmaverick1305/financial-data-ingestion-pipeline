@@ -148,6 +148,25 @@ class DocumentRepository:
             """)
             )
 
+            conn.execute(
+                text("""
+                CREATE INDEX IF NOT EXISTS idx_doc_type_status
+                ON document_metadata (document_type, processing_status)
+            """)
+            )
+            conn.execute(
+                text("""
+                CREATE INDEX IF NOT EXISTS idx_doc_title_filename_fts
+                ON document_metadata
+                USING GIN (
+                    to_tsvector(
+                        'english',
+                        COALESCE(title, '') || ' ' || COALESCE(file_name, '')
+                    )
+                )
+            """)
+            )
+
         self._log.info("db.tables_ready")
 
     # ------------------------------------------------------------------
