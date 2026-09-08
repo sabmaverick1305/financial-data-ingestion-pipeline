@@ -14,15 +14,20 @@ class InvestmentEligibilityPolicy:
         actions = []
         for action in plan.actions:
             params = dict(action.parameters)
+            category = action.category
             if action.action_type is ActionType.DISCOVER_FUNDS:
-                if not action.category and "category" not in params:
-                    params["eligible_categories"] = list(decision.eligible_categories)
+                eligible = set(decision.eligible_categories)
+                if category and category not in eligible:
+                    category = None
+                if params.get("category") and params.get("category") not in eligible:
+                    params.pop("category", None)
+                params["eligible_categories"] = list(decision.eligible_categories)
                 params["mandate"] = decision.mandate.value
                 params["mandate_rationale"] = decision.rationale
             if action.action_type is ActionType.DISCOVER_CATEGORIES:
                 params["eligible_categories"] = list(decision.eligible_categories)
                 params["mandate"] = decision.mandate.value
-            actions.append(replace(action, parameters=params))
+            actions.append(replace(action, category=category, parameters=params))
 
         return (
             ResearchPlan(
