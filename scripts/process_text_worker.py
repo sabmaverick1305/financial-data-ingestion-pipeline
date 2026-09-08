@@ -122,7 +122,11 @@ def process_one(doc: dict, s3, repo, extractor: TextExtractor, lineage: LineageC
             completed_at=completed_at,
         )
 
-        next_status = Status.TABLES_EXTRACTED if file_type.lower() in ("xls", "xlsx") else Status.TEXT_EXTRACTED
+        next_status = (
+            Status.TABLES_EXTRACTED
+            if file_type.lower() in ("xls", "xlsx", "html", "htm")
+            else Status.TEXT_EXTRACTED
+        )
         repo.update_status(
             doc_id,
             next_status,
