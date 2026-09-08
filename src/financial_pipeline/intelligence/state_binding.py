@@ -7,7 +7,8 @@ from financial_pipeline.intelligence.research_plan import ActionStatus, ActionTy
 class ActionStateBinder:
     def bind(self, state: ReasoningState, action: ResearchAction) -> ResearchAction:
         params = dict(action.parameters)
-        categories: list[str] = []
+        global_categories: list[str] = []
+        candidate_categories: list[str] = []
         scheme_codes: list[str] = []
 
         for observation in state.observations:
@@ -15,7 +16,7 @@ class ActionStateBinder:
                 continue
             result = observation.result if isinstance(observation.result, dict) else {}
             if observation.action_type is ActionType.DISCOVER_CATEGORIES:
-                categories.extend(str(v) for v in result.get("categories", []) if v)
+                global_categories.extend(str(v) for v in result.get("categories", []) if v)
             if observation.action_type is ActionType.DISCOVER_FUNDS:
                 for fund in result.get("funds", []):
                     if not isinstance(fund, dict):
@@ -25,21 +26,30 @@ class ActionStateBinder:
                     if code:
                         scheme_codes.append(str(code))
                     if category:
-                        categories.append(str(category))
+                        candidate_categories.append(str(category))
 
-        categories = list(dict.fromkeys(categories))
+        global_categories = list(dict.fromkeys(global_categories))
+        candidate_categories = list(dict.fromkeys(candidate_categories))
         scheme_codes = list(dict.fromkeys(scheme_codes))
 
-        if action.action_type in (ActionType.FETCH_PERFORMANCE, ActionType.COMPUTE_RETURNS, ActionType.COMPUTE_RISK):
+        if action.action_type in (
+            ActionType.FETCH_PERFORMANCE,
+            ActionType.COMPUTE_RETURNS,
+            ActionType.COMPUTE_RISK,
+        ):
             if "scheme_code" not in params and "scheme_codes" not in params and scheme_codes:
                 params["scheme_codes"] = scheme_codes
 
         if action.action_type is ActionType.COMPARE_PEERS:
-            if "category" not in params and "categories" not in params and categories:
-                params["categories"] = categories
+            if "category" not in params and "categories" not in params:
+                categories = candidate_categories or global_categories
+                if categories:
+                    params["categories"] = categories
 
         if action.action_type in (ActionType.FETCH_AUM, ActionType.FETCH_FLOWS):
-            if "category" not in params and categories:
-                params["category"] = categories[0]
+            if "category" not in params:
+                categories = candidate_categories or global_categories
+                if categories:
+                    params["category"] = categories[0]
 
         return replace(action, parameters=params)
