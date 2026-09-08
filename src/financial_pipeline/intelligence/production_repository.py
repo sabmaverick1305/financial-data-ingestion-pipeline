@@ -42,7 +42,7 @@ class ReasoningProductionRepository:
             GROUP BY m.scheme_code, m.scheme_name, m.amc_name, m.category, m.scheme_type,
                      p.latest_nav, p.latest_nav_date, p.return_1y, p.return_3y_cagr,
                      p.return_5y_cagr, p.return_10y_cagr, p.rolling_volatility
-            ORDER BY m.scheme_name ASC
+            ORDER BY p.return_3y_cagr DESC NULLS LAST, p.return_1y DESC NULLS LAST, m.scheme_name ASC
             LIMIT :limit
         """
         with self._engine.connect() as conn:
