@@ -57,3 +57,32 @@ def test_confidence_penalizes_replans() -> None:
     score = ConfidenceScorer().score(state)
     assert score.replan_penalty == 0.1
     assert 0 <= score.score <= 1
+
+
+def test_discover_funds_ranking_expression_becomes_operation_parameters() -> None:
+    plan = ResearchPlan(
+        objective="discover",
+        actions=(ResearchAction(ActionType.DISCOVER_FUNDS, metrics=("top_10_by_aum",)),),
+    )
+    action = MetricOwnershipRouter().route(plan).actions[0]
+    assert action.metrics == ()
+    assert action.parameters == {"rank_by": "aum", "sort_order": "desc", "limit": 10}
+
+
+def test_contradiction_rules_move_from_metrics_to_checks() -> None:
+    plan = ResearchPlan(
+        objective="validate",
+        actions=(ResearchAction(ActionType.CHECK_CONTRADICTIONS, metrics=("performance_consistency", "style_drift")),),
+    )
+    action = MetricOwnershipRouter().route(plan).actions[0]
+    assert action.metrics == ()
+    assert action.checks == ("performance_consistency", "style_drift")
+
+
+def test_empty_peer_comparison_gets_explicit_default_basis() -> None:
+    plan = ResearchPlan(
+        objective="compare",
+        actions=(ResearchAction(ActionType.COMPARE_PEERS),),
+    )
+    action = MetricOwnershipRouter().route(plan).actions[0]
+    assert action.metrics == ("percentile_rank", "peer_outperformance")
