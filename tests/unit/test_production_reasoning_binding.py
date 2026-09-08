@@ -41,7 +41,7 @@ def test_live_metric_variants_normalize_before_contract_validation() -> None:
 
 def test_production_rag_contract_accepts_documentary_semantics() -> None:
     class Pack:
-        discover_categories = discover_funds = performance = risk = peer_compare = aum = flows = documentary = contradictions = lambda self, action: None
+        discover_categories = discover_funds = performance = returns = risk = peer_compare = aum = flows = documentary = contradictions = lambda self, action: None
     registry = build_production_registry(Pack())
     contract = registry.get(ActionType.RETRIEVE_EVIDENCE).contract
     action = ResearchAction(
