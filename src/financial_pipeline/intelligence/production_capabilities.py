@@ -112,18 +112,59 @@ class ProductionCapabilityPack:
         )
 
     def peer_compare(self, action: ResearchAction) -> CapabilityResult:
+        categories = action.parameters.get("categories")
         category = action.parameters.get("category")
-        if not category:
-            raise ValueError("category is required for peer comparison")
-        peers = self._repo().peer_performance(category=str(category), limit=int(action.parameters.get("peer_limit", 100)))
-        metric = str(action.parameters.get("compare_metric", "return_3y_cagr"))
-        ranked = [p for p in peers if p.get(metric) is not None]
-        ranked.sort(key=lambda row: float(row[metric]), reverse=True)
-        total = len(ranked)
-        for index, row in enumerate(ranked, 1):
-            row["rank"] = index
-            row["percentile_rank"] = ((total - index) / max(1, total - 1)) * 100 if total > 1 else 100.0
-        return CapabilityResult(result={"scope": "scheme_peer_set", "category": category, "metric": metric, "peers": ranked}, evidence_refs=("verified:postgres:mf_scheme_master", "verified:postgres:mf_scheme_performance"))
+        if category and not categories:
+            categories = [category]
+        if not categories:
+            raise ValueError("category or categories is required for peer comparison")
+
+        metric = str(
+            action.parameters.get("compare_metric")
+            or action.parameters.get("rank_by")
+            or "return_3y_cagr"
+        )
+        if metric not in {
+            "return_1y",
+            "return_3y_cagr",
+            "return_5y_cagr",
+            "return_10y_cagr",
+            "rolling_volatility",
+        }:
+            metric = "return_3y_cagr"
+
+        groups = []
+        for current_category in categories:
+            peers = self._repo().peer_performance(
+                category=str(current_category),
+                limit=int(action.parameters.get("peer_limit", 100)),
+            )
+            ranked = [dict(row) for row in peers if row.get(metric) is not None]
+            ranked.sort(
+                key=lambda row: float(row[metric]),
+                reverse=metric != "rolling_volatility",
+            )
+            total = len(ranked)
+            for index, row in enumerate(ranked, 1):
+                row["rank"] = index
+                row["percentile_rank"] = (
+                    ((total - index) / max(1, total - 1)) * 100
+                    if total > 1 else 100.0
+                )
+                row["peer_outperformance"] = index <= max(1, math.ceil(total * 0.25))
+            groups.append({
+                "category": str(current_category),
+                "metric": metric,
+                "peers": ranked,
+            })
+
+        return CapabilityResult(
+            result={"scope": "scheme_peer_sets", "categories": groups},
+            evidence_refs=(
+                "verified:postgres:mf_scheme_master",
+                "verified:postgres:mf_scheme_performance",
+            ),
+        )
 
     def aum(self, action: ResearchAction) -> CapabilityResult:
         category = action.parameters.get("category")
