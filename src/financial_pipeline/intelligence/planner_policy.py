@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from financial_pipeline.intelligence.evidence import EvidenceDimension, EvidenceRequirement
+from financial_pipeline.intelligence.evidence import EvidenceDimension, EvidenceImportance, EvidenceRequirement
 from financial_pipeline.intelligence.research_plan import ActionType, ResearchPlan
 
 
@@ -73,6 +73,26 @@ class PlannerPolicy:
             return requested
 
         by_dimension = {requirement.dimension: requirement for requirement in requested}
+        soft_dimensions = {
+            EvidenceDimension.FLOWS,
+            EvidenceDimension.AUM,
+            EvidenceDimension.DOCUMENTARY,
+        }
+        enforced = {}
         for dimension in _FLAGSHIP_MINIMUM:
-            by_dimension.setdefault(dimension, EvidenceRequirement(dimension=dimension))
-        return tuple(by_dimension[dimension] for dimension in _FLAGSHIP_MINIMUM)
+            requested_requirement = by_dimension.get(dimension)
+            importance = (
+                EvidenceImportance.SOFT
+                if dimension in soft_dimensions
+                else EvidenceImportance.HARD
+            )
+            enforced[dimension] = EvidenceRequirement(
+                dimension=dimension,
+                required=True,
+                allow_partial=(
+                    True if importance is EvidenceImportance.SOFT
+                    else bool(requested_requirement.allow_partial) if requested_requirement else False
+                ),
+                importance=importance,
+            )
+        return tuple(enforced[dimension] for dimension in _FLAGSHIP_MINIMUM)
