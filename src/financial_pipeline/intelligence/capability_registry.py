@@ -22,6 +22,8 @@ class CapabilityResult:
 
     result: Any
     evidence_refs: tuple[str, ...] = ()
+    status: ActionStatus = ActionStatus.SUCCEEDED
+    tradeoff_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,15 +64,20 @@ class CapabilityRegistry:
             if isinstance(raw_result, CapabilityResult):
                 result = raw_result.result
                 evidence_refs = raw_result.evidence_refs
+                status = raw_result.status
+                tradeoff_reason = raw_result.tradeoff_reason
             else:
                 result = raw_result
                 evidence_refs = ()
+                status = ActionStatus.SUCCEEDED
+                tradeoff_reason = None
             return ActionObservation(
                 action_id=action.action_id,
                 action_type=action.action_type,
-                status=ActionStatus.SUCCEEDED,
+                status=status,
                 result=result,
                 evidence_refs=evidence_refs,
+                tradeoff_reason=tradeoff_reason,
             )
         except Exception as exc:
             return ActionObservation(
