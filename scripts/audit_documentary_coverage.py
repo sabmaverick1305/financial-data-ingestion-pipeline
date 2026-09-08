@@ -43,15 +43,22 @@ def main() -> None:
         fund_names=args.fund_names,
         required_document_types=args.types,
     )
+    diagnosis = repo.diagnose_documentary_resolution(
+        fund_names=args.fund_names,
+        required_document_types=args.types,
+    )
 
     ratios = [float(item["coverage_ratio"]) for item in coverage.values()]
+    strict_ready = bool(ratios) and all(ratio >= 1.0 for ratio in ratios)
     print(json.dumps({
         "fund_count": len(coverage),
         "required_document_types": args.types,
         "coverage_ratio": sum(ratios) / len(ratios) if ratios else 0.0,
+        "strict_documentary_ready": strict_ready,
         "fully_covered_funds": sum(1 for item in coverage.values() if item["covered"]),
         "missing_combinations": len(backlog),
         "resolved_document_ids": identities,
+        "diagnosis": diagnosis,
         "funds": coverage,
         "ingestion_backlog": backlog,
     }, indent=2))
