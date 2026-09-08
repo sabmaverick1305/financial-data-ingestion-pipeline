@@ -116,10 +116,21 @@ class AuthoritativeSourcePageDiscoverer:
 
         parser = _AnchorParser()
         parser.feed(response.text)
+        stopwords = {
+            "fund", "mutual", "india", "capital", "the", "and",
+            "plan", "direct", "regular", "growth",
+        }
+        normalized_scheme = (
+            scheme_family_key.lower()
+            .replace("&", " and ")
+            .replace("mid cap", "midcap")
+            .replace("small cap", "smallcap")
+            .replace("large cap", "largecap")
+        )
         scheme_tokens = {
             token
-            for token in scheme_family_key.lower().replace("&", " and ").split()
-            if len(token) > 2
+            for token in normalized_scheme.split()
+            if len(token) > 2 and token not in stopwords
         }
 
         discovered: list[DiscoveredAuthoritativeDocument] = []
@@ -130,9 +141,15 @@ class AuthoritativeSourcePageDiscoverer:
             if not (link_host == allowed or link_host.endswith("." + allowed)):
                 continue
 
-            haystack = f"{anchor_text} {absolute}".lower().replace("-", " ")
-            scheme_overlap = sum(token in haystack for token in scheme_tokens)
-            if scheme_tokens and scheme_overlap < max(1, len(scheme_tokens) // 2):
+            haystack = (
+                f"{anchor_text} {absolute}".lower()
+                .replace("-", " ")
+                .replace("_", " ")
+                .replace("mid cap", "midcap")
+                .replace("small cap", "smallcap")
+                .replace("large cap", "largecap")
+            )
+            if scheme_tokens and not all(token in haystack for token in scheme_tokens):
                 continue
 
             for document_type, keywords in self._TYPE_KEYWORDS.items():
