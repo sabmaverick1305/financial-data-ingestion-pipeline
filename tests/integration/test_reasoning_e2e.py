@@ -65,7 +65,8 @@ def test_e2e_partial_risk_is_replanned_under_strict_evidence_policy() -> None:
     state = result.state
 
     assert state.replan_count == 2
-    assert state.abstention_reason == "replan budget exhausted before evidence became sufficient"
+    assert state.investigation_round == 3
+    assert state.abstention_reason == "investigation-round budget exhausted before evidence became sufficient"
     assert result.visited_nodes[-1] is GraphNode.ABSTAIN
     assert capabilities.calls.count(capabilities.calls[3]) >= 1
 
