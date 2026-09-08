@@ -67,23 +67,38 @@ class CapabilityRegistry:
             return None
         return capability.contract.supported_metrics
 
+    def supported_evidence_types(self, action_type: ActionType) -> tuple[str, ...] | None:
+        """Return canonical evidence types advertised by a capability contract."""
+        capability = self.get(action_type)
+        if capability.contract is None:
+            return None
+        return capability.contract.supported_evidence_types
+
     def execute(self, action: ResearchAction) -> ActionObservation:
         capability = self.get(action.action_type)
         try:
             executable_action = action
             unsupported_metrics: tuple[str, ...] = ()
+            unsupported_evidence: tuple[str, ...] = ()
             if capability.contract is not None:
-                executable_action, unsupported_metrics = capability.contract.normalize(action)
-                if action.metrics and not executable_action.metrics:
+                executable_action, unsupported_metrics, unsupported_evidence = (
+                    capability.contract.normalize(action)
+                )
+                requested_any = bool(action.metrics or action.evidence_types)
+                executable_any = bool(
+                    executable_action.metrics or executable_action.evidence_types
+                )
+                if requested_any and not executable_any:
+                    rejected = ", ".join((*unsupported_metrics, *unsupported_evidence))
                     return ActionObservation(
                         action_id=action.action_id,
                         action_type=action.action_type,
                         status=ActionStatus.FAILED,
                         tradeoff_reason=(
-                            "capability contract rejected all requested metrics: "
-                            + ", ".join(unsupported_metrics)
+                            "capability contract rejected all requested semantics: "
+                            + rejected
                         ),
-                        error="unsupported capability metrics",
+                        error="unsupported capability semantics",
                     )
 
             raw_result = capability.handler(executable_action)
@@ -97,11 +112,19 @@ class CapabilityRegistry:
                 evidence_refs = ()
                 status = ActionStatus.SUCCEEDED
                 tradeoff_reason = None
-            if unsupported_metrics:
-                contract_reason = (
-                    "unsupported metrics omitted by capability contract: "
-                    + ", ".join(unsupported_metrics)
-                )
+            if unsupported_metrics or unsupported_evidence:
+                reasons: list[str] = []
+                if unsupported_metrics:
+                    reasons.append(
+                        "unsupported metrics omitted by capability contract: "
+                        + ", ".join(unsupported_metrics)
+                    )
+                if unsupported_evidence:
+                    reasons.append(
+                        "unsupported evidence types omitted by capability contract: "
+                        + ", ".join(unsupported_evidence)
+                    )
+                contract_reason = "; ".join(reasons)
                 if status is ActionStatus.SUCCEEDED:
                     status = ActionStatus.PARTIAL
                 tradeoff_reason = (
