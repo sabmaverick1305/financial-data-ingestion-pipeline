@@ -33,6 +33,8 @@ class ResearchExecutor:
                     "rationale": action.rationale,
                     "metrics": list(action.metrics),
                     "evidence_types": list(action.evidence_types),
+                    "checks": list(action.checks),
+                    "parameters": dict(action.parameters),
                 },
             )
             self._harness.validate_action(state, action)
