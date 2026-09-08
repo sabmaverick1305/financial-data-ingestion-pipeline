@@ -148,3 +148,26 @@ def test_llm_planner_fails_safely_after_two_invalid_json_responses() -> None:
 
     assert planner.llm_calls_used == 2
     assert generator.calls == 2
+
+
+def test_llm_planner_merges_duplicate_action_types_before_policy_validation() -> None:
+    payload = _flagship_payload()
+    payload["actions"].append(
+        {
+            "action_type": "fetch_aum",
+            "metrics": ["aum", "aum_trend"],
+            "rationale": "duplicate richer AUM request",
+            "parameters": {"window": "5y"},
+        }
+    )
+
+    planner = LLMPlanner(FakeGenerator(payload))
+    plan, _ = planner.plan("Give me some of the best mutual funds to invest in 2026")
+
+    aum_actions = [
+        action for action in plan.actions
+        if action.action_type is ActionType.FETCH_AUM
+    ]
+    assert len(aum_actions) == 1
+    assert aum_actions[0].metrics == ("aum", "aum_trend")
+    assert aum_actions[0].parameters == {"window": "5y"}
