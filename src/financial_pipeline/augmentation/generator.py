@@ -173,7 +173,6 @@ class AnswerGenerator:
         resp = client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            temperature=temperature,
             system=system,
             messages=user_ms,
         )
