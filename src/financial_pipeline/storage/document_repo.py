@@ -238,7 +238,14 @@ class DocumentRepository:
                         'uploaded', 0
                     )
                     ON CONFLICT (file_name) DO UPDATE SET
+                        source            = EXCLUDED.source,
+                        provider          = EXCLUDED.provider,
+                        document_type     = EXCLUDED.document_type,
+                        category          = EXCLUDED.category,
+                        title             = EXCLUDED.title,
+                        original_url      = EXCLUDED.original_url,
                         s3_raw_key        = EXCLUDED.s3_raw_key,
+                        file_type         = EXCLUDED.file_type,
                         file_hash         = EXCLUDED.file_hash,
                         file_size_bytes   = EXCLUDED.file_size_bytes,
                         processing_status = 'uploaded',
