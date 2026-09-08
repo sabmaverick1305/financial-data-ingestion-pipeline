@@ -50,7 +50,7 @@ def main() -> None:
 
     discoverer = AuthoritativeSourcePageDiscoverer()
     manifest = []
-    unresolved = []
+    unresolved_candidates = set()
     failures = []
 
     for source in sources:
@@ -111,7 +111,7 @@ def main() -> None:
                 })
 
         if not discovered_any:
-            unresolved.append(scheme_key)
+            unresolved_candidates.add(scheme_key)
 
     # De-duplicate exact official document URLs discovered through multiple
     # catalogue pages.
@@ -120,6 +120,9 @@ def main() -> None:
         key = (item["scheme_family_key"], item["source_url"], item["document_type"])
         deduped[key] = item
     manifest = list(deduped.values())
+    resolved_scheme_keys = {item["scheme_family_key"] for item in manifest}
+    all_scheme_keys = {source["scheme_family_key"] for source in sources}
+    unresolved = sorted(all_scheme_keys - resolved_scheme_keys)
 
     args.output.write_text(json.dumps(manifest, indent=2))
     print(json.dumps({
