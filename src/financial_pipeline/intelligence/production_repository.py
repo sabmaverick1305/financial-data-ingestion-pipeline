@@ -3,11 +3,13 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from financial_pipeline.intelligence.category_ontology import CategoryOntology
+from financial_pipeline.intelligence.data_quality import FundDataQualityGate
 
 class ReasoningProductionRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
         self._categories = CategoryOntology()
+        self._quality = FundDataQualityGate()
 
     def discover_categories(self) -> list[str]:
         with self._engine.connect() as conn:
@@ -55,6 +57,10 @@ class ReasoningProductionRepository:
                 continue
             row["raw_category"] = raw_category
             row["category"] = canonical
+            quality = self._quality.validate_candidate(row)
+            if not quality.valid:
+                continue
+            row["data_quality"] = {"valid": True, "issues": []}
             filtered.append(row)
             if len(filtered) >= limit:
                 break
