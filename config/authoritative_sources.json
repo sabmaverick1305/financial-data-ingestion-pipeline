@@ -159,7 +159,15 @@
     "scheme_code": null,
     "provider": "ICICI Prudential Mutual Fund",
     "source_page_url": "https://digitalfactsheet.icicipruamc.com/fact/icici-prudential-large-and-mid-cap-fund.php",
-    "authoritative_domain": "icicipruamc.com"
+    "authoritative_domain": "icicipruamc.com",
+    "direct_documents": [
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.icicipruamc.com/blob/downloads/Files/Historic%20Factsheets/2025-2026/Complete%20Factsheet%20May%202025.pdf",
+        "file_name": "icici-prudential-complete-factsheet-may-2025.pdf",
+        "title": "ICICI Prudential Mutual Fund Complete Factsheet May 2025"
+      }
+    ]
   },
   {
     "scheme_family_key": "bandhan small cap fund",
@@ -220,6 +228,12 @@
         "source_url": "https://cmsnew.bandhanmutual.com/bandhan-small-cap-fund/",
         "file_name": "bandhan-small-cap-fund.html",
         "title": "Bandhan Small Cap Fund Official Factsheet Page"
+      },
+      {
+        "document_type": "portfolio_disclosure",
+        "source_url": "https://cmsnew.bandhanmutual.com/monthly-and-half-yearly-bandhan-small-cap-fund-30-june-2026/",
+        "file_name": "bandhan-small-cap-portfolio-june-2026.html",
+        "title": "Monthly and Half-yearly - Bandhan Small Cap Fund 30 June 2026"
       }
     ]
   },
@@ -229,13 +243,6 @@
     "provider": "ICICI Prudential Mutual Fund",
     "authoritative_domain": "digitalfactsheet.icicipruamc.com",
     "source_page_url": null,
-    "direct_documents": [
-      {
-        "document_type": "fund_fact_sheet",
-        "source_url": "https://digitalfactsheet.icicipruamc.com/fact/icici-prudential-large-and-mid-cap-fund.php",
-        "file_name": "icici-prudential-large-and-mid-cap-fund.html",
-        "title": "ICICI Prudential Large & Mid Cap Fund Digital Factsheet"
-      }
-    ]
+    "direct_documents": []
   }
 ]
