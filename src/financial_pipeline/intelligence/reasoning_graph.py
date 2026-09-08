@@ -16,6 +16,7 @@ from financial_pipeline.intelligence.harness import ReasoningHarness
 from financial_pipeline.intelligence.metric_routing import MetricOwnershipRouter
 from financial_pipeline.intelligence.confidence import ConfidenceScorer
 from financial_pipeline.intelligence.answer_synthesis import AnswerSynthesizer
+from financial_pipeline.intelligence.fund_ranking import FundRanker
 from financial_pipeline.intelligence.planner_protocol import ResearchPlanner
 from financial_pipeline.intelligence.reasoning_loop import ReasoningLoop
 from financial_pipeline.intelligence.reasoning_state import ReasoningState
@@ -51,6 +52,7 @@ class ReasoningGraph:
         self._metric_router = MetricOwnershipRouter()
         self._confidence = ConfidenceScorer()
         self._synthesizer = AnswerSynthesizer()
+        self._ranker = FundRanker()
         self._loop = ReasoningLoop(executor, evaluator, replanner, harness)
 
     def run(self, query: str) -> GraphResult:
@@ -70,6 +72,8 @@ class ReasoningGraph:
         if state.abstention_reason:
             visited.append(GraphNode.ABSTAIN)
         else:
+            ranked = self._ranker.rank(state, limit=10)
+            state.ranked_funds = [fund.__dict__ for fund in ranked]
             confidence = self._confidence.score(state)
             state.confidence_score = confidence.score
             state.final_answer = self._synthesizer.synthesize(state, confidence)
