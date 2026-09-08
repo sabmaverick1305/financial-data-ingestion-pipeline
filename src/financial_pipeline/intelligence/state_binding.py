@@ -10,6 +10,7 @@ class ActionStateBinder:
         global_categories: list[str] = []
         candidate_categories: list[str] = []
         scheme_codes: list[str] = []
+        candidate_names: list[str] = []
 
         for observation in state.observations:
             if observation.status not in (ActionStatus.SUCCEEDED, ActionStatus.PARTIAL):
@@ -25,12 +26,16 @@ class ActionStateBinder:
                     category = fund.get("category")
                     if code:
                         scheme_codes.append(str(code))
+                    name = fund.get("scheme_name")
+                    if name:
+                        candidate_names.append(str(name))
                     if category:
                         candidate_categories.append(str(category))
 
         global_categories = list(dict.fromkeys(global_categories))
         candidate_categories = list(dict.fromkeys(candidate_categories))
         scheme_codes = list(dict.fromkeys(scheme_codes))
+        candidate_names = list(dict.fromkeys(candidate_names))
 
         if action.action_type in (
             ActionType.FETCH_PERFORMANCE,
@@ -51,5 +56,11 @@ class ActionStateBinder:
                 categories = candidate_categories or global_categories
                 if categories:
                     params["category"] = categories[0]
+
+        if action.action_type is ActionType.RETRIEVE_EVIDENCE:
+            if "query" not in params and candidate_names:
+                requested = " ".join(action.evidence_types)
+                names = "; ".join(candidate_names[:5])
+                params["query"] = f"{requested} for mutual funds: {names}"
 
         return replace(action, parameters=params)
