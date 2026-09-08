@@ -183,12 +183,50 @@ class LLMPlanner:
 
     @staticmethod
     def _build_plan(query: str, payload: dict[str, Any]) -> ResearchPlan:
-        actions = tuple(LLMPlanner._parse_action(item) for item in payload.get("actions", []))
+        parsed_actions = tuple(
+            LLMPlanner._parse_action(item)
+            for item in payload.get("actions", [])
+        )
+        actions = LLMPlanner._deduplicate_actions(parsed_actions)
         return ResearchPlan(
             objective=str(payload.get("objective") or query),
             actions=actions,
             assumptions=tuple(str(item) for item in payload.get("assumptions", [])),
         )
+
+    @staticmethod
+    def _deduplicate_actions(
+        actions: tuple[ResearchAction, ...],
+    ) -> tuple[ResearchAction, ...]:
+        """Merge duplicate action types while preserving first-seen ordering."""
+        merged: dict[ActionType, ResearchAction] = {}
+        order: list[ActionType] = []
+
+        for action in actions:
+            existing = merged.get(action.action_type)
+            if existing is None:
+                merged[action.action_type] = action
+                order.append(action.action_type)
+                continue
+
+            metrics = tuple(dict.fromkeys((*existing.metrics, *action.metrics)))
+            parameters = {**existing.parameters, **action.parameters}
+            rationale = existing.rationale or action.rationale
+            entity = existing.entity or action.entity
+            category = existing.category or action.category
+
+            merged[action.action_type] = ResearchAction(
+                action_type=action.action_type,
+                entity=entity,
+                category=category,
+                metrics=metrics,
+                rationale=rationale,
+                parameters=parameters,
+                action_id=existing.action_id,
+            )
+
+        return tuple(merged[action_type] for action_type in order)
+
     @staticmethod
     def _parse_action(item: dict[str, Any]) -> ResearchAction:
         return ResearchAction(
