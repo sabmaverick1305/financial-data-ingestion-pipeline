@@ -181,10 +181,15 @@ def main() -> None:
     )
     print(f"funds_checked={len(family_keys)}")
     print(f"coverage_ratio={documentary_preflight_ratio}")
-    print(
-        "fully_covered_funds="
-        + str(sum(1 for item in documentary_coverage.values() if item.get("covered")))
+    fully_covered_funds = sum(
+        1 for item in documentary_coverage.values() if item.get("covered")
     )
+    print("fully_covered_funds=" + str(fully_covered_funds))
+    documentary_diagnosis = document_repo.diagnose_documentary_resolution(
+        fund_names=family_keys,
+        required_document_types=documentary_types,
+    )
+    print("diagnosis=" + json.dumps(documentary_diagnosis, default=str))
 
     print("\n=== BENCHMARK ===")
     print(f"total_latency_ms={total_latency_ms}")
@@ -214,9 +219,11 @@ def main() -> None:
         ),
         "no_abstention": state.abstention_reason is None,
         "latency_under_30s_target": total_latency_ms <= 30000,
-        "documentary_identity_resolved": (
-            documentary_preflight_ratio > 0.0
-            or "documentary" in state.soft_evidence_gaps
+        "documentary_identity_resolved": documentary_preflight_ratio > 0.0,
+        "documentary_full_coverage": (
+            len(family_keys) > 0
+            and fully_covered_funds == len(family_keys)
+            and documentary_preflight_ratio >= 1.0
         ),
     }
     for name, passed in gates.items():
