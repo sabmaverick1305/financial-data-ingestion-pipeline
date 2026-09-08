@@ -13,6 +13,7 @@ sys.path.insert(0, "src")
 from financial_pipeline.augmentation.generator import AnswerGenerator
 from financial_pipeline.config import settings
 from financial_pipeline.intelligence.evidence import EvidenceEvaluator
+from financial_pipeline.documentary.evidence_policy import DEFAULT_BETA_REQUIREMENTS
 from financial_pipeline.intelligence.executor import ResearchExecutor
 from financial_pipeline.intelligence.harness import HarnessLimits, ReasoningHarness
 from financial_pipeline.intelligence.llm_planner import LLMPlanner
@@ -162,34 +163,27 @@ def main() -> None:
         for fund in discovered_result.get("funds", [])
         if fund.get("scheme_family_key")
     ]
-    documentary_types = (
-        "fund_prospectus",
-        "fund_fact_sheet",
-        "fund_strategy_document",
-    )
-    documentary_coverage = document_repo.documentary_coverage(
+    semantic_requirements = list(DEFAULT_BETA_REQUIREMENTS)
+    semantic_coverage = document_repo.semantic_documentary_coverage(
         fund_names=family_keys,
-        required_document_types=documentary_types,
+        requirement_keys=semantic_requirements,
     )
     documentary_ratios = [
         float(item.get("coverage_ratio", 0.0))
-        for item in documentary_coverage.values()
+        for item in semantic_coverage.values()
     ]
     documentary_preflight_ratio = (
         sum(documentary_ratios) / len(documentary_ratios)
         if documentary_ratios else 0.0
     )
-    print(f"funds_checked={len(family_keys)}")
-    print(f"coverage_ratio={documentary_preflight_ratio}")
     fully_covered_funds = sum(
-        1 for item in documentary_coverage.values() if item.get("covered")
+        1 for item in semantic_coverage.values() if item.get("covered")
     )
-    print("fully_covered_funds=" + str(fully_covered_funds))
-    documentary_diagnosis = document_repo.diagnose_documentary_resolution(
-        fund_names=family_keys,
-        required_document_types=documentary_types,
-    )
-    print("diagnosis=" + json.dumps(documentary_diagnosis, default=str))
+    print(f"funds_checked={len(family_keys)}")
+    print(f"semantic_requirements={semantic_requirements}")
+    print(f"coverage_ratio={documentary_preflight_ratio}")
+    print(f"fully_covered_funds={fully_covered_funds}")
+    print("semantic_coverage=" + json.dumps(semantic_coverage, default=str))
 
     print("\n=== BENCHMARK ===")
     print(f"total_latency_ms={total_latency_ms}")
