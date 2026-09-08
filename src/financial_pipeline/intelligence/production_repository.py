@@ -28,7 +28,7 @@ class ReasoningProductionRepository:
 
     def discover_funds(self, *, category: str | None = None, limit: int = 20) -> list[dict]:
         where = "WHERE m.is_active = TRUE AND m.category IS NOT NULL"
-        params: dict[str, object] = {"limit": max(limit * 20, 500)}
+        params: dict[str, object] = {"limit": max(limit * 4, 100)}
         if category:
             where += " AND LOWER(COALESCE(m.category, '')) LIKE LOWER(:category_pattern)"
             params["category_pattern"] = f"%{category}%"
