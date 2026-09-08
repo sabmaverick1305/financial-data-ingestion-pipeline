@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from financial_pipeline.intelligence.capability_contracts import CapabilityContract
 from financial_pipeline.intelligence.capability_registry import CapabilityRegistry, CapabilityResult
 from financial_pipeline.intelligence.research_plan import ActionStatus, ActionType, ResearchAction
 
@@ -12,8 +13,45 @@ class MockVerifiedCapabilityPack:
         self.calls: list[ActionType] = []
 
     def register_all(self, registry: CapabilityRegistry) -> None:
+        contracts = {
+            ActionType.DISCOVER_FUNDS: CapabilityContract(
+                supported_metrics=("aum", "inception_date", "expense_ratio"),
+            ),
+            ActionType.FETCH_PERFORMANCE: CapabilityContract(
+                supported_metrics=("return_1y", "return_3y_cagr", "return_5y_cagr", "return_10y_cagr"),
+                metric_aliases={
+                    "1yr_return": "return_1y",
+                    "3yr_return": "return_3y_cagr",
+                    "5yr_return": "return_5y_cagr",
+                    "10yr_return": "return_10y_cagr",
+                },
+            ),
+            ActionType.COMPUTE_RISK: CapabilityContract(
+                supported_metrics=("volatility", "sharpe_ratio", "max_drawdown"),
+                metric_aliases={"rolling_volatility": "volatility", "rolling_stddev": "volatility"},
+            ),
+            ActionType.COMPARE_PEERS: CapabilityContract(
+                supported_metrics=("percentile_rank", "peer_outperformance"),
+            ),
+            ActionType.FETCH_FLOWS: CapabilityContract(
+                supported_metrics=("net_inflow", "flow_trend"),
+                metric_aliases={"net_flows": "net_inflow"},
+            ),
+            ActionType.FETCH_AUM: CapabilityContract(
+                supported_metrics=("aum", "aum_trend"),
+                metric_aliases={"total_aum": "aum"},
+            ),
+            ActionType.RETRIEVE_EVIDENCE: CapabilityContract(
+                supported_metrics=("fund_manager_tenure", "expense_ratio", "portfolio_concentration"),
+            ),
+        }
         for action_type in ActionType:
-            registry.register(action_type, self._handle, trusted=True)
+            registry.register(
+                action_type,
+                self._handle,
+                trusted=True,
+                contract=contracts.get(action_type),
+            )
 
     def _handle(self, action: ResearchAction) -> CapabilityResult:
         self.calls.append(action.action_type)
