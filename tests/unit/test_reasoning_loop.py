@@ -1,3 +1,4 @@
+from financial_pipeline.intelligence.capability_contracts import CapabilityContract
 from financial_pipeline.intelligence.capability_registry import CapabilityRegistry
 from financial_pipeline.intelligence.evidence import (
     EvidenceDimension,
@@ -111,3 +112,27 @@ def test_reasoning_loop_stops_when_replan_budget_is_exhausted() -> None:
 
     assert state.replan_count == 1
     assert state.abstention_reason == "replan budget exhausted before evidence became sufficient"
+
+
+def test_replanner_uses_capability_supported_metrics_instead_of_empty_metrics() -> None:
+    registry = CapabilityRegistry()
+    registry.register(
+        ActionType.COMPARE_PEERS,
+        lambda _: {"ok": True},
+        contract=CapabilityContract(
+            supported_metrics=("percentile_rank", "peer_outperformance"),
+        ),
+    )
+    replanner = EvidenceReplanner(registry)
+    evaluation = EvidenceEvaluator().evaluate(
+        ReasoningState(query="best mutual funds"),
+        (EvidenceRequirement(EvidenceDimension.PEER_COMPARISON),),
+    )
+
+    decision = replanner.decide(evaluation)
+
+    assert decision.should_replan
+    assert len(decision.actions) == 1
+    assert decision.actions[0].action_type is ActionType.COMPARE_PEERS
+    assert decision.actions[0].metrics == ("percentile_rank", "peer_outperformance")
+    assert "capability-supported metrics" in decision.actions[0].rationale
