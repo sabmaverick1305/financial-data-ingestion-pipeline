@@ -31,7 +31,16 @@ class ProductionCapabilityPack:
         category = action.parameters.get("category") or action.category
         limit = int(action.parameters.get("limit", 20))
         rows = self._repo().discover_funds(category=category, limit=limit)
-        return CapabilityResult(result={"scope": "scheme", "funds": rows}, evidence_refs=("verified:postgres:mf_scheme_master", "verified:postgres:mf_scheme_performance"))
+        if not rows:
+            raise ValueError("no production fund candidates passed the data-quality gate")
+        return CapabilityResult(
+            result={"scope": "scheme", "funds": rows},
+            evidence_refs=(
+                "verified:postgres:mf_scheme_master",
+                "verified:postgres:mf_scheme_performance",
+                "verified:deterministic:data_quality_gate",
+            ),
+        )
 
     def performance(self, action: ResearchAction) -> CapabilityResult:
         scheme_codes = action.parameters.get("scheme_codes")
