@@ -62,3 +62,27 @@ DEFAULT_BETA_REQUIREMENTS = (
     "investment_strategy",
     "portfolio_composition",
 )
+
+PLANNER_EVIDENCE_TO_SEMANTIC = {
+    "prospectus": "scheme_mandate",
+    "fund_prospectus": "scheme_mandate",
+    "scheme_information_document": "scheme_mandate",
+    "fact_sheet": "portfolio_composition",
+    "factsheet": "portfolio_composition",
+    "fund_fact_sheet": "portfolio_composition",
+    "strategy": "investment_strategy",
+    "fund_strategy_document": "investment_strategy",
+    "disclosures": "portfolio_composition",
+    "portfolio_disclosure": "portfolio_composition",
+}
+
+def semantic_requirements_for_evidence_types(
+    evidence_types: list[str] | tuple[str, ...],
+) -> tuple[str, ...]:
+    requirements: list[str] = []
+    for value in evidence_types:
+        normalized = str(value).lower().replace(" ", "_")
+        semantic = PLANNER_EVIDENCE_TO_SEMANTIC.get(normalized)
+        if semantic and semantic not in requirements:
+            requirements.append(semantic)
+    return tuple(requirements) or DEFAULT_BETA_REQUIREMENTS
