@@ -1,5 +1,8 @@
 from financial_pipeline.intelligence.capability_contracts import CapabilityContract
 from financial_pipeline.intelligence.capability_registry import CapabilityRegistry, CapabilityResult
+from financial_pipeline.intelligence.evidence import EvidenceDimension, EvidenceEvaluator, EvidenceRequirement
+from financial_pipeline.intelligence.reasoning_state import ReasoningState
+from financial_pipeline.intelligence.replan import EvidenceReplanner
 from financial_pipeline.intelligence.research_plan import ActionStatus, ActionType, ResearchAction
 
 
