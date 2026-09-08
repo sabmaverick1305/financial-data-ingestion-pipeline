@@ -213,8 +213,8 @@ def main() -> None:
         ),
         "no_abstention": state.abstention_reason is None,
         "latency_under_30s_target": total_latency_ms <= 30000,
-        "documentary_identity_resolved": documentary_preflight_ratio > 0.0,
-        "documentary_full_coverage": (
+        "documentary_semantic_evidence_resolved": documentary_preflight_ratio > 0.0,
+        "documentary_semantic_full_coverage": (
             len(family_keys) > 0
             and fully_covered_funds == len(family_keys)
             and documentary_preflight_ratio >= 1.0
