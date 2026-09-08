@@ -740,14 +740,22 @@ class DocumentRepository:
             key = f"name_{index}"
             clauses.append(
                 f"(LOWER(COALESCE(dm.title, '')) LIKE LOWER(:{key}) "
-                f"OR LOWER(COALESCE(dm.file_name, '')) LIKE LOWER(:{key}))"
+                f"OR LOWER(COALESCE(dm.file_name, '')) LIKE LOWER(:{key}) "
+                f"OR to_tsvector('english', COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')) "
+                f"@@ plainto_tsquery('english', :{key}_query))"
             )
             params[key] = f"%{name}%"
+            params[f"{key}_query"] = name
 
         type_filter = ""
         if document_types:
-            params["document_types"] = list(document_types)
-            type_filter = "AND LOWER(dm.document_type) = ANY(:document_types)"
+            params["document_types"] = [
+                str(value).lower().replace(" ", "_")
+                for value in document_types
+            ]
+            type_filter = (
+                "AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)"
+            )
 
         sql = f"""
             SELECT DISTINCT CAST(dm.document_id AS text) AS document_id
