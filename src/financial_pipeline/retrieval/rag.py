@@ -128,6 +128,66 @@ class RAGPipeline:
             retrieval_count=len(chunks),
         )
 
+    def ask_documentary(
+        self,
+        question: str,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...],
+        top_k: int | None = None,
+    ) -> RAGResponse:
+        """Retrieve only from indexed fund-specific documentary sources."""
+        document_ids = self._retriever.find_document_ids(
+            fund_names=fund_names,
+            document_types=document_types,
+            limit=50,
+        )
+        if not document_ids:
+            return RAGResponse(
+                query=question,
+                answer="Requested fund-specific documentary evidence is not indexed in the current corpus.",
+                sources=[],
+                model="",
+                latency_ms=0,
+                retrieval_count=0,
+            )
+
+        t0 = time.perf_counter()
+        limit = top_k or self._top_k
+        chunks = self._retriever.get_context_chunks(
+            question,
+            limit=limit,
+            document_ids=document_ids,
+        )
+        log.info(
+            "rag.documentary_retrieved",
+            count=len(chunks),
+            matched_documents=len(document_ids),
+            question=question[:80],
+        )
+        messages = self._ctx.build_messages(question, chunks)
+        sources = self._ctx.format_sources(chunks)
+        answer, usage = self._complete(messages, self._model)
+        latency = int((time.perf_counter() - t0) * 1000)
+
+        if settings.llm_provider == "anthropic":
+            prompt_tok = getattr(usage, "input_tokens", 0) if usage else 0
+            compl_tok = getattr(usage, "output_tokens", 0) if usage else 0
+        else:
+            prompt_tok = getattr(usage, "prompt_tokens", 0) if usage else 0
+            compl_tok = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        return RAGResponse(
+            query=question,
+            answer=answer,
+            sources=sources,
+            model=self._model,
+            latency_ms=latency,
+            prompt_tokens=prompt_tok,
+            completion_tokens=compl_tok,
+            retrieval_count=len(chunks),
+        )
+
     def is_llm_configured(self) -> bool:
         return bool(settings.openai_api_key)
 
