@@ -83,11 +83,7 @@ class LLMPlanner:
         payload = self._generate_payload(messages)
         plan = self._build_plan(query, payload)
 
-        missing = self._policy.missing_required_actions(query, plan)
-        if missing and self._llm_calls_used < 2:
-            payload = self._repair_policy_plan(query, messages, missing)
-            plan = self._build_plan(query, payload)
-
+        plan = self._policy.complete_plan(query, plan)
         self._policy.validate_plan(query, plan)
 
         requested_requirements = tuple(
