@@ -24,15 +24,51 @@
     "scheme_family_key": "invesco india mid cap fund",
     "scheme_code": null,
     "provider": "Invesco Mutual Fund",
-    "source_page_url": "https://www.invescomutualfund.com/our-funds/fund/equity/invesco-india-mid-cap-fund/211G",
-    "authoritative_domain": "invescomutualfund.com"
+    "source_page_url": "https://www.invescomutualfund.com/literature-forms/scheme-information-document/all-funds",
+    "authoritative_domain": "invescomutualfund.com",
+    "source_page_urls": [
+      "https://www.invescomutualfund.com/literature-forms/scheme-information-document/all-funds",
+      "https://www.invescomutualfund.com/literature-forms/factsheets"
+    ],
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://invescomutualfund.com/docs/default-source/default-document-library/sid---invesco-india-midcap-fund---nov-14-25.pdf?sfvrsn=c3da9bc2_0",
+        "file_name": "sid-invesco-india-midcap-fund-nov-14-25.pdf",
+        "title": "Invesco India Midcap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.invescomutualfund.com/docs/default-source/factsheet/invesco-mf-factsheet---march-2026.pdf?sfvrsn=3fc39dc2_0",
+        "file_name": "invesco-mf-factsheet-march-2026.pdf",
+        "title": "Invesco Mutual Fund Factsheet March 2026"
+      }
+    ]
   },
   {
     "scheme_family_key": "invesco india large and mid cap fund",
     "scheme_code": null,
     "provider": "Invesco Mutual Fund",
-    "source_page_url": "https://www.invescomutualfund.com/our-funds/fund/equity/invesco-india-large-and-mid-cap-fund",
-    "authoritative_domain": "invescomutualfund.com"
+    "source_page_url": "https://www.invescomutualfund.com/literature-forms/scheme-information-document/all-funds",
+    "authoritative_domain": "invescomutualfund.com",
+    "source_page_urls": [
+      "https://www.invescomutualfund.com/literature-forms/scheme-information-document/all-funds",
+      "https://www.invescomutualfund.com/literature-forms/factsheets"
+    ],
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://www.invescomutualfund.com/docs/default-source/scheme-information-documents-pdf/sid---invesco-india-large-mid-cap-fund---may-30-25.pdf?sfvrsn=37f899c2_0",
+        "file_name": "sid-invesco-india-large-mid-cap-fund-may-30-25.pdf",
+        "title": "Invesco India Large & Mid Cap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.invescomutualfund.com/docs/default-source/factsheet/invesco-mf-factsheet---january-20268a77fb07eee8616aaa28ff00007d74af.pdf",
+        "file_name": "invesco-mf-factsheet-january-2026.pdf",
+        "title": "Invesco Mutual Fund Factsheet January 2026"
+      }
+    ]
   },
   {
     "scheme_family_key": "motilal oswal midcap fund",
