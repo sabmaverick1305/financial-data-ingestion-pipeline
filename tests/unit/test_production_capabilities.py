@@ -40,3 +40,14 @@ def test_aum_and_flows_are_explicitly_category_scoped():
 def test_scheme_level_aum_fails_closed():
     with pytest.raises(ValueError, match="scheme-level AUM"):
         ProductionCapabilityPack(repository=Repo()).aum(ResearchAction(ActionType.FETCH_AUM, parameters={"scheme_code":"1"}))
+
+
+def test_compute_returns_uses_nav_history_deterministically():
+    action=ResearchAction(
+        ActionType.COMPUTE_RETURNS,
+        metrics=("total_return_3y","annualized_return"),
+        parameters={"scheme_code":"1"},
+    )
+    metrics=ProductionCapabilityPack(repository=Repo()).returns(action).result["metrics"]
+    assert metrics["total_return_3y"] > 0
+    assert metrics["annualized_return"] > 0
