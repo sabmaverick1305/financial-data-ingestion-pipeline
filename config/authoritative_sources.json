@@ -11,6 +11,12 @@
         "source_url": "https://www.assetmanagement.hsbc.co.in/assets/documents/mutual-funds/en/a6c34b27-227e-4684-9efd-b16ebf3aff29/hsbc-mid-cap-fund-sid.pdf",
         "file_name": "hsbc-mid-cap-fund-sid.pdf",
         "title": "HSBC Midcap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.assetmanagement.hsbc.co.in/assets/documents/mutual-funds/en/fund-factsheets/hsbc-midcap-fund.pdf",
+        "file_name": "hsbc-midcap-fund-factsheet.pdf",
+        "title": "HSBC Midcap Fund Factsheet"
       }
     ]
   },
@@ -151,6 +157,12 @@
         "source_url": "https://uatcontent.whiteoakamc.com/whiteoak_capital_mid_cap_fund_sid_8c36bddeec.pdf",
         "file_name": "whiteoak-capital-mid-cap-fund-sid.pdf",
         "title": "WhiteOak Capital Mid Cap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.whiteoakamc.com/assets/factsheet/WhiteOak-Capital-Mutual-Fund-Factsheet.pdf",
+        "file_name": "whiteoak-capital-mutual-fund-factsheet.pdf",
+        "title": "WhiteOak Capital Mutual Fund Factsheet"
       }
     ]
   },
@@ -244,5 +256,33 @@
     "authoritative_domain": "digitalfactsheet.icicipruamc.com",
     "source_page_url": null,
     "direct_documents": []
+  },
+  {
+    "scheme_family_key": "bank of india small cap fund",
+    "scheme_code": null,
+    "provider": "Bank of India Mutual Fund",
+    "authoritative_domain": "portal.amfiindia.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://portal.amfiindia.com/spages/12319.pdf",
+        "file_name": "bank-of-india-small-cap-fund-sid.pdf",
+        "title": "Bank of India Small Cap Fund Scheme Information Document"
+      }
+    ]
+  },
+  {
+    "scheme_family_key": "iti small cap fund",
+    "scheme_code": null,
+    "provider": "ITI Mutual Fund",
+    "authoritative_domain": "portal.amfiindia.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://portal.amfiindia.com/spages/12146.pdf",
+        "file_name": "iti-small-cap-fund-sid.pdf",
+        "title": "ITI Small Cap Fund Scheme Information Document"
+      }
+    ]
   }
 ]
