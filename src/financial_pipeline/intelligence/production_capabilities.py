@@ -400,10 +400,14 @@ class ProductionCapabilityPack:
             raise RuntimeError("RAG pipeline is not configured")
         query = action.parameters.get("query") or " ".join((*action.metrics, *action.evidence_types))
         candidate_names = list(action.parameters.get("candidate_names") or [])
-        if candidate_names and hasattr(self.rag_pipeline, "ask_documentary"):
+        document_search_names = list(
+            action.parameters.get("document_search_names")
+            or candidate_names
+        )
+        if document_search_names and hasattr(self.rag_pipeline, "ask_documentary"):
             response = self.rag_pipeline.ask_documentary(
                 str(query),
-                fund_names=candidate_names,
+                fund_names=document_search_names,
                 document_types=list(action.evidence_types),
             )
         else:
