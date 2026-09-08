@@ -9,6 +9,7 @@ import sys
 sys.path.insert(0, "src")
 
 from financial_pipeline.config import settings
+from financial_pipeline.documentary.evidence_policy import DEFAULT_BETA_REQUIREMENTS
 from financial_pipeline.storage.document_repo import DocumentRepository
 
 DEFAULT_TYPES = (
@@ -47,14 +48,27 @@ def main() -> None:
         fund_names=args.fund_names,
         required_document_types=args.types,
     )
+    semantic_coverage = repo.semantic_documentary_coverage(
+        fund_names=args.fund_names,
+        requirement_keys=list(DEFAULT_BETA_REQUIREMENTS),
+    )
 
     ratios = [float(item["coverage_ratio"]) for item in coverage.values()]
+    semantic_ratios = [
+        float(item["coverage_ratio"]) for item in semantic_coverage.values()
+    ]
     strict_ready = bool(ratios) and all(ratio >= 1.0 for ratio in ratios)
+    semantic_ready = bool(semantic_ratios) and all(
+        ratio >= 1.0 for ratio in semantic_ratios
+    )
     print(json.dumps({
         "fund_count": len(coverage),
         "required_document_types": args.types,
         "coverage_ratio": sum(ratios) / len(ratios) if ratios else 0.0,
         "strict_documentary_ready": strict_ready,
+        "semantic_documentary_ready": semantic_ready,
+        "semantic_requirements": list(DEFAULT_BETA_REQUIREMENTS),
+        "semantic_coverage": semantic_coverage,
         "fully_covered_funds": sum(1 for item in coverage.values() if item["covered"]),
         "missing_combinations": len(backlog),
         "resolved_document_ids": identities,
