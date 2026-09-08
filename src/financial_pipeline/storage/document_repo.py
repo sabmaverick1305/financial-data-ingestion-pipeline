@@ -789,18 +789,34 @@ class DocumentRepository:
 
         type_filter = ""
         if document_types:
-            params["document_types"] = [
-                str(value).lower().replace(" ", "_")
-                for value in document_types
-            ]
+            type_aliases = {
+                "prospectus": ("fund_prospectus", "prospectus"),
+                "fact_sheet": ("fund_fact_sheet", "fact_sheet", "factsheet"),
+                "factsheet": ("fund_fact_sheet", "fact_sheet", "factsheet"),
+                "strategy": ("fund_strategy_document", "strategy"),
+                "disclosures": ("portfolio_disclosure", "regulatory_filing", "disclosures"),
+                "portfolio_disclosure": ("portfolio_disclosure",),
+                "regulatory_filing": ("regulatory_filing",),
+                "annual_report": ("annual_report",),
+            }
+            expanded = []
+            for value in document_types:
+                normalized = str(value).lower().replace(" ", "_")
+                expanded.extend(type_aliases.get(normalized, (normalized,)))
+            params["document_types"] = list(dict.fromkeys(expanded))
             type_filter = (
                 "AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)"
             )
 
+        fts_clauses = [
+            f"to_tsvector('english', COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')) "
+            f"@@ plainto_tsquery('english', :name_{index}_query)"
+            for index, _ in enumerate(fund_names)
+        ]
         sql = f"""
             SELECT DISTINCT CAST(dm.document_id AS text) AS document_id
             FROM document_metadata dm
-            WHERE ({' OR '.join(clauses)})
+            WHERE ({' OR '.join(fts_clauses)})
               AND dm.processing_status IN ('embedded', 'indexed')
               {type_filter}
             ORDER BY document_id
