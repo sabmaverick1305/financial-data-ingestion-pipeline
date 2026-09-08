@@ -11,6 +11,22 @@ class ReasoningProductionRepository:
         self._categories = CategoryOntology()
         self._quality = FundDataQualityGate()
 
+    def ensure_latency_indexes(self) -> None:
+        """Create indexes used by the closed-beta reasoning hot path."""
+        with self._engine.begin() as conn:
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_mf_nav_history_scheme_date
+                ON mf_nav_history (scheme_code, nav_date)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_mf_scheme_performance_3y
+                ON mf_scheme_performance (return_3y_cagr DESC)
+            """))
+            conn.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_mf_scheme_master_active_category
+                ON mf_scheme_master (is_active, category)
+            """))
+
     def discover_categories(self) -> list[str]:
         with self._engine.connect() as conn:
             rows = conn.execute(text("""
