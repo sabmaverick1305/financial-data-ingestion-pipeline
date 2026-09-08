@@ -14,6 +14,10 @@ class ResearchExecutor:
         self._registry = registry
         self._harness = harness
 
+    @property
+    def registry(self) -> CapabilityRegistry:
+        return self._registry
+
     def execute(self, state: ReasoningState, plan: ResearchPlan) -> ReasoningState:
         state.set_plan(plan)
 
