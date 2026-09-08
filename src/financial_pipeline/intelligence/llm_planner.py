@@ -34,6 +34,8 @@ For mutual-fund research:
 - do not ask for human approval for trusted analytical actions;
 - keep each rationale under 12 words;
 - include at most 4 metrics per action;
+- put numeric/comparative measures in metrics;
+- for retrieve_evidence, put prospectus, fact sheet, strategy, filings, reports, and disclosures in evidence_types, not metrics;
 - return compact JSON only;
 - do not use markdown or add explanation outside the JSON.
 
@@ -46,7 +48,8 @@ JSON schema:
       "action_type": "one allowed action type",
       "entity": "string or null",
       "category": "string or null",
-      "metrics": ["string"],
+      "metrics": ["numeric/comparative metric only"],
+      "evidence_types": ["document/evidence type only"],
       "rationale": "string or null",
       "parameters": {}
     }
@@ -210,6 +213,7 @@ class LLMPlanner:
                 continue
 
             metrics = tuple(dict.fromkeys((*existing.metrics, *action.metrics)))
+            evidence_types = tuple(dict.fromkeys((*existing.evidence_types, *action.evidence_types)))
             parameters = {**existing.parameters, **action.parameters}
             rationale = existing.rationale or action.rationale
             entity = existing.entity or action.entity
@@ -220,6 +224,7 @@ class LLMPlanner:
                 entity=entity,
                 category=category,
                 metrics=metrics,
+                evidence_types=evidence_types,
                 rationale=rationale,
                 parameters=parameters,
                 action_id=existing.action_id,
@@ -234,6 +239,7 @@ class LLMPlanner:
             entity=item.get("entity"),
             category=item.get("category"),
             metrics=tuple(str(metric) for metric in item.get("metrics", [])),
+            evidence_types=tuple(str(value) for value in item.get("evidence_types", [])),
             rationale=item.get("rationale"),
             parameters=dict(item.get("parameters") or {}),
         )
