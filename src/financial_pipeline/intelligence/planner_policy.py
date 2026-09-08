@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from financial_pipeline.intelligence.evidence import EvidenceDimension, EvidenceImportance, EvidenceRequirement
-from financial_pipeline.intelligence.research_plan import ActionType, ResearchPlan
+from financial_pipeline.intelligence.research_plan import ActionType, ResearchAction, ResearchPlan
 
 
 _FLAGSHIP_MINIMUM = (
@@ -48,6 +48,66 @@ class PlannerPolicy:
             action_type
             for action_type in self.required_actions(query)
             if action_type not in present
+        )
+
+    def complete_plan(self, query: str, plan: ResearchPlan) -> ResearchPlan:
+        """Deterministically add required flagship actions omitted by the LLM."""
+        missing = self.missing_required_actions(query, plan)
+        if not missing:
+            return plan
+
+        defaults = {
+            ActionType.DISCOVER_CATEGORIES: ResearchAction(
+                ActionType.DISCOVER_CATEGORIES,
+                rationale="deterministic policy completion",
+            ),
+            ActionType.DISCOVER_FUNDS: ResearchAction(
+                ActionType.DISCOVER_FUNDS,
+                rationale="deterministic policy completion",
+                parameters={"limit": 20},
+            ),
+            ActionType.FETCH_PERFORMANCE: ResearchAction(
+                ActionType.FETCH_PERFORMANCE,
+                metrics=("return_1y", "return_3y_cagr", "return_5y_cagr"),
+                rationale="deterministic policy completion",
+            ),
+            ActionType.COMPUTE_RISK: ResearchAction(
+                ActionType.COMPUTE_RISK,
+                metrics=("volatility", "sharpe_ratio", "max_drawdown"),
+                rationale="deterministic policy completion",
+            ),
+            ActionType.COMPARE_PEERS: ResearchAction(
+                ActionType.COMPARE_PEERS,
+                metrics=("percentile_rank", "peer_outperformance"),
+                parameters={"rank_by": "return_3y_cagr"},
+                rationale="deterministic policy completion",
+            ),
+            ActionType.FETCH_FLOWS: ResearchAction(
+                ActionType.FETCH_FLOWS,
+                metrics=("net_inflow",),
+                rationale="deterministic policy completion",
+            ),
+            ActionType.FETCH_AUM: ResearchAction(
+                ActionType.FETCH_AUM,
+                metrics=("aum",),
+                rationale="deterministic policy completion",
+            ),
+            ActionType.RETRIEVE_EVIDENCE: ResearchAction(
+                ActionType.RETRIEVE_EVIDENCE,
+                evidence_types=("prospectus", "fact_sheet", "strategy", "disclosures"),
+                rationale="deterministic policy completion",
+            ),
+            ActionType.CHECK_CONTRADICTIONS: ResearchAction(
+                ActionType.CHECK_CONTRADICTIONS,
+                checks=("performance_consistency", "style_drift"),
+                rationale="deterministic policy completion",
+            ),
+        }
+        return ResearchPlan(
+            objective=plan.objective,
+            actions=(*plan.actions, *(defaults[action] for action in missing)),
+            assumptions=plan.assumptions,
+            plan_id=plan.plan_id,
         )
 
     def validate_plan(self, query: str, plan: ResearchPlan) -> None:
