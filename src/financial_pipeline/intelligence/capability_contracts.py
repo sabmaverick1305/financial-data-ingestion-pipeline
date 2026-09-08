@@ -20,28 +20,49 @@ class CapabilityContract:
     metric_ontology: MetricOntology = field(default_factory=MetricOntology)
     evidence_ontology: EvidenceOntology = field(default_factory=EvidenceOntology)
 
-    def normalize(self, action: ResearchAction) -> tuple[ResearchAction, tuple[str, ...]]:
+    def normalize(
+        self,
+        action: ResearchAction,
+    ) -> tuple[ResearchAction, tuple[str, ...], tuple[str, ...]]:
+        """Normalize metric and evidence vocabularies independently.
+
+        For backward compatibility, recognized evidence terms accidentally placed
+        in ``metrics`` are migrated to ``evidence_types`` before validation.
+        """
+        metric_values = list(action.metrics)
+        evidence_values = list(action.evidence_types)
+
+        if self.supported_evidence_types is not None and metric_values:
+            retained_metrics: list[str] = []
+            for value in metric_values:
+                evidence_canonical = self.evidence_ontology.canonicalize(value)
+                if (
+                    self.evidence_ontology.is_known(value)
+                    or evidence_canonical in set(self.supported_evidence_types)
+                ):
+                    evidence_values.append(value)
+                else:
+                    retained_metrics.append(value)
+            metric_values = retained_metrics
+
         metrics, unsupported_metrics = self._normalize_values(
-            action.metrics,
+            tuple(metric_values),
             self.supported_metrics,
             self.metric_aliases,
             self.metric_ontology.canonicalize,
         )
         evidence_types, unsupported_evidence = self._normalize_values(
-            action.evidence_types,
+            tuple(evidence_values),
             self.supported_evidence_types,
             self.evidence_aliases,
             self.evidence_ontology.canonicalize,
         )
 
-        unsupported = tuple(
-            [*unsupported_metrics, *unsupported_evidence]
+        return (
+            replace(action, metrics=metrics, evidence_types=evidence_types),
+            unsupported_metrics,
+            unsupported_evidence,
         )
-        return replace(
-            action,
-            metrics=metrics,
-            evidence_types=evidence_types,
-        ), unsupported
 
     @staticmethod
     def _normalize_values(values, supported_values, aliases, canonicalize):
