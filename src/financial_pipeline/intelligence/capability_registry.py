@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from financial_pipeline.intelligence.capability_contracts import CapabilityContract
 from financial_pipeline.intelligence.research_plan import (
     ActionObservation,
     ActionStatus,
@@ -31,6 +32,7 @@ class Capability:
     action_type: ActionType
     handler: CapabilityHandler
     trusted: bool = True
+    contract: CapabilityContract | None = None
 
 
 class CapabilityRegistry:
@@ -43,10 +45,11 @@ class CapabilityRegistry:
         handler: CapabilityHandler,
         *,
         trusted: bool = True,
+        contract: CapabilityContract | None = None,
     ) -> None:
         if action_type in self._capabilities:
             raise ValueError(f"capability already registered: {action_type}")
-        self._capabilities[action_type] = Capability(action_type, handler, trusted)
+        self._capabilities[action_type] = Capability(action_type, handler, trusted, contract)
 
     def has(self, action_type: ActionType) -> bool:
         return action_type in self._capabilities
@@ -60,7 +63,23 @@ class CapabilityRegistry:
     def execute(self, action: ResearchAction) -> ActionObservation:
         capability = self.get(action.action_type)
         try:
-            raw_result = capability.handler(action)
+            executable_action = action
+            unsupported_metrics: tuple[str, ...] = ()
+            if capability.contract is not None:
+                executable_action, unsupported_metrics = capability.contract.normalize(action)
+                if action.metrics and not executable_action.metrics:
+                    return ActionObservation(
+                        action_id=action.action_id,
+                        action_type=action.action_type,
+                        status=ActionStatus.FAILED,
+                        tradeoff_reason=(
+                            "capability contract rejected all requested metrics: "
+                            + ", ".join(unsupported_metrics)
+                        ),
+                        error="unsupported capability metrics",
+                    )
+
+            raw_result = capability.handler(executable_action)
             if isinstance(raw_result, CapabilityResult):
                 result = raw_result.result
                 evidence_refs = raw_result.evidence_refs
@@ -71,6 +90,19 @@ class CapabilityRegistry:
                 evidence_refs = ()
                 status = ActionStatus.SUCCEEDED
                 tradeoff_reason = None
+            if unsupported_metrics:
+                contract_reason = (
+                    "unsupported metrics omitted by capability contract: "
+                    + ", ".join(unsupported_metrics)
+                )
+                if status is ActionStatus.SUCCEEDED:
+                    status = ActionStatus.PARTIAL
+                tradeoff_reason = (
+                    f"{tradeoff_reason}; {contract_reason}"
+                    if tradeoff_reason
+                    else contract_reason
+                )
+
             return ActionObservation(
                 action_id=action.action_id,
                 action_type=action.action_type,
