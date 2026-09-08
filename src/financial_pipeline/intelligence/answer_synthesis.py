@@ -29,6 +29,10 @@ class AnswerSynthesizer:
                 f"Max DD={self._fmt(fund.get('max_drawdown'))}; "
                 f"Peer percentile={self._fmt(fund.get('peer_percentile'))}"
             )
+        if state.evidence_tradeoffs:
+            lines.append(
+                "Limitations: " + "; ".join(dict.fromkeys(state.evidence_tradeoffs))
+            )
         lines.append(self._safety.framing(personalized=False))
         return "\n".join(lines)
 
