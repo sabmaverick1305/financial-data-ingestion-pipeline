@@ -1,0 +1,55 @@
+"""Verified mock capability pack for pre-LLM end-to-end reasoning tests."""
+
+from __future__ import annotations
+
+from financial_pipeline.intelligence.capability_registry import CapabilityRegistry, CapabilityResult
+from financial_pipeline.intelligence.research_plan import ActionStatus, ActionType, ResearchAction
+
+
+class MockVerifiedCapabilityPack:
+    def __init__(self, *, partial_risk: bool = False) -> None:
+        self.partial_risk = partial_risk
+        self.calls: list[ActionType] = []
+
+    def register_all(self, registry: CapabilityRegistry) -> None:
+        for action_type in ActionType:
+            registry.register(action_type, self._handle, trusted=True)
+
+    def _handle(self, action: ResearchAction) -> CapabilityResult:
+        self.calls.append(action.action_type)
+
+        if action.action_type is ActionType.DISCOVER_CATEGORIES:
+            result = {"categories": ["Large Cap Fund", "Mid Cap Fund", "Hybrid Fund"]}
+        elif action.action_type is ActionType.DISCOVER_FUNDS:
+            result = {"funds": ["Fund A", "Fund B", "Fund C"]}
+        elif action.action_type is ActionType.FETCH_PERFORMANCE:
+            result = {
+                "Fund A": {"return_1y": 14.2, "return_3y_cagr": 18.4, "return_5y_cagr": 20.1},
+                "Fund B": {"return_1y": 17.8, "return_3y_cagr": 16.2, "return_5y_cagr": 17.4},
+            }
+        elif action.action_type is ActionType.COMPUTE_RISK and self.partial_risk:
+            return CapabilityResult(
+                result={"Fund A": {"drawdown": 12.5, "volatility": None}},
+                evidence_refs=("verified:risk",),
+                status=ActionStatus.PARTIAL,
+                tradeoff_reason="volatility unavailable; drawdown evidence retained",
+            )
+        elif action.action_type is ActionType.COMPUTE_RISK:
+            result = {"Fund A": {"drawdown": 12.5, "volatility": 16.2}}
+        elif action.action_type is ActionType.COMPARE_PEERS:
+            result = {"ranked": ["Fund A", "Fund B"], "basis": "peer-adjusted"}
+        elif action.action_type is ActionType.FETCH_FLOWS:
+            result = {"category_net_inflow": 5100}
+        elif action.action_type is ActionType.FETCH_AUM:
+            result = {"category_aum": 345678.9}
+        elif action.action_type is ActionType.RETRIEVE_EVIDENCE:
+            result = {"sources": ["AMFI", "SEBI"]}
+        elif action.action_type is ActionType.CHECK_CONTRADICTIONS:
+            result = {"contradictions": []}
+        else:
+            result = {"ok": True}
+
+        return CapabilityResult(
+            result=result,
+            evidence_refs=(f"verified:{action.action_type.value}",),
+        )
