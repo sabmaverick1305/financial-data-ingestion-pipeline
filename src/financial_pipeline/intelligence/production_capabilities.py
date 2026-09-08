@@ -31,14 +31,33 @@ class ProductionCapabilityPack:
         return CapabilityResult(result={"scope": "scheme", "funds": rows}, evidence_refs=("verified:postgres:mf_scheme_master", "verified:postgres:mf_scheme_performance"))
 
     def performance(self, action: ResearchAction) -> CapabilityResult:
+        scheme_codes = action.parameters.get("scheme_codes")
         scheme_code = action.parameters.get("scheme_code")
-        if not scheme_code:
-            raise ValueError("scheme_code is required for scheme performance")
-        row = self._repo().performance(str(scheme_code))
-        if row is None:
-            raise ValueError(f"no performance row for scheme {scheme_code}")
-        result = {metric: row.get(metric) for metric in action.metrics}
-        return CapabilityResult(result={"scope": "scheme", "scheme_code": str(scheme_code), "metrics": result}, evidence_refs=(f"verified:postgres:mf_scheme_performance:{scheme_code}",))
+        if scheme_code and not scheme_codes:
+            scheme_codes = [scheme_code]
+        if not scheme_codes:
+            raise ValueError("scheme_code or scheme_codes is required for scheme performance")
+
+        rows = []
+        refs = []
+        for code in scheme_codes:
+            row = self._repo().performance(str(code))
+            if row is None:
+                continue
+            rows.append({
+                "scheme_code": str(code),
+                "scheme_name": row.get("scheme_name"),
+                "category": row.get("category"),
+                "metrics": {metric: row.get(metric) for metric in action.metrics},
+            })
+            refs.append(f"verified:postgres:mf_scheme_performance:{code}")
+
+        if not rows:
+            raise ValueError("no performance rows found for discovered schemes")
+        return CapabilityResult(
+            result={"scope": "scheme_batch", "rows": rows},
+            evidence_refs=tuple(dict.fromkeys(refs)),
+        )
 
     def risk(self, action: ResearchAction) -> CapabilityResult:
         scheme_code = action.parameters.get("scheme_code")
