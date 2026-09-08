@@ -14,6 +14,7 @@ from financial_pipeline.intelligence.evidence import EvidenceEvaluator
 from financial_pipeline.intelligence.executor import ResearchExecutor
 from financial_pipeline.intelligence.harness import ReasoningHarness
 from financial_pipeline.intelligence.metric_routing import MetricOwnershipRouter
+from financial_pipeline.intelligence.investment_eligibility import InvestmentEligibilityPolicy
 from financial_pipeline.intelligence.plan_dependencies import PlanDependencyResolver
 from financial_pipeline.intelligence.confidence import ConfidenceScorer
 from financial_pipeline.intelligence.answer_synthesis import AnswerSynthesizer
@@ -51,6 +52,7 @@ class ReasoningGraph:
     ) -> None:
         self._planner = planner
         self._metric_router = MetricOwnershipRouter()
+        self._eligibility = InvestmentEligibilityPolicy()
         self._dependency_resolver = PlanDependencyResolver()
         self._confidence = ConfidenceScorer()
         self._synthesizer = AnswerSynthesizer()
@@ -61,6 +63,7 @@ class ReasoningGraph:
         visited: list[GraphNode] = [GraphNode.PLAN]
         plan, requirements = self._planner.plan(query)
         plan = self._metric_router.route(plan)
+        plan, mandate = self._eligibility.apply(query, plan)
         plan = self._dependency_resolver.order(plan)
 
         visited.append(GraphNode.EXECUTE_AND_EVALUATE)
