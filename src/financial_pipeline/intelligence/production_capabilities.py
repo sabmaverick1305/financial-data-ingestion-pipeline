@@ -5,13 +5,15 @@ import statistics
 from datetime import timedelta
 from typing import Any
 from financial_pipeline.intelligence.capability_registry import CapabilityResult
-from financial_pipeline.intelligence.research_plan import ResearchAction
+from financial_pipeline.intelligence.research_plan import ActionStatus, ResearchAction
+from financial_pipeline.intelligence.documentary_validation import DocumentaryEvidenceValidator
 
 class ProductionCapabilityPack:
     def __init__(self, *, repository=None, rag_pipeline=None, risk_free_rate: float = 0.065) -> None:
         self.repository = repository
         self.rag_pipeline = rag_pipeline
         self.risk_free_rate = risk_free_rate
+        self._documentary_validator = DocumentaryEvidenceValidator()
 
     def _repo(self):
         if self.repository is None:
@@ -293,4 +295,19 @@ class ProductionCapabilityPack:
         query = action.parameters.get("query") or " ".join((*action.metrics, *action.evidence_types))
         response = self.rag_pipeline.ask(str(query))
         refs = tuple(f"verified:rag:{source.get('document_id', source.get('source', index))}" for index, source in enumerate(response.sources))
-        return CapabilityResult(result={"scope": "document", "answer": response.answer, "sources": response.sources}, evidence_refs=refs)
+        valid, reason = self._documentary_validator.validate(
+            answer=response.answer,
+            sources=response.sources,
+            requested=action.evidence_types,
+        )
+        return CapabilityResult(
+            result={
+                "scope": "document",
+                "answer": response.answer,
+                "sources": response.sources,
+                "evidence_valid": valid,
+            },
+            evidence_refs=refs,
+            status=ActionStatus.SUCCEEDED if valid else ActionStatus.PARTIAL,
+            tradeoff_reason=reason,
+        )
