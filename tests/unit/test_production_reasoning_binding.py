@@ -59,3 +59,12 @@ def test_production_rag_contract_accepts_documentary_semantics() -> None:
         "annual_report",
         "portfolio_disclosure",
     )
+
+
+def test_production_registry_covers_all_action_types() -> None:
+    class Pack:
+        discover_categories = discover_funds = performance = returns = risk = peer_compare = aum = flows = documentary = contradictions = lambda self, action: None
+
+    registry = build_production_registry(Pack())
+    missing = [action_type for action_type in ActionType if not registry.has(action_type)]
+    assert missing == []
