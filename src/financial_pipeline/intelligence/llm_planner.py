@@ -35,7 +35,7 @@ For mutual-fund research:
 - keep each rationale under 12 words;
 - include at most 4 metrics per action;
 - put numeric/comparative measures in metrics;
-- for retrieve_evidence, put prospectus, fact sheet, strategy, filings, reports, and disclosures in evidence_types, not metrics;
+- for retrieve_evidence, put prospectus, fact sheet, strategy, filings, reports, and disclosures in evidence_types, not metrics;\n- for check_contradictions, put validation rules such as performance_consistency or style_drift in checks, not metrics;\n- put ranking/filter operations such as top 10 by AUM in parameters using rank_by, sort_order, and limit;
 - return compact JSON only;
 - do not use markdown or add explanation outside the JSON.
 
@@ -50,6 +50,7 @@ JSON schema:
       "category": "string or null",
       "metrics": ["numeric/comparative metric only"],
       "evidence_types": ["document/evidence type only"],
+      "checks": ["validation/check semantic only"],
       "rationale": "string or null",
       "parameters": {}
     }
@@ -214,6 +215,7 @@ class LLMPlanner:
 
             metrics = tuple(dict.fromkeys((*existing.metrics, *action.metrics)))
             evidence_types = tuple(dict.fromkeys((*existing.evidence_types, *action.evidence_types)))
+            checks = tuple(dict.fromkeys((*existing.checks, *action.checks)))
             parameters = {**existing.parameters, **action.parameters}
             rationale = existing.rationale or action.rationale
             entity = existing.entity or action.entity
@@ -225,6 +227,7 @@ class LLMPlanner:
                 category=category,
                 metrics=metrics,
                 evidence_types=evidence_types,
+                checks=checks,
                 rationale=rationale,
                 parameters=parameters,
                 action_id=existing.action_id,
@@ -240,6 +243,7 @@ class LLMPlanner:
             category=item.get("category"),
             metrics=tuple(str(metric) for metric in item.get("metrics", [])),
             evidence_types=tuple(str(value) for value in item.get("evidence_types", [])),
+            checks=tuple(str(value) for value in item.get("checks", [])),
             rationale=item.get("rationale"),
             parameters=dict(item.get("parameters") or {}),
         )
