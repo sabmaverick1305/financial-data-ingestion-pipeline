@@ -36,11 +36,11 @@ class ProductionCapabilityPack:
         return self.repository
 
     def discover_categories(self, action: ResearchAction) -> CapabilityResult:
-        categories = self._repo().discover_categories()
         eligible = action.parameters.get("eligible_categories")
         if eligible:
-            allowed = set(str(value) for value in eligible)
-            categories = [category for category in categories if category in allowed]
+            categories = list(dict.fromkeys(str(value) for value in eligible))
+        else:
+            categories = self._repo().discover_categories()
         return CapabilityResult(
             result={
                 "scope": "scheme_category",
@@ -56,7 +56,8 @@ class ProductionCapabilityPack:
     def discover_funds(self, action: ResearchAction) -> CapabilityResult:
         category = action.parameters.get("category") or action.category
         eligible = action.parameters.get("eligible_categories")
-        limit = int(action.parameters.get("limit", 20))
+        requested_limit = int(action.parameters.get("limit", 20))
+        limit = min(requested_limit, 20)
 
         if category:
             rows = self._repo().discover_funds(category=category, limit=max(limit * 3, limit))
