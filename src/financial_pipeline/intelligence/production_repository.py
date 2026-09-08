@@ -135,7 +135,7 @@ class ReasoningProductionRepository:
                 break
         return filtered
 
-    def nav_history_many(self, scheme_codes: list[str]) -> dict[str, list[tuple]]:
+    def nav_history_many(self, scheme_codes: list[str], *, years: int = 5) -> dict[str, list[tuple]]:
         if not scheme_codes:
             return {}
         with self._engine.connect() as conn:
@@ -144,9 +144,10 @@ class ReasoningProductionRepository:
                     SELECT scheme_code, nav_date, nav
                     FROM mf_nav_history
                     WHERE scheme_code = ANY(:codes)
+                      AND nav_date >= CURRENT_DATE - (:years * INTERVAL '1 year')
                     ORDER BY scheme_code, nav_date
                 """),
-                {"codes": scheme_codes},
+                {"codes": scheme_codes, "years": years},
             ).all()
         result: dict[str, list[tuple]] = {str(code): [] for code in scheme_codes}
         for scheme_code, nav_date, nav in rows:
