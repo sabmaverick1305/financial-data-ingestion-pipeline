@@ -470,14 +470,29 @@ class ProductionCapabilityPack:
             f"verified:rag:{source.get('document_id', source.get('source', index))}"
             for index, source in enumerate(response.sources)
         )
-        valid, reason = self._documentary_validator.validate(
+        rag_valid, rag_reason = self._documentary_validator.validate(
             answer=response.answer,
             sources=response.sources,
             requested=action.evidence_types,
         )
-        if not response.sources and candidate_names:
-            valid = False
-            reason = "fund-specific documentary evidence is not indexed in the current corpus"
+        semantic_ratio = (
+            sum(
+                float(item.get("coverage_ratio", 0.0))
+                for item in coverage.values()
+            ) / len(coverage)
+            if coverage else 0.0
+        )
+        semantic_full_coverage = bool(coverage) and all(
+            bool(item.get("covered")) for item in coverage.values()
+        )
+        valid = semantic_full_coverage and rag_valid
+        if not semantic_full_coverage:
+            reason = "required authoritative semantic documentary evidence is incomplete"
+        elif not rag_valid:
+            reason = rag_reason
+        else:
+            reason = None
+
         return CapabilityResult(
             result={
                 "scope": "document",
@@ -487,13 +502,8 @@ class ProductionCapabilityPack:
                 "candidate_names": candidate_names,
                 "documentary_coverage": coverage,
                 "semantic_requirements": list(semantic_requirements),
-                "documentary_coverage_ratio": (
-                    sum(
-                        float(item.get("coverage_ratio", 0.0))
-                        for item in coverage.values()
-                    ) / len(coverage)
-                    if coverage else 0.0
-                ),
+                "documentary_coverage_ratio": semantic_ratio,
+                "documentary_full_coverage": semantic_full_coverage,
                 "ingestion_backlog": backlog,
             },
             evidence_refs=refs,
