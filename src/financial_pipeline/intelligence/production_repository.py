@@ -88,10 +88,10 @@ class ReasoningProductionRepository:
                        p.return_10y_cagr, p.rolling_volatility
                 FROM mf_scheme_master m
                 JOIN mf_scheme_performance p ON p.scheme_code=m.scheme_code
-                WHERE m.is_active=TRUE AND LOWER(COALESCE(m.category, ''))=LOWER(:category)
+                WHERE m.is_active=TRUE AND LOWER(COALESCE(m.category, '')) LIKE LOWER(:category_pattern)
                 ORDER BY p.return_3y_cagr DESC NULLS LAST
                 LIMIT :limit
-            """), {"category": category, "limit": limit}).mappings().all()
+            """), {"category_pattern": f"%{category}%", "limit": limit}).mappings().all()
         return [dict(row) for row in rows]
 
     def latest_category_facts(self, *, metric: str, category: str | None = None) -> list[dict]:
@@ -100,8 +100,8 @@ class ReasoningProductionRepository:
         where = f"WHERE afs.{metric} IS NOT NULL"
         params: dict[str, object] = {}
         if category:
-            where += " AND LOWER(afs.fund_category)=LOWER(:category)"
-            params["category"] = category
+            where += " AND LOWER(afs.fund_category) LIKE LOWER(:category_pattern)"
+            params["category_pattern"] = f"%{category}%"
         sql = f"""
             SELECT DISTINCT ON (afs.fund_category)
                    afs.fund_category, afs.period_year, afs.period_month, afs.{metric} AS value,
