@@ -30,7 +30,7 @@ class ActionStateBinder:
         categories = list(dict.fromkeys(categories))
         scheme_codes = list(dict.fromkeys(scheme_codes))
 
-        if action.action_type in (ActionType.FETCH_PERFORMANCE, ActionType.COMPUTE_RISK):
+        if action.action_type in (ActionType.FETCH_PERFORMANCE, ActionType.COMPUTE_RETURNS, ActionType.COMPUTE_RISK):
             if "scheme_code" not in params and "scheme_codes" not in params and scheme_codes:
                 params["scheme_codes"] = scheme_codes
 
