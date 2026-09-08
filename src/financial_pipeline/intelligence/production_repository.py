@@ -114,6 +114,34 @@ class ReasoningProductionRepository:
             ).mappings().first()
         return dict(row) if row else None
 
+    def peer_performance_many(
+        self,
+        *,
+        categories: list[str],
+        limit_per_category: int = 100,
+    ) -> dict[str, list[dict]]:
+        if not categories:
+            return {}
+        result: dict[str, list[dict]] = {}
+        with self._engine.connect() as conn:
+            for category in categories:
+                rows = conn.execute(text("""
+                    SELECT m.scheme_code, m.scheme_name, m.amc_name, m.category,
+                           p.return_1y, p.return_3y_cagr, p.return_5y_cagr,
+                           p.return_10y_cagr, p.rolling_volatility
+                    FROM mf_scheme_master m
+                    JOIN mf_scheme_performance p ON p.scheme_code=m.scheme_code
+                    WHERE m.is_active=TRUE
+                      AND LOWER(COALESCE(m.category, '')) LIKE LOWER(:category_pattern)
+                    ORDER BY p.return_3y_cagr DESC NULLS LAST
+                    LIMIT :limit
+                """), {
+                    "category_pattern": f"%{category}%",
+                    "limit": limit_per_category,
+                }).mappings().all()
+                result[str(category)] = [dict(row) for row in rows]
+        return result
+
     def peer_performance(self, *, category: str, limit: int = 100) -> list[dict]:
         with self._engine.connect() as conn:
             rows = conn.execute(text("""
