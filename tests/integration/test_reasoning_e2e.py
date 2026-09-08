@@ -54,8 +54,20 @@ def test_best_mutual_funds_e2e_graph_loop_harness() -> None:
     assert state.trace is not None
     event_types = [event.event_type for event in state.trace.events]
     assert event_types[0] is ReasoningTraceEventType.PLAN_STARTED
-    assert event_types[-1] is ReasoningTraceEventType.LOOP_STOPPED
-    assert state.trace.events[-1].payload["reason"] == "evidence_sufficient"
+
+    loop_stops = [
+        event
+        for event in state.trace.events
+        if event.event_type is ReasoningTraceEventType.LOOP_STOPPED
+    ]
+    assert loop_stops
+    assert loop_stops[-1].payload["reason"] == "evidence_sufficient"
+
+    assert event_types[-3:] == [
+        ReasoningTraceEventType.DECISION_GATES_EVALUATED,
+        ReasoningTraceEventType.RANKING_COMPLETED,
+        ReasoningTraceEventType.CONFIDENCE_EVALUATED,
+    ]
 
 
 def test_e2e_partial_risk_is_replanned_under_strict_evidence_policy() -> None:
