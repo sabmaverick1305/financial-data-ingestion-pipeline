@@ -24,6 +24,8 @@ class ReasoningState:
     final_answer: str | None = None
     confidence_score: float | None = None
     ranked_funds: list[dict] = field(default_factory=list)
+    evidence_tradeoffs: list[str] = field(default_factory=list)
+    soft_evidence_gaps: list[str] = field(default_factory=list)
     abstention_reason: str | None = None
     trace: ReasoningTrace | None = None
 
