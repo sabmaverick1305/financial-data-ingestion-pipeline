@@ -22,17 +22,10 @@ _FLAGSHIP_MINIMUM = (
 class PlannerPolicy:
     """Validate planner output independently of the model that produced it."""
 
-    def validate_plan(self, query: str, plan: ResearchPlan) -> None:
-        if not plan.actions:
-            raise ValueError("planner produced an empty action plan")
-
-        action_types = [action.action_type for action in plan.actions]
-        if len(action_types) != len(set(action_types)):
-            raise ValueError("planner produced duplicate action types")
-
+    def required_actions(self, query: str) -> tuple[ActionType, ...]:
         q = query.lower()
         if "best mutual fund" in q or "best mutual funds" in q:
-            required_actions = {
+            return (
                 ActionType.DISCOVER_CATEGORIES,
                 ActionType.DISCOVER_FUNDS,
                 ActionType.FETCH_PERFORMANCE,
@@ -42,11 +35,33 @@ class PlannerPolicy:
                 ActionType.FETCH_AUM,
                 ActionType.RETRIEVE_EVIDENCE,
                 ActionType.CHECK_CONTRADICTIONS,
-            }
-            missing = required_actions.difference(action_types)
-            if missing:
-                names = ", ".join(sorted(action.value for action in missing))
-                raise ValueError(f"planner omitted required flagship actions: {names}")
+            )
+        return ()
+
+    def missing_required_actions(
+        self,
+        query: str,
+        plan: ResearchPlan,
+    ) -> tuple[ActionType, ...]:
+        present = {action.action_type for action in plan.actions}
+        return tuple(
+            action_type
+            for action_type in self.required_actions(query)
+            if action_type not in present
+        )
+
+    def validate_plan(self, query: str, plan: ResearchPlan) -> None:
+        if not plan.actions:
+            raise ValueError("planner produced an empty action plan")
+
+        action_types = [action.action_type for action in plan.actions]
+        if len(action_types) != len(set(action_types)):
+            raise ValueError("planner produced duplicate action types")
+
+        missing = self.missing_required_actions(query, plan)
+        if missing:
+            names = ", ".join(action.value for action in missing)
+            raise ValueError(f"planner omitted required flagship actions: {names}")
 
     def enforce_requirements(
         self,
