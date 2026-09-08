@@ -34,16 +34,11 @@ class ReasoningProductionRepository:
             params["category_pattern"] = f"%{category}%"
         sql = f"""
             SELECT m.scheme_code, m.scheme_name, m.amc_name, m.category, m.scheme_type,
-                   MIN(n.nav_date) AS inception_date,
                    p.latest_nav, p.latest_nav_date, p.return_1y, p.return_3y_cagr,
                    p.return_5y_cagr, p.return_10y_cagr, p.rolling_volatility
             FROM mf_scheme_master m
-            LEFT JOIN mf_nav_history n ON n.scheme_code = m.scheme_code
             LEFT JOIN mf_scheme_performance p ON p.scheme_code = m.scheme_code
             {where}
-            GROUP BY m.scheme_code, m.scheme_name, m.amc_name, m.category, m.scheme_type,
-                     p.latest_nav, p.latest_nav_date, p.return_1y, p.return_3y_cagr,
-                     p.return_5y_cagr, p.return_10y_cagr, p.rolling_volatility
             ORDER BY p.return_3y_cagr DESC NULLS LAST, p.return_1y DESC NULLS LAST, m.scheme_name ASC
             LIMIT :limit
         """
@@ -65,6 +60,39 @@ class ReasoningProductionRepository:
             if len(filtered) >= limit:
                 break
         return filtered
+
+    def nav_history_many(self, scheme_codes: list[str]) -> dict[str, list[tuple]]:
+        if not scheme_codes:
+            return {}
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT scheme_code, nav_date, nav
+                    FROM mf_nav_history
+                    WHERE scheme_code = ANY(:codes)
+                    ORDER BY scheme_code, nav_date
+                """),
+                {"codes": scheme_codes},
+            ).all()
+        result: dict[str, list[tuple]] = {str(code): [] for code in scheme_codes}
+        for scheme_code, nav_date, nav in rows:
+            result.setdefault(str(scheme_code), []).append((nav_date, float(nav)))
+        return result
+
+    def performance_many(self, scheme_codes: list[str]) -> dict[str, dict]:
+        if not scheme_codes:
+            return {}
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT p.*, m.scheme_name, m.amc_name, m.category
+                    FROM mf_scheme_performance p
+                    JOIN mf_scheme_master m ON m.scheme_code=p.scheme_code
+                    WHERE p.scheme_code = ANY(:codes)
+                """),
+                {"codes": scheme_codes},
+            ).mappings().all()
+        return {str(row["scheme_code"]): dict(row) for row in rows}
 
     def nav_history(self, scheme_code: str) -> list[tuple]:
         with self._engine.connect() as conn:
