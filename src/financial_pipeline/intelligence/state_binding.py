@@ -11,6 +11,7 @@ class ActionStateBinder:
         candidate_categories: list[str] = []
         scheme_codes: list[str] = []
         candidate_names: list[str] = []
+        document_search_names: list[str] = []
 
         for observation in state.observations:
             if observation.status not in (ActionStatus.SUCCEEDED, ActionStatus.PARTIAL):
@@ -29,6 +30,11 @@ class ActionStateBinder:
                     name = fund.get("scheme_name")
                     if name:
                         candidate_names.append(str(name))
+                    family_key = fund.get("scheme_family_key")
+                    if family_key:
+                        document_search_names.append(str(family_key))
+                    elif name:
+                        document_search_names.append(str(name))
                     if category:
                         candidate_categories.append(str(category))
 
@@ -36,6 +42,7 @@ class ActionStateBinder:
         candidate_categories = list(dict.fromkeys(candidate_categories))
         scheme_codes = list(dict.fromkeys(scheme_codes))
         candidate_names = list(dict.fromkeys(candidate_names))
+        document_search_names = list(dict.fromkeys(document_search_names))
 
         if action.action_type in (
             ActionType.FETCH_PERFORMANCE,
@@ -60,6 +67,8 @@ class ActionStateBinder:
         if action.action_type is ActionType.RETRIEVE_EVIDENCE:
             if candidate_names:
                 params["candidate_names"] = candidate_names[:10]
+            if document_search_names:
+                params["document_search_names"] = document_search_names[:10]
             if "query" not in params and candidate_names:
                 requested = " ".join(action.evidence_types)
                 names = "; ".join(candidate_names[:5])
