@@ -9,14 +9,23 @@ from financial_pipeline.intelligence.research_plan import ActionStatus, Research
 from financial_pipeline.intelligence.documentary_validation import DocumentaryEvidenceValidator
 from financial_pipeline.intelligence.scheme_family import SchemeFamilyPolicy
 from financial_pipeline.documentary.evidence_policy import semantic_requirements_for_evidence_types
+from financial_pipeline.intelligence.closed_beta_policy import ClosedBetaUniversePolicy
 
 class ProductionCapabilityPack:
-    def __init__(self, *, repository=None, rag_pipeline=None, risk_free_rate: float = 0.065) -> None:
+    def __init__(
+        self,
+        *,
+        repository=None,
+        rag_pipeline=None,
+        risk_free_rate: float = 0.065,
+        beta_universe_policy: ClosedBetaUniversePolicy | None = None,
+    ) -> None:
         self.repository = repository
         self.rag_pipeline = rag_pipeline
         self.risk_free_rate = risk_free_rate
         self._documentary_validator = DocumentaryEvidenceValidator()
         self._scheme_families = SchemeFamilyPolicy()
+        self._beta_universe_policy = beta_universe_policy
         self._nav_snapshot_cache: dict[tuple[str, ...], dict[str, list[tuple]]] = {}
 
     def _nav_snapshot(self, scheme_codes: list[str]) -> dict[str, list[tuple]]:
@@ -98,6 +107,8 @@ class ProductionCapabilityPack:
             rows = self._repo().discover_funds(category=None, limit=max(limit * 3, limit))
 
         rows = self._scheme_families.deduplicate(rows)
+        if self._beta_universe_policy is not None:
+            rows = self._beta_universe_policy.filter_rows(rows)
         rows.sort(
             key=lambda row: (
                 float(row.get("return_3y_cagr") or float("-inf")),
@@ -116,6 +127,12 @@ class ProductionCapabilityPack:
                 "funds": rows,
                 "mandate": action.parameters.get("mandate"),
                 "eligible_categories": list(eligible or ([category] if category else [])),
+                "beta_universe_enabled": self._beta_universe_policy is not None,
+                "beta_allowed_scheme_families": (
+                    sorted(self._beta_universe_policy.allowed_scheme_families)
+                    if self._beta_universe_policy is not None
+                    else []
+                ),
             },
             evidence_refs=(
                 "verified:postgres:mf_scheme_master",
