@@ -1,13 +1,10 @@
 """Evidence requirements and deterministic evaluation for FIES reasoning."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import StrEnum
-
 from financial_pipeline.intelligence.reasoning_state import ReasoningState
 from financial_pipeline.intelligence.research_plan import ActionStatus, ActionType
-
 
 class EvidenceDimension(StrEnum):
     CATEGORY = "category"
@@ -19,7 +16,6 @@ class EvidenceDimension(StrEnum):
     AUM = "aum"
     DOCUMENTARY = "documentary"
     CONTRADICTION = "contradiction"
-
 
 _DIMENSION_ACTIONS: dict[EvidenceDimension, ActionType] = {
     EvidenceDimension.CATEGORY: ActionType.DISCOVER_CATEGORIES,
@@ -33,13 +29,11 @@ _DIMENSION_ACTIONS: dict[EvidenceDimension, ActionType] = {
     EvidenceDimension.CONTRADICTION: ActionType.CHECK_CONTRADICTIONS,
 }
 
-
 @dataclass(frozen=True)
 class EvidenceRequirement:
     dimension: EvidenceDimension
     required: bool = True
     allow_partial: bool = False
-
 
 @dataclass(frozen=True)
 class EvidenceEvaluation:
@@ -50,49 +44,36 @@ class EvidenceEvaluation:
     partial: tuple[EvidenceDimension, ...]
     tradeoffs: tuple[str, ...]
 
-
 class EvidenceEvaluator:
-    def evaluate(
-        self,
-        state: ReasoningState,
-        requirements: tuple[EvidenceRequirement, ...],
-    ) -> EvidenceEvaluation:
-        succeeded_actions = {
-            observation.action_type
-            for observation in state.observations
-            if observation.status is ActionStatus.SUCCEEDED
-        }
-        failed_actions = {
-            observation.action_type
-            for observation in state.observations
-            if observation.status is ActionStatus.FAILED
-        }
-        partial_observations = {
-            observation.action_type: observation
-            for observation in state.observations
-            if observation.status is ActionStatus.PARTIAL
-        }
+    def evaluate(self, state: ReasoningState, requirements: tuple[EvidenceRequirement, ...]) -> EvidenceEvaluation:
+        latest = {}
+        for observation in state.observations:
+            latest[observation.action_type] = observation
 
-        satisfied: list[EvidenceDimension] = []
-        missing: list[EvidenceDimension] = []
-        failed: list[EvidenceDimension] = []
-        partial: list[EvidenceDimension] = []
-        tradeoffs: list[str] = []
+        satisfied = []
+        missing = []
+        failed = []
+        partial = []
+        tradeoffs = []
 
         for requirement in requirements:
             if not requirement.required:
                 continue
             action_type = _DIMENSION_ACTIONS[requirement.dimension]
-            if action_type in succeeded_actions:
+            observation = latest.get(action_type)
+            if observation is None:
+                missing.append(requirement.dimension)
+            elif observation.status is ActionStatus.SUCCEEDED:
                 satisfied.append(requirement.dimension)
-            elif action_type in partial_observations:
+            elif observation.status is ActionStatus.PARTIAL:
                 partial.append(requirement.dimension)
-                observation = partial_observations[action_type]
                 if observation.tradeoff_reason:
                     tradeoffs.append(observation.tradeoff_reason)
-                if not requirement.allow_partial:
+                if requirement.allow_partial:
+                    satisfied.append(requirement.dimension)
+                else:
                     failed.append(requirement.dimension)
-            elif action_type in failed_actions:
+            elif observation.status is ActionStatus.FAILED:
                 failed.append(requirement.dimension)
             else:
                 missing.append(requirement.dimension)
