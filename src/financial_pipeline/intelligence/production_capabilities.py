@@ -414,6 +414,18 @@ class ProductionCapabilityPack:
             action.parameters.get("document_search_names")
             or candidate_names
         )
+        coverage = {}
+        backlog = []
+        if document_search_names and hasattr(self.rag_pipeline, "documentary_coverage"):
+            coverage = self.rag_pipeline.documentary_coverage(
+                fund_names=document_search_names,
+                document_types=list(action.evidence_types),
+            )
+            backlog = self.rag_pipeline.documentary_ingestion_backlog(
+                fund_names=document_search_names,
+                document_types=list(action.evidence_types),
+            )
+
         if document_search_names and hasattr(self.rag_pipeline, "ask_documentary"):
             response = self.rag_pipeline.ask_documentary(
                 str(query),
@@ -441,6 +453,15 @@ class ProductionCapabilityPack:
                 "sources": response.sources,
                 "evidence_valid": valid,
                 "candidate_names": candidate_names,
+                "documentary_coverage": coverage,
+                "documentary_coverage_ratio": (
+                    sum(
+                        float(item.get("coverage_ratio", 0.0))
+                        for item in coverage.values()
+                    ) / len(coverage)
+                    if coverage else 0.0
+                ),
+                "ingestion_backlog": backlog,
             },
             evidence_refs=refs,
             status=ActionStatus.SUCCEEDED if valid else ActionStatus.PARTIAL,
