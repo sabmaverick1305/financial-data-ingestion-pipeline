@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+from datetime import datetime
 from sqlalchemy import create_engine
 
 sys.path.insert(0, "src")
@@ -65,7 +67,9 @@ def main() -> None:
         harness=harness,
     )
 
+    t0 = time.perf_counter()
     result = graph.run(QUERY)
+    total_latency_ms = int((time.perf_counter() - t0) * 1000)
     state = result.state
 
     print("\n=== QUERY ===")
@@ -134,6 +138,39 @@ def main() -> None:
                 f" | category={decision.get('category')}"
                 f" | failed_gates={failed_gates}"
             )
+
+    print("\n=== BENCHMARK ===")
+    print(f"total_latency_ms={total_latency_ms}")
+    assert state.trace is not None
+    starts = {}
+    action_latencies = {}
+    for event in state.trace.events:
+        if event.event_type.value == "action_started" and event.action_id:
+            starts[event.action_id] = datetime.fromisoformat(event.timestamp)
+        elif event.event_type.value == "action_finished" and event.action_id in starts:
+            elapsed = (
+                datetime.fromisoformat(event.timestamp) - starts[event.action_id]
+            ).total_seconds() * 1000
+            action_latencies[event.action_type or event.action_id] = int(elapsed)
+    for action_type, latency_ms in action_latencies.items():
+        print(f"{action_type}_latency_ms={latency_ms}")
+
+    print("\n=== CLOSED BETA GO/NO-GO ===")
+    gates = {
+        "one_round_or_less": state.investigation_round <= 1,
+        "zero_replans": state.replan_count == 0,
+        "ranked_results_present": len(state.ranked_funds) > 0,
+        "confidence_present": state.confidence_score is not None,
+        "hard_evidence_candidates_present": any(
+            decision.get("eligible_for_ranking")
+            for decision in state.candidate_decisions.values()
+        ),
+        "no_abstention": state.abstention_reason is None,
+        "latency_under_30s_target": total_latency_ms <= 30000,
+    }
+    for name, passed in gates.items():
+        print(f"{name}={'PASS' if passed else 'FAIL'}")
+    print(f"overall={'GO' if all(gates.values()) else 'NO-GO'}")
 
     print("\n=== FINAL ANSWER ===")
     print(state.final_answer)
