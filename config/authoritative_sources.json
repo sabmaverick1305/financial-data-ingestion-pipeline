@@ -3,8 +3,16 @@
     "scheme_family_key": "hsbc midcap fund",
     "scheme_code": "151036",
     "provider": "HSBC Mutual Fund",
-    "source_page_url": "https://www.assetmanagement.hsbc.co.in/en/mutual-funds/investor-resources",
-    "authoritative_domain": "assetmanagement.hsbc.co.in"
+    "source_page_url": null,
+    "authoritative_domain": "assetmanagement.hsbc.co.in",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://www.assetmanagement.hsbc.co.in/assets/documents/mutual-funds/en/a6c34b27-227e-4684-9efd-b16ebf3aff29/hsbc-mid-cap-fund-sid.pdf",
+        "file_name": "hsbc-mid-cap-fund-sid.pdf",
+        "title": "HSBC Midcap Fund Scheme Information Document"
+      }
+    ]
   },
   {
     "scheme_family_key": "iti small cap fund",
@@ -75,14 +83,42 @@
     "scheme_code": null,
     "provider": "Motilal Oswal Mutual Fund",
     "source_page_url": "https://www.motilaloswalmf.com/mutual-funds/motilal-oswal-midcap-fund",
-    "authoritative_domain": "motilaloswalmf.com"
+    "authoritative_domain": "motilaloswalmf.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/sid/2026/may/SID%20-%20Motilal%20Oswal%20Midcap%20Fund.pdf",
+        "file_name": "sid-motilal-oswal-midcap-fund.pdf",
+        "title": "Motilal Oswal Midcap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/factsheet/2026/jun/Factsheet%20May%202026%20Active.pdf",
+        "file_name": "motilal-oswal-factsheet-may-2026.pdf",
+        "title": "Motilal Oswal Mutual Fund Factsheet May 2026"
+      }
+    ]
   },
   {
     "scheme_family_key": "motilal oswal large and midcap fund",
     "scheme_code": null,
     "provider": "Motilal Oswal Mutual Fund",
     "source_page_url": "https://www.motilaloswalmf.com/mutual-funds/motilal-oswal-large-and-midcap-fund",
-    "authoritative_domain": "motilaloswalmf.com"
+    "authoritative_domain": "motilaloswalmf.com",
+    "direct_documents": [
+      {
+        "document_type": "scheme_information_document",
+        "source_url": "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/sid/2026/jul/SID%20Motilal%20Oswal%20Large%20and%20Midcap%20Fund.pdf",
+        "file_name": "sid-motilal-oswal-large-and-midcap-fund.pdf",
+        "title": "Motilal Oswal Large and Midcap Fund Scheme Information Document"
+      },
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://www.motilaloswalmf.com/content/dam/motilal-mf/downloads/mf/factsheet/2026/aug/most-factsheet-july-2026-active-1.pdf",
+        "file_name": "motilal-oswal-factsheet-july-2026.pdf",
+        "title": "Motilal Oswal Mutual Fund Factsheet July 2026"
+      }
+    ]
   },
   {
     "scheme_family_key": "bank of india small cap fund",
@@ -170,6 +206,35 @@
         "source_url": "https://portal.amfiindia.com/spages/SSD_129.pdf",
         "file_name": "icici-prudential-large-and-mid-cap-fund-summary.pdf",
         "title": "ICICI Prudential Large & Mid Cap Fund Scheme Summary Document"
+      }
+    ]
+  },
+  {
+    "scheme_family_key": "bandhan small cap fund",
+    "scheme_code": null,
+    "provider": "Bandhan Mutual Fund",
+    "authoritative_domain": "cmsnew.bandhanmutual.com",
+    "direct_documents": [
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://cmsnew.bandhanmutual.com/bandhan-small-cap-fund/",
+        "file_name": "bandhan-small-cap-fund.html",
+        "title": "Bandhan Small Cap Fund Official Factsheet Page"
+      }
+    ]
+  },
+  {
+    "scheme_family_key": "icici prudential large and mid cap fund",
+    "scheme_code": null,
+    "provider": "ICICI Prudential Mutual Fund",
+    "authoritative_domain": "digitalfactsheet.icicipruamc.com",
+    "source_page_url": null,
+    "direct_documents": [
+      {
+        "document_type": "fund_fact_sheet",
+        "source_url": "https://digitalfactsheet.icicipruamc.com/fact/icici-prudential-large-and-mid-cap-fund.php",
+        "file_name": "icici-prudential-large-and-mid-cap-fund.html",
+        "title": "ICICI Prudential Large & Mid Cap Fund Digital Factsheet"
       }
     ]
   }
