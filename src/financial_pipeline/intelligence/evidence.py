@@ -38,6 +38,7 @@ _DIMENSION_ACTIONS: dict[EvidenceDimension, ActionType] = {
 class EvidenceRequirement:
     dimension: EvidenceDimension
     required: bool = True
+    allow_partial: bool = False
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,8 @@ class EvidenceEvaluation:
     satisfied: tuple[EvidenceDimension, ...]
     missing: tuple[EvidenceDimension, ...]
     failed: tuple[EvidenceDimension, ...]
+    partial: tuple[EvidenceDimension, ...]
+    tradeoffs: tuple[str, ...]
 
 
 class EvidenceEvaluator:
@@ -64,10 +67,17 @@ class EvidenceEvaluator:
             for observation in state.observations
             if observation.status is ActionStatus.FAILED
         }
+        partial_observations = {
+            observation.action_type: observation
+            for observation in state.observations
+            if observation.status is ActionStatus.PARTIAL
+        }
 
         satisfied: list[EvidenceDimension] = []
         missing: list[EvidenceDimension] = []
         failed: list[EvidenceDimension] = []
+        partial: list[EvidenceDimension] = []
+        tradeoffs: list[str] = []
 
         for requirement in requirements:
             if not requirement.required:
@@ -75,6 +85,13 @@ class EvidenceEvaluator:
             action_type = _DIMENSION_ACTIONS[requirement.dimension]
             if action_type in succeeded_actions:
                 satisfied.append(requirement.dimension)
+            elif action_type in partial_observations:
+                partial.append(requirement.dimension)
+                observation = partial_observations[action_type]
+                if observation.tradeoff_reason:
+                    tradeoffs.append(observation.tradeoff_reason)
+                if not requirement.allow_partial:
+                    failed.append(requirement.dimension)
             elif action_type in failed_actions:
                 failed.append(requirement.dimension)
             else:
@@ -85,6 +102,8 @@ class EvidenceEvaluator:
             satisfied=tuple(satisfied),
             missing=tuple(missing),
             failed=tuple(failed),
+            partial=tuple(partial),
+            tradeoffs=tuple(tradeoffs),
         )
 
     @staticmethod
