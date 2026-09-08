@@ -113,8 +113,16 @@ class ProductionCapabilityPack:
 
         rows = []
         refs = []
+        repo = self._repo()
+        if hasattr(repo, "performance_many"):
+            performance_map = repo.performance_many([str(code) for code in scheme_codes])
+        else:
+            performance_map = {
+                str(code): repo.performance(str(code))
+                for code in scheme_codes
+            }
         for code in scheme_codes:
-            row = self._repo().performance(str(code))
+            row = performance_map.get(str(code))
             if row is None:
                 continue
             rows.append({
@@ -153,8 +161,16 @@ class ProductionCapabilityPack:
 
         rows = []
         refs = []
+        repo = self._repo()
+        if hasattr(repo, "nav_history_many"):
+            history_map = repo.nav_history_many([str(code) for code in scheme_codes])
+        else:
+            history_map = {
+                str(code): repo.nav_history(str(code))
+                for code in scheme_codes
+            }
         for code in scheme_codes:
-            history = self._repo().nav_history(str(code))
+            history = history_map.get(str(code), [])
             if len(history) < 2:
                 continue
             end_date, end_nav = history[-1]
@@ -205,8 +221,16 @@ class ProductionCapabilityPack:
 
         rows = []
         refs = []
+        repo = self._repo()
+        if hasattr(repo, "nav_history_many"):
+            history_map = repo.nav_history_many([str(code) for code in scheme_codes])
+        else:
+            history_map = {
+                str(code): repo.nav_history(str(code))
+                for code in scheme_codes
+            }
         for code in scheme_codes:
-            history = self._repo().nav_history(str(code))
+            history = history_map.get(str(code), [])
             if len(history) < 2:
                 continue
             returns = [
