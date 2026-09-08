@@ -17,6 +17,10 @@ class EvidenceDimension(StrEnum):
     DOCUMENTARY = "documentary"
     CONTRADICTION = "contradiction"
 
+class EvidenceImportance(StrEnum):
+    HARD = "hard"
+    SOFT = "soft"
+
 _DIMENSION_ACTIONS: dict[EvidenceDimension, ActionType] = {
     EvidenceDimension.CATEGORY: ActionType.DISCOVER_CATEGORIES,
     EvidenceDimension.FUND_DISCOVERY: ActionType.DISCOVER_FUNDS,
@@ -34,6 +38,7 @@ class EvidenceRequirement:
     dimension: EvidenceDimension
     required: bool = True
     allow_partial: bool = False
+    importance: EvidenceImportance = EvidenceImportance.HARD
 
 @dataclass(frozen=True)
 class EvidenceEvaluation:
@@ -42,6 +47,8 @@ class EvidenceEvaluation:
     missing: tuple[EvidenceDimension, ...]
     failed: tuple[EvidenceDimension, ...]
     partial: tuple[EvidenceDimension, ...]
+    soft_missing: tuple[EvidenceDimension, ...]
+    soft_failed: tuple[EvidenceDimension, ...]
     tradeoffs: tuple[str, ...]
 
 class EvidenceEvaluator:
@@ -54,6 +61,8 @@ class EvidenceEvaluator:
         missing = []
         failed = []
         partial = []
+        soft_missing = []
+        soft_failed = []
         tradeoffs = []
 
         for requirement in requirements:
@@ -61,20 +70,45 @@ class EvidenceEvaluator:
                 continue
             action_type = _DIMENSION_ACTIONS[requirement.dimension]
             observation = latest.get(action_type)
+            is_soft = requirement.importance is EvidenceImportance.SOFT
+
             if observation is None:
-                missing.append(requirement.dimension)
-            elif observation.status is ActionStatus.SUCCEEDED:
+                if is_soft:
+                    soft_missing.append(requirement.dimension)
+                    tradeoffs.append(f"soft evidence unavailable: {requirement.dimension.value}")
+                else:
+                    missing.append(requirement.dimension)
+                continue
+
+            if observation.status is ActionStatus.SUCCEEDED:
                 satisfied.append(requirement.dimension)
-            elif observation.status is ActionStatus.PARTIAL:
+                continue
+
+            if observation.status is ActionStatus.PARTIAL:
                 partial.append(requirement.dimension)
                 if observation.tradeoff_reason:
                     tradeoffs.append(observation.tradeoff_reason)
-                if requirement.allow_partial:
-                    satisfied.append(requirement.dimension)
+                if is_soft or requirement.allow_partial:
+                    if is_soft:
+                        soft_failed.append(requirement.dimension)
+                    else:
+                        satisfied.append(requirement.dimension)
                 else:
                     failed.append(requirement.dimension)
-            elif observation.status is ActionStatus.FAILED:
-                failed.append(requirement.dimension)
+                continue
+
+            if observation.status is ActionStatus.FAILED:
+                if observation.tradeoff_reason:
+                    tradeoffs.append(observation.tradeoff_reason)
+                if is_soft:
+                    soft_failed.append(requirement.dimension)
+                    tradeoffs.append(f"soft evidence failed: {requirement.dimension.value}")
+                else:
+                    failed.append(requirement.dimension)
+                continue
+
+            if is_soft:
+                soft_missing.append(requirement.dimension)
             else:
                 missing.append(requirement.dimension)
 
@@ -84,7 +118,9 @@ class EvidenceEvaluator:
             missing=tuple(missing),
             failed=tuple(failed),
             partial=tuple(partial),
-            tradeoffs=tuple(tradeoffs),
+            soft_missing=tuple(soft_missing),
+            soft_failed=tuple(soft_failed),
+            tradeoffs=tuple(dict.fromkeys(tradeoffs)),
         )
 
     @staticmethod
