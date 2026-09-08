@@ -15,6 +15,9 @@ class ReasoningTraceEventType(StrEnum):
     EVIDENCE_EVALUATED = "evidence_evaluated"
     REPLAN_CREATED = "replan_created"
     LOOP_STOPPED = "loop_stopped"
+    DECISION_GATES_EVALUATED = "decision_gates_evaluated"
+    RANKING_COMPLETED = "ranking_completed"
+    CONFIDENCE_EVALUATED = "confidence_evaluated"
 
 
 @dataclass(frozen=True)
