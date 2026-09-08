@@ -30,6 +30,11 @@ def main() -> None:
         raise RuntimeError("POSTGRES_URL is required")
 
     repo = DocumentRepository(settings.postgres_url)
+    repo.create_tables()
+    identities = repo.resolve_document_identity(
+        fund_names=args.fund_names,
+        document_types=args.types,
+    )
     coverage = repo.documentary_coverage(
         fund_names=args.fund_names,
         required_document_types=args.types,
@@ -46,6 +51,7 @@ def main() -> None:
         "coverage_ratio": sum(ratios) / len(ratios) if ratios else 0.0,
         "fully_covered_funds": sum(1 for item in coverage.values() if item["covered"]),
         "missing_combinations": len(backlog),
+        "resolved_document_ids": identities,
         "funds": coverage,
         "ingestion_backlog": backlog,
     }, indent=2))
