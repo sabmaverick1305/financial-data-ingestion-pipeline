@@ -225,3 +225,58 @@ def test_evidence_ontology_rejects_unknown_document_type_without_corrupting_metr
     assert seen[0].metrics == ("expense_ratio",)
     assert seen[0].evidence_types == ("fund_fact_sheet",)
     assert "social media rumor" in observation.tradeoff_reason
+
+
+def test_retrieve_evidence_migrates_legacy_document_terms_out_of_metrics() -> None:
+    registry = CapabilityRegistry()
+    seen: list[ResearchAction] = []
+
+    def handler(action: ResearchAction):
+        seen.append(action)
+        return CapabilityResult(result={"ok": True}, evidence_refs=("verified:evidence",))
+
+    registry.register(
+        ActionType.RETRIEVE_EVIDENCE,
+        handler,
+        contract=CapabilityContract(
+            supported_metrics=("expense_ratio",),
+            supported_evidence_types=(
+                "fund_strategy_document", "regulatory_filing", "annual_report"
+            ),
+        ),
+    )
+    observation = registry.execute(
+        ResearchAction(
+            ActionType.RETRIEVE_EVIDENCE,
+            metrics=("expense ratio", "strategy", "filings", "reports", "disclosures"),
+        )
+    )
+
+    assert observation.status is ActionStatus.SUCCEEDED
+    assert seen[0].metrics == ("expense_ratio",)
+    assert seen[0].evidence_types == (
+        "fund_strategy_document", "regulatory_filing", "annual_report"
+    )
+
+
+def test_documentary_replanner_populates_metrics_and_evidence_types() -> None:
+    registry = CapabilityRegistry()
+    registry.register(
+        ActionType.RETRIEVE_EVIDENCE,
+        lambda action: CapabilityResult(result={"ok": True}),
+        contract=CapabilityContract(
+            supported_metrics=("expense_ratio", "fund_manager_tenure"),
+            supported_evidence_types=("fund_prospectus", "fund_fact_sheet"),
+        ),
+    )
+    replanner = EvidenceReplanner(registry)
+    evaluation = EvidenceEvaluator().evaluate(
+        ReasoningState(query="best mutual funds"),
+        (EvidenceRequirement(EvidenceDimension.DOCUMENTARY),),
+    )
+
+    decision = replanner.decide(evaluation)
+    action = decision.actions[0]
+    assert action.metrics == ("expense_ratio", "fund_manager_tenure")
+    assert action.evidence_types == ("fund_prospectus", "fund_fact_sheet")
+    assert "capability-supported semantics" in action.rationale
