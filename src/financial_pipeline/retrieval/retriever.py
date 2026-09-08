@@ -109,6 +109,7 @@ class Retriever:
         min_sim: float = 0.0,
         year_from: int | None = None,
         year_to: int | None = None,
+        document_ids: list[str] | None = None,
     ) -> list[dict]:
         """Return ranked chunks for *query* using the requested mode."""
         if not query.strip():
@@ -129,6 +130,7 @@ class Retriever:
                     min_similarity=min_sim,
                     year_from=year_from,
                     year_to=year_to,
+                    document_ids=document_ids,
                 )
                 for r in semantic:
                     r["search_mode"] = "semantic"
@@ -147,6 +149,7 @@ class Retriever:
                 category=category,
                 year_from=year_from,
                 year_to=year_to,
+                document_ids=document_ids,
             )
             for r in keyword:
                 r["search_mode"] = "keyword"
@@ -157,6 +160,19 @@ class Retriever:
             return semantic[:limit]
         else:
             return keyword[:limit]
+
+    def find_document_ids(
+        self,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...] = (),
+        limit: int = 50,
+    ) -> list[str]:
+        return self._repo.find_document_ids(
+            fund_names=fund_names,
+            document_types=document_types,
+            limit=limit,
+        )
 
     def get_context_chunks(
         self,
