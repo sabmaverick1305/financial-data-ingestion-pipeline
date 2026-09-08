@@ -17,6 +17,14 @@ CapabilityHandler = Callable[[ResearchAction], Any]
 
 
 @dataclass(frozen=True)
+class CapabilityResult:
+    """Normalized capability output consumed by the registry."""
+
+    result: Any
+    evidence_refs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Capability:
     action_type: ActionType
     handler: CapabilityHandler
@@ -50,12 +58,19 @@ class CapabilityRegistry:
     def execute(self, action: ResearchAction) -> ActionObservation:
         capability = self.get(action.action_type)
         try:
-            result = capability.handler(action)
+            raw_result = capability.handler(action)
+            if isinstance(raw_result, CapabilityResult):
+                result = raw_result.result
+                evidence_refs = raw_result.evidence_refs
+            else:
+                result = raw_result
+                evidence_refs = ()
             return ActionObservation(
                 action_id=action.action_id,
                 action_type=action.action_type,
                 status=ActionStatus.SUCCEEDED,
                 result=result,
+                evidence_refs=evidence_refs,
             )
         except Exception as exc:
             return ActionObservation(
