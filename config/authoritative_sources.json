@@ -1,0 +1,72 @@
+[
+  {
+    "scheme_family_key": "hsbc midcap fund",
+    "scheme_code": "151036",
+    "provider": "HSBC Mutual Fund",
+    "source_page_url": "https://www.assetmanagement.hsbc.co.in/en/mutual-funds/investor-resources",
+    "authoritative_domain": "assetmanagement.hsbc.co.in"
+  },
+  {
+    "scheme_family_key": "iti small cap fund",
+    "scheme_code": "147919",
+    "provider": "ITI Mutual Fund",
+    "source_page_url": "https://www.itiamc.com/digitalfactsheet/July2026/innerpages/Small-Cap.html",
+    "authoritative_domain": "itiamc.com"
+  },
+  {
+    "scheme_family_key": "bandhan small cap fund",
+    "scheme_code": null,
+    "provider": "Bandhan Mutual Fund",
+    "source_page_url": "https://bandhanmutual.com/downloads/factsheets",
+    "authoritative_domain": "bandhanmutual.com"
+  },
+  {
+    "scheme_family_key": "invesco india mid cap fund",
+    "scheme_code": null,
+    "provider": "Invesco Mutual Fund",
+    "source_page_url": "https://www.invescomutualfund.com/our-funds/fund/equity/invesco-india-mid-cap-fund/211G",
+    "authoritative_domain": "invescomutualfund.com"
+  },
+  {
+    "scheme_family_key": "invesco india large and mid cap fund",
+    "scheme_code": null,
+    "provider": "Invesco Mutual Fund",
+    "source_page_url": "https://www.invescomutualfund.com/our-funds/fund/equity/invesco-india-large-and-mid-cap-fund",
+    "authoritative_domain": "invescomutualfund.com"
+  },
+  {
+    "scheme_family_key": "motilal oswal midcap fund",
+    "scheme_code": null,
+    "provider": "Motilal Oswal Mutual Fund",
+    "source_page_url": "https://www.motilaloswalmf.com/mutual-funds/motilal-oswal-midcap-fund",
+    "authoritative_domain": "motilaloswalmf.com"
+  },
+  {
+    "scheme_family_key": "motilal oswal large and midcap fund",
+    "scheme_code": null,
+    "provider": "Motilal Oswal Mutual Fund",
+    "source_page_url": "https://www.motilaloswalmf.com/mutual-funds/motilal-oswal-large-and-midcap-fund",
+    "authoritative_domain": "motilaloswalmf.com"
+  },
+  {
+    "scheme_family_key": "bank of india small cap fund",
+    "scheme_code": null,
+    "provider": "Bank of India Mutual Fund",
+    "source_page_url": "https://www.boimf.in/products/equity-funds/bank-of-india-small-cap-fund",
+    "authoritative_domain": "boimf.in"
+  },
+  {
+    "scheme_family_key": "whiteoak capital mid cap fund",
+    "scheme_code": null,
+    "provider": "WhiteOak Capital Mutual Fund",
+    "source_page_url": "https://www.whiteoakamc.com/",
+    "authoritative_domain": "whiteoakamc.com"
+  },
+  {
+    "scheme_family_key": "icici prudential large and mid cap fund",
+    "scheme_code": null,
+    "provider": "ICICI Prudential Mutual Fund",
+    "source_page_url": "https://digitalfactsheet.icicipruamc.com/fact/icici-prudential-large-and-mid-cap-fund.php",
+    "authoritative_domain": "icicipruamc.com"
+  }
+]
