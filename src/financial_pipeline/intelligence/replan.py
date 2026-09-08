@@ -41,17 +41,23 @@ class EvidenceReplanner:
     def _recovery_action(self, dimension) -> ResearchAction:
         action_type = EvidenceEvaluator.action_for_dimension(dimension)
         metrics: tuple[str, ...] = ()
+        evidence_types: tuple[str, ...] = ()
         rationale = f"fill missing or failed evidence dimension: {dimension.value}"
 
         if self._registry is not None and self._registry.has(action_type):
             supported = self._registry.supported_metrics(action_type)
             if supported:
                 metrics = supported
-                rationale += "; retry with capability-supported metrics"
+            supported_evidence = self._registry.supported_evidence_types(action_type)
+            if supported_evidence:
+                evidence_types = supported_evidence
+            if metrics or evidence_types:
+                rationale += "; retry with capability-supported semantics"
 
         return ResearchAction(
             action_type=action_type,
             metrics=metrics,
+            evidence_types=evidence_types,
             rationale=rationale,
         )
 
