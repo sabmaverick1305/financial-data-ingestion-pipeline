@@ -60,3 +60,6 @@ class ActionObservation:
     evidence_refs: tuple[str, ...] = ()
     tradeoff_reason: str | None = None
     error: str | None = None
+    failure_domain: str | None = None
+    retryable: bool | None = None
+    replannable: bool | None = None
