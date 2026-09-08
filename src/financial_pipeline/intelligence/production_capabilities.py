@@ -60,28 +60,56 @@ class ProductionCapabilityPack:
         )
 
     def risk(self, action: ResearchAction) -> CapabilityResult:
+        scheme_codes = action.parameters.get("scheme_codes")
         scheme_code = action.parameters.get("scheme_code")
-        if not scheme_code:
-            raise ValueError("scheme_code is required for risk computation")
-        history = self._repo().nav_history(str(scheme_code))
-        if len(history) < 2:
-            raise ValueError(f"insufficient NAV history for scheme {scheme_code}")
-        returns = [(history[i][1] / history[i-1][1]) - 1.0 for i in range(1, len(history)) if history[i-1][1] > 0]
-        if not returns:
-            raise ValueError(f"invalid NAV history for scheme {scheme_code}")
-        daily_std = statistics.stdev(returns) if len(returns) > 1 else 0.0
-        volatility = daily_std * math.sqrt(252) * 100
-        annualized_return = statistics.mean(returns) * 252
-        sharpe = ((annualized_return - self.risk_free_rate) / (daily_std * math.sqrt(252))) if daily_std else None
-        peak = history[0][1]
-        max_drawdown = 0.0
-        for _, nav in history:
-            peak = max(peak, nav)
-            if peak:
-                max_drawdown = max(max_drawdown, (peak - nav) / peak)
-        values = {"volatility": volatility, "sharpe_ratio": sharpe, "max_drawdown": max_drawdown * 100}
-        requested = {metric: values.get(metric) for metric in action.metrics}
-        return CapabilityResult(result={"scope": "scheme", "scheme_code": str(scheme_code), "metrics": requested}, evidence_refs=(f"verified:postgres:mf_nav_history:{scheme_code}",))
+        if scheme_code and not scheme_codes:
+            scheme_codes = [scheme_code]
+        if not scheme_codes:
+            raise ValueError("scheme_code or scheme_codes is required for risk computation")
+
+        rows = []
+        refs = []
+        for code in scheme_codes:
+            history = self._repo().nav_history(str(code))
+            if len(history) < 2:
+                continue
+            returns = [
+                (history[i][1] / history[i - 1][1]) - 1.0
+                for i in range(1, len(history))
+                if history[i - 1][1] > 0
+            ]
+            if not returns:
+                continue
+            daily_std = statistics.stdev(returns) if len(returns) > 1 else 0.0
+            volatility = daily_std * math.sqrt(252) * 100
+            annualized_return = statistics.mean(returns) * 252
+            sharpe = (
+                (annualized_return - self.risk_free_rate) / (daily_std * math.sqrt(252))
+                if daily_std else None
+            )
+            peak = history[0][1]
+            max_drawdown = 0.0
+            for _, nav in history:
+                peak = max(peak, nav)
+                if peak:
+                    max_drawdown = max(max_drawdown, (peak - nav) / peak)
+            values = {
+                "volatility": volatility,
+                "sharpe_ratio": sharpe,
+                "max_drawdown": max_drawdown * 100,
+            }
+            rows.append({
+                "scheme_code": str(code),
+                "metrics": {metric: values.get(metric) for metric in action.metrics},
+            })
+            refs.append(f"verified:postgres:mf_nav_history:{code}")
+
+        if not rows:
+            raise ValueError("no schemes had sufficient NAV history for risk computation")
+        return CapabilityResult(
+            result={"scope": "scheme_batch", "rows": rows},
+            evidence_refs=tuple(dict.fromkeys(refs)),
+        )
 
     def peer_compare(self, action: ResearchAction) -> CapabilityResult:
         category = action.parameters.get("category")
