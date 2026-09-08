@@ -43,6 +43,14 @@ class MockVerifiedCapabilityPack:
             ),
             ActionType.RETRIEVE_EVIDENCE: CapabilityContract(
                 supported_metrics=("fund_manager_tenure", "expense_ratio", "portfolio_concentration"),
+                supported_evidence_types=(
+                    "fund_prospectus",
+                    "fund_fact_sheet",
+                    "fund_strategy_document",
+                    "regulatory_filing",
+                    "annual_report",
+                    "portfolio_disclosure",
+                ),
             ),
         }
         for action_type in ActionType:
