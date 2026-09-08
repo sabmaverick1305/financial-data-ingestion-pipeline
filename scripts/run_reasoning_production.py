@@ -38,6 +38,7 @@ def main() -> None:
 
     engine = create_engine(settings.postgres_url, pool_pre_ping=True)
     production_repo = ReasoningProductionRepository(engine)
+    production_repo.ensure_latency_indexes()
 
     document_repo = DocumentRepository(settings.postgres_url)
     document_repo.create_tables()
