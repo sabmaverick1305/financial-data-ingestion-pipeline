@@ -16,6 +16,19 @@ class ProductionCapabilityPack:
         self.risk_free_rate = risk_free_rate
         self._documentary_validator = DocumentaryEvidenceValidator()
         self._scheme_families = SchemeFamilyPolicy()
+        self._nav_snapshot_cache: dict[tuple[str, ...], dict[str, list[tuple]]] = {}
+
+    def _nav_snapshot(self, scheme_codes: list[str]) -> dict[str, list[tuple]]:
+        codes = tuple(dict.fromkeys(str(code) for code in scheme_codes))
+        if codes in self._nav_snapshot_cache:
+            return self._nav_snapshot_cache[codes]
+        repo = self._repo()
+        if hasattr(repo, "nav_history_many"):
+            snapshot = repo.nav_history_many(list(codes))
+        else:
+            snapshot = {code: repo.nav_history(code) for code in codes}
+        self._nav_snapshot_cache[codes] = snapshot
+        return snapshot
 
     def _repo(self):
         if self.repository is None:
@@ -161,14 +174,7 @@ class ProductionCapabilityPack:
 
         rows = []
         refs = []
-        repo = self._repo()
-        if hasattr(repo, "nav_history_many"):
-            history_map = repo.nav_history_many([str(code) for code in scheme_codes])
-        else:
-            history_map = {
-                str(code): repo.nav_history(str(code))
-                for code in scheme_codes
-            }
+        history_map = self._nav_snapshot([str(code) for code in scheme_codes])
         for code in scheme_codes:
             history = history_map.get(str(code), [])
             if len(history) < 2:
@@ -221,14 +227,7 @@ class ProductionCapabilityPack:
 
         rows = []
         refs = []
-        repo = self._repo()
-        if hasattr(repo, "nav_history_many"):
-            history_map = repo.nav_history_many([str(code) for code in scheme_codes])
-        else:
-            history_map = {
-                str(code): repo.nav_history(str(code))
-                for code in scheme_codes
-            }
+        history_map = self._nav_snapshot([str(code) for code in scheme_codes])
         for code in scheme_codes:
             history = history_map.get(str(code), [])
             if len(history) < 2:
@@ -321,7 +320,10 @@ class ProductionCapabilityPack:
             }
         for current_category in categories:
             peers = peer_map.get(str(current_category), [])
-            ranked = [dict(row) for row in peers if row.get(metric) is not None]
+            family_peers = self._scheme_families.deduplicate(
+                [dict(row) for row in peers]
+            )
+            ranked = [dict(row) for row in family_peers if row.get(metric) is not None]
             ranked.sort(
                 key=lambda row: float(row[metric]),
                 reverse=metric != "rolling_volatility",
