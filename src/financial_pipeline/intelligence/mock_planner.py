@@ -9,6 +9,10 @@ from financial_pipeline.intelligence.research_plan import ActionType, ResearchAc
 class MockPlanner:
     """Rule-based planner for representative mutual-fund research queries."""
 
+    @property
+    def llm_calls_used(self) -> int:
+        return 0
+
     def plan(self, query: str) -> tuple[ResearchPlan, tuple[EvidenceRequirement, ...]]:
         q = query.lower()
 
