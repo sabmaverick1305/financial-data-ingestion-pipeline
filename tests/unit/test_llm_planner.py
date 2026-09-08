@@ -89,3 +89,62 @@ def test_llm_planner_rejects_flagship_plan_with_missing_required_action() -> Non
 
     with pytest.raises(ValueError, match="omitted required flagship actions"):
         LLMPlanner(FakeGenerator(payload)).plan("Give me some of the best mutual funds to invest in 2026")
+
+
+class TruncatedThenValidGenerator:
+    def __init__(self, payload: dict) -> None:
+        self.payload = payload
+        self.calls = 0
+        self.max_tokens_seen: list[int] = []
+
+    def generate(self, messages, intent_type="default", max_tokens=1024):
+        self.calls += 1
+        self.max_tokens_seen.append(max_tokens)
+        answer = '{"objective": "truncated' if self.calls == 1 else json.dumps(self.payload)
+        return GenerationResult(
+            answer=answer,
+            model="fake-planner",
+            provider="fake",
+            prompt_tokens=100,
+            completion_tokens=max_tokens if self.calls == 1 else 100,
+            latency_ms=1,
+        )
+
+
+class AlwaysInvalidGenerator:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, messages, intent_type="default", max_tokens=1024):
+        self.calls += 1
+        return GenerationResult(
+            answer='{"objective": "still truncated',
+            model="fake-planner",
+            provider="fake",
+            prompt_tokens=100,
+            completion_tokens=max_tokens,
+            latency_ms=1,
+        )
+
+
+def test_llm_planner_retries_once_after_truncated_json() -> None:
+    generator = TruncatedThenValidGenerator(_flagship_payload())
+    planner = LLMPlanner(generator)
+
+    plan, _ = planner.plan("Give me some of the best mutual funds to invest in 2026")
+
+    assert plan.actions
+    assert planner.llm_calls_used == 2
+    assert generator.calls == 2
+    assert generator.max_tokens_seen == [1800, 2800]
+
+
+def test_llm_planner_fails_safely_after_two_invalid_json_responses() -> None:
+    generator = AlwaysInvalidGenerator()
+    planner = LLMPlanner(generator)
+
+    with pytest.raises(ValueError, match="invalid or truncated JSON after retry"):
+        planner.plan("Give me some of the best mutual funds to invest in 2026")
+
+    assert planner.llm_calls_used == 2
+    assert generator.calls == 2
