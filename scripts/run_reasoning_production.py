@@ -142,6 +142,50 @@ def main() -> None:
                 f" | failed_gates={failed_gates}"
             )
 
+    print("\n=== DOCUMENTARY PREFLIGHT ===")
+    discovered_observation = next(
+        (
+            observation
+            for observation in state.observations
+            if observation.action_type.value == "discover_funds"
+        ),
+        None,
+    )
+    discovered_result = (
+        discovered_observation.result
+        if discovered_observation is not None
+        and isinstance(discovered_observation.result, dict)
+        else {}
+    )
+    family_keys = [
+        str(fund.get("scheme_family_key"))
+        for fund in discovered_result.get("funds", [])
+        if fund.get("scheme_family_key")
+    ]
+    documentary_types = (
+        "fund_prospectus",
+        "fund_fact_sheet",
+        "fund_strategy_document",
+    )
+    documentary_coverage = document_repo.documentary_coverage(
+        fund_names=family_keys,
+        required_document_types=documentary_types,
+    )
+    documentary_ratios = [
+        float(item.get("coverage_ratio", 0.0))
+        for item in documentary_coverage.values()
+    ]
+    documentary_preflight_ratio = (
+        sum(documentary_ratios) / len(documentary_ratios)
+        if documentary_ratios else 0.0
+    )
+    print(f"funds_checked={len(family_keys)}")
+    print(f"coverage_ratio={documentary_preflight_ratio}")
+    print(
+        "fully_covered_funds="
+        + str(sum(1 for item in documentary_coverage.values() if item.get("covered")))
+    )
+
     print("\n=== BENCHMARK ===")
     print(f"total_latency_ms={total_latency_ms}")
     assert state.trace is not None
@@ -170,6 +214,10 @@ def main() -> None:
         ),
         "no_abstention": state.abstention_reason is None,
         "latency_under_30s_target": total_latency_ms <= 30000,
+        "documentary_identity_resolved": (
+            documentary_preflight_ratio > 0.0
+            or "documentary" in state.soft_evidence_gaps
+        ),
     }
     for name, passed in gates.items():
         print(f"{name}={'PASS' if passed else 'FAIL'}")
