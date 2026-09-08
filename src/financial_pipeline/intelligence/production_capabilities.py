@@ -54,6 +54,16 @@ class ProductionCapabilityPack:
 
         if not rows:
             raise ValueError("no performance rows found for discovered schemes")
+        if len(rows) == 1 and scheme_code:
+            single = rows[0]
+            return CapabilityResult(
+                result={
+                    "scope": "scheme",
+                    "scheme_code": single["scheme_code"],
+                    "metrics": single["metrics"],
+                },
+                evidence_refs=tuple(dict.fromkeys(refs)),
+            )
         return CapabilityResult(
             result={"scope": "scheme_batch", "rows": rows},
             evidence_refs=tuple(dict.fromkeys(refs)),
@@ -106,6 +116,16 @@ class ProductionCapabilityPack:
 
         if not rows:
             raise ValueError("no schemes had sufficient NAV history for risk computation")
+        if len(rows) == 1 and scheme_code:
+            single = rows[0]
+            return CapabilityResult(
+                result={
+                    "scope": "scheme",
+                    "scheme_code": single["scheme_code"],
+                    "metrics": single["metrics"],
+                },
+                evidence_refs=tuple(dict.fromkeys(refs)),
+            )
         return CapabilityResult(
             result={"scope": "scheme_batch", "rows": rows},
             evidence_refs=tuple(dict.fromkeys(refs)),
@@ -158,6 +178,20 @@ class ProductionCapabilityPack:
                 "peers": ranked,
             })
 
+        if len(groups) == 1 and category:
+            group = groups[0]
+            return CapabilityResult(
+                result={
+                    "scope": "scheme_peer_set",
+                    "category": group["category"],
+                    "metric": group["metric"],
+                    "peers": group["peers"],
+                },
+                evidence_refs=(
+                    "verified:postgres:mf_scheme_master",
+                    "verified:postgres:mf_scheme_performance",
+                ),
+            )
         return CapabilityResult(
             result={"scope": "scheme_peer_sets", "categories": groups},
             evidence_refs=(
