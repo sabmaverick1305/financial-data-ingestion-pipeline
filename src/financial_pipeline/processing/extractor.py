@@ -111,6 +111,9 @@ class TextExtractor:
             if ft in {"xls", "xlsx"}:
                 return self._extract_spreadsheet(raw, ft)
 
+            if ft in {"html", "htm"}:
+                return self._extract_html(raw)
+
             raise DocumentExtractionError(f"Unsupported file type: {file_type}")
 
         except Exception as exc:
@@ -204,6 +207,49 @@ class TextExtractor:
         )
 
         return result
+
+    def _extract_html(self, raw: bytes) -> ExtractResult:
+        """Extract authoritative digital factsheets using only stdlib HTML parsing."""
+        from html.parser import HTMLParser
+
+        class VisibleTextParser(HTMLParser):
+            def __init__(self) -> None:
+                super().__init__()
+                self._skip_depth = 0
+                self.parts: list[str] = []
+
+            def handle_starttag(self, tag: str, attrs) -> None:
+                if tag.lower() in {"script", "style", "noscript", "svg"}:
+                    self._skip_depth += 1
+
+            def handle_endtag(self, tag: str) -> None:
+                if tag.lower() in {"script", "style", "noscript", "svg"} and self._skip_depth:
+                    self._skip_depth -= 1
+
+            def handle_data(self, data: str) -> None:
+                if self._skip_depth:
+                    return
+                text = " ".join(data.split())
+                if text:
+                    self.parts.append(text)
+
+        decoded = raw.decode("utf-8", errors="replace")
+        parser = VisibleTextParser()
+        parser.feed(decoded)
+        full_text = "\n".join(parser.parts).strip()
+        if not full_text:
+            raise DocumentExtractionError("Authoritative HTML contained no visible text")
+
+        return ExtractResult(
+            pages=[{"page": 1, "text": full_text}],
+            tables=[],
+            full_text=full_text,
+            markdown=full_text,
+            metadata={"content_type": "text/html"},
+            has_text_layer=True,
+            figures=[],
+            extraction_engine="stdlib_html_parser",
+        )
 
     def _extract_spreadsheet(self, raw: bytes, ext: str) -> ExtractResult:
         # AMFI serves some files with a .xls extension whose content is
