@@ -80,6 +80,23 @@ class CapabilityRegistry:
             return None
         return capability.contract.supported_evidence_types
 
+    @staticmethod
+    def _classify_exception(exc: Exception) -> tuple[str, bool, bool]:
+        message = str(exc).lower()
+        if (
+            "not_found_error" in message
+            or ("404" in message and "model" in message)
+            or "model not found" in message
+        ):
+            return "configuration", False, False
+        if any(token in message for token in ("timeout", "timed out", "429", "rate limit", "503", "502", "connection reset")):
+            return "execution", True, False
+        if any(token in message for token in ("scheme_code is required", "scheme_code or scheme_codes is required", "category is required", "category or categories is required")):
+            return "dependency", False, True
+        if isinstance(exc, ValueError):
+            return "data_or_contract", False, True
+        return "execution", False, False
+
     def execute(self, action: ResearchAction) -> ActionObservation:
         capability = self.get(action.action_type)
         try:
@@ -156,9 +173,13 @@ class CapabilityRegistry:
                 tradeoff_reason=tradeoff_reason,
             )
         except Exception as exc:
+            failure_domain, retryable, replannable = self._classify_exception(exc)
             return ActionObservation(
                 action_id=action.action_id,
                 action_type=action.action_type,
                 status=ActionStatus.FAILED,
                 error=str(exc),
+                failure_domain=failure_domain,
+                retryable=retryable,
+                replannable=replannable,
             )
