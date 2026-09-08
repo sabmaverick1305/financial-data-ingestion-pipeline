@@ -724,6 +724,27 @@ class DocumentRepository:
             rows = conn.execute(text(sql), params).mappings().all()
         return [dict(r) for r in rows]
 
+    def documentary_coverage(
+        self,
+        *,
+        fund_names: list[str],
+        required_document_types: list[str] | tuple[str, ...],
+    ) -> dict[str, dict]:
+        """Report indexed documentary coverage for each fund search term."""
+        coverage: dict[str, dict] = {}
+        for fund_name in fund_names:
+            matched = self.find_document_ids(
+                fund_names=[fund_name],
+                document_types=required_document_types,
+                limit=100,
+            )
+            coverage[fund_name] = {
+                "matched_document_count": len(matched),
+                "covered": bool(matched),
+                "required_document_types": list(required_document_types),
+            }
+        return coverage
+
     def find_document_ids(
         self,
         *,
