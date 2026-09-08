@@ -32,7 +32,10 @@ For mutual-fund research:
 - use performance, risk, peer, flow/AUM, documentary, and contradiction evidence;
 - do not invent metrics or tools;
 - do not ask for human approval for trusted analytical actions;
-- return JSON only.
+- keep each rationale under 12 words;
+- include at most 4 metrics per action;
+- return compact JSON only;
+- do not use markdown or add explanation outside the JSON.
 
 JSON schema:
 {
@@ -73,14 +76,7 @@ class LLMPlanner:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": f"User query: {query}"},
         ]
-        result = self._generator.generate(
-            messages,
-            intent_type="factual",
-            max_tokens=1200,
-        )
-        self._llm_calls_used += 1
-        raw = re.sub(r"```(?:json)?\s*|\s*```", "", result.answer.strip()).strip()
-        payload = json.loads(raw)
+        payload = self._generate_payload(messages)
 
         actions = tuple(self._parse_action(item) for item in payload.get("actions", []))
         plan = ResearchPlan(
@@ -99,6 +95,57 @@ class LLMPlanner:
         )
         requirements = self._policy.enforce_requirements(query, requested_requirements)
         return plan, requirements
+
+    def _generate_payload(self, messages: list[dict]) -> dict[str, Any]:
+        """Generate planner JSON with one bounded repair retry on malformed output."""
+        attempts: tuple[tuple[list[dict], int], ...] = (
+            (messages, 1800),
+            (
+                [
+                    *messages,
+                    {
+                        "role": "user",
+                        "content": (
+                            "Return the complete plan again as compact valid JSON only. "
+                            "Do not use markdown. Keep rationales under 12 words."
+                        ),
+                    },
+                ],
+                2800,
+            ),
+        )
+
+        last_error: Exception | None = None
+
+        for attempt_messages, max_tokens in attempts:
+            result = self._generator.generate(
+                attempt_messages,
+                intent_type="factual",
+                max_tokens=max_tokens,
+            )
+            self._llm_calls_used += 1
+
+            raw = re.sub(
+                r"```(?:json)?\s*|\s*```",
+                "",
+                result.answer.strip(),
+            ).strip()
+
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                last_error = exc
+                continue
+
+            if not isinstance(payload, dict):
+                last_error = ValueError("planner output must be a JSON object")
+                continue
+
+            return payload
+
+        raise ValueError(
+            "planner returned invalid or truncated JSON after retry"
+        ) from last_error
 
     @staticmethod
     def _parse_action(item: dict[str, Any]) -> ResearchAction:
