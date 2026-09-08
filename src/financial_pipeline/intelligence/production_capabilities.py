@@ -63,15 +63,22 @@ class ProductionCapabilityPack:
             rows = self._repo().discover_funds(category=category, limit=max(limit * 3, limit))
         elif eligible:
             categories = list(dict.fromkeys(str(value) for value in eligible))
-            per_category = max(6, math.ceil((limit * 3) / max(1, len(categories))))
-            pooled = []
-            for eligible_category in categories:
-                pooled.extend(
-                    self._repo().discover_funds(
-                        category=eligible_category,
-                        limit=per_category,
-                    )
+            repo = self._repo()
+            if hasattr(repo, "discover_funds_many"):
+                pooled = repo.discover_funds_many(
+                    categories=categories,
+                    limit=max(limit * 3, limit),
                 )
+            else:
+                per_category = max(6, math.ceil((limit * 3) / max(1, len(categories))))
+                pooled = []
+                for eligible_category in categories:
+                    pooled.extend(
+                        repo.discover_funds(
+                            category=eligible_category,
+                            limit=per_category,
+                        )
+                    )
             deduped = {}
             for row in pooled:
                 code = str(row.get("scheme_code") or "")
@@ -305,7 +312,7 @@ class ProductionCapabilityPack:
 
         groups = []
         repo = self._repo()
-        peer_limit = int(action.parameters.get("peer_limit", 100))
+        peer_limit = min(int(action.parameters.get("peer_limit", 50)), 50)
         if hasattr(repo, "peer_performance_many"):
             peer_map = repo.peer_performance_many(
                 categories=[str(value) for value in categories],
