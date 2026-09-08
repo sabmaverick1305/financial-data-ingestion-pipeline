@@ -749,20 +749,61 @@ class DocumentRepository:
         fund_names: list[str],
         required_document_types: list[str] | tuple[str, ...],
     ) -> dict[str, dict]:
-        """Report indexed documentary coverage for each fund search term."""
+        """Report indexed coverage per fund and per required documentary type."""
         coverage: dict[str, dict] = {}
+        required = [str(value) for value in required_document_types]
         for fund_name in fund_names:
-            matched = self.find_document_ids(
-                fund_names=[fund_name],
-                document_types=required_document_types,
-                limit=100,
-            )
+            by_type: dict[str, dict] = {}
+            missing: list[str] = []
+            all_ids: set[str] = set()
+            for document_type in required:
+                matched = self.find_document_ids(
+                    fund_names=[fund_name],
+                    document_types=[document_type],
+                    limit=100,
+                )
+                by_type[document_type] = {
+                    "covered": bool(matched),
+                    "document_ids": matched,
+                    "matched_document_count": len(matched),
+                }
+                all_ids.update(matched)
+                if not matched:
+                    missing.append(document_type)
+
             coverage[fund_name] = {
-                "matched_document_count": len(matched),
-                "covered": bool(matched),
-                "required_document_types": list(required_document_types),
+                "covered": not missing,
+                "coverage_ratio": (
+                    (len(required) - len(missing)) / len(required)
+                    if required else 1.0
+                ),
+                "matched_document_count": len(all_ids),
+                "required_document_types": required,
+                "missing_document_types": missing,
+                "by_type": by_type,
             }
         return coverage
+
+    def documentary_ingestion_backlog(
+        self,
+        *,
+        fund_names: list[str],
+        required_document_types: list[str] | tuple[str, ...],
+    ) -> list[dict]:
+        """Return deterministic missing fund/document combinations for ingestion."""
+        coverage = self.documentary_coverage(
+            fund_names=fund_names,
+            required_document_types=required_document_types,
+        )
+        backlog: list[dict] = []
+        for fund_name, item in coverage.items():
+            for document_type in item["missing_document_types"]:
+                backlog.append({
+                    "fund_name": fund_name,
+                    "document_type": document_type,
+                    "reason": "required documentary evidence not indexed",
+                })
+        return backlog
 
     def find_document_ids(
         self,
