@@ -82,6 +82,59 @@ def main() -> None:
     print(f"confidence_score={state.confidence_score}")
     print(f"abstention_reason={state.abstention_reason}")
 
+
+    print("\n=== DECISION FUNNEL ===")
+    decisions = list(state.candidate_decisions.values())
+    discovered = len(decisions)
+    eligibility_pass = sum(
+        1 for decision in decisions
+        if decision.get("gates", {}).get("eligibility", {}).get("status") == "pass"
+    )
+    data_quality_pass = sum(
+        1 for decision in decisions
+        if decision.get("gates", {}).get("data_quality", {}).get("status") == "pass"
+    )
+    evidence_pass = sum(
+        1 for decision in decisions
+        if decision.get("gates", {}).get("evidence", {}).get("status") == "pass"
+    )
+    peer_pass = sum(
+        1 for decision in decisions
+        if decision.get("gates", {}).get("peer_comparison", {}).get("status") == "pass"
+    )
+    eligible_for_ranking = sum(
+        1 for decision in decisions
+        if decision.get("eligible_for_ranking")
+    )
+    print(f"mandate={state.investment_mandate}")
+    print(f"eligible_categories={state.eligible_categories}")
+    print(f"discovered={discovered}")
+    print(f"eligibility_pass={eligibility_pass}")
+    print(f"data_quality_pass={data_quality_pass}")
+    print(f"hard_evidence_pass={evidence_pass}")
+    print(f"peer_comparable={peer_pass}")
+    print(f"eligible_for_ranking={eligible_for_ranking}")
+    print(f"ranked={len(state.ranked_funds)}")
+    print(f"confidence={state.confidence_score}")
+    print(f"soft_evidence_gaps={state.soft_evidence_gaps}")
+    print(f"tradeoffs={state.evidence_tradeoffs}")
+
+    if decisions:
+        print("\n=== REJECTED CANDIDATES ===")
+        for decision in decisions:
+            if decision.get("eligible_for_ranking"):
+                continue
+            failed_gates = [
+                gate_name
+                for gate_name, gate in decision.get("gates", {}).items()
+                if gate.get("status") == "fail"
+            ]
+            print(
+                f"- {decision.get('scheme_code')} | {decision.get('scheme_name')}"
+                f" | category={decision.get('category')}"
+                f" | failed_gates={failed_gates}"
+            )
+
     print("\n=== FINAL ANSWER ===")
     print(state.final_answer)
 
