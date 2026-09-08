@@ -10,6 +10,13 @@ _INSUFFICIENT_PHRASES = (
 )
 
 _KEYWORDS = {
+    "prospectus": ("prospectus", "scheme information document", "sid"),
+    "fund_prospectus": ("prospectus", "scheme information document", "sid"),
+    "scheme_information_document": ("scheme information document", "sid", "investment objective"),
+    "fact_sheet": ("fact sheet", "factsheet", "portfolio"),
+    "factsheet": ("fact sheet", "factsheet", "portfolio"),
+    "strategy": ("strategy", "investment approach", "investment objective"),
+    "disclosures": ("portfolio", "disclosure", "holdings"),
     "fund_prospectus": ("prospectus", "scheme information document", "sid"),
     "fund_fact_sheet": ("fact sheet", "factsheet"),
     "fund_strategy_document": ("strategy", "investment objective"),
@@ -27,7 +34,7 @@ class DocumentaryEvidenceValidator:
         haystack = " ".join(
             str(source.get(key, ""))
             for source in sources
-            for key in ("file_name", "title", "category", "preview")
+            for key in ("file_name", "title", "category", "preview", "document_type", "text")
         ).lower()
 
         if requested:
