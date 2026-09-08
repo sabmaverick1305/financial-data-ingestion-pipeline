@@ -246,6 +246,17 @@ class RAGPipeline:
             retrieval_count=len(chunks),
         )
 
+    def semantic_documentary_coverage(
+        self,
+        *,
+        fund_names: list[str],
+        requirement_keys: list[str] | tuple[str, ...],
+    ) -> dict[str, dict]:
+        return self._retriever.semantic_documentary_coverage(
+            fund_names=fund_names,
+            requirement_keys=requirement_keys,
+        )
+
     def documentary_coverage(
         self,
         *,
