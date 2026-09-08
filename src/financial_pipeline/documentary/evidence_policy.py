@@ -8,6 +8,7 @@ class SemanticEvidenceRequirement:
     key: str
     accepted_document_types: tuple[str, ...]
     content_terms: tuple[str, ...] = ()
+    match_mode: str = "any"
 
 SEMANTIC_EVIDENCE_REQUIREMENTS: tuple[SemanticEvidenceRequirement, ...] = (
     SemanticEvidenceRequirement(
@@ -21,6 +22,7 @@ SEMANTIC_EVIDENCE_REQUIREMENTS: tuple[SemanticEvidenceRequirement, ...] = (
             "investment objective",
             "asset allocation",
         ),
+        match_mode="all",
     ),
     SemanticEvidenceRequirement(
         key="investment_strategy",
