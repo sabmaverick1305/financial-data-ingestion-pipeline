@@ -2,6 +2,7 @@
 from __future__ import annotations
 import math
 import statistics
+from datetime import timedelta
 from typing import Any
 from financial_pipeline.intelligence.capability_registry import CapabilityResult
 from financial_pipeline.intelligence.research_plan import ResearchAction
@@ -84,8 +85,10 @@ class ProductionCapabilityPack:
             history = self._repo().nav_history(str(code))
             if len(history) < 2:
                 continue
-            start_date, start_nav = history[0]
             end_date, end_nav = history[-1]
+            target_start = end_date - timedelta(days=365 * 3)
+            candidates = [point for point in history if point[0] >= target_start]
+            start_date, start_nav = candidates[0] if candidates else history[0]
             if start_nav <= 0 or end_nav <= 0:
                 continue
             days = max(1, (end_date - start_date).days)
