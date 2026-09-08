@@ -19,6 +19,13 @@ class AnswerSynthesizer:
         lines = [
             f"FIES research ranking (confidence={confidence.score:.2f}):"
         ]
+        if state.investment_mandate:
+            lines.append(
+                "Mandate: "
+                + state.investment_mandate
+                + " | eligible categories: "
+                + ", ".join(state.eligible_categories)
+            )
         for index, fund in enumerate(state.ranked_funds[:5], 1):
             lines.append(
                 f"{index}. {fund['scheme_name']} [{fund['category']}] "
