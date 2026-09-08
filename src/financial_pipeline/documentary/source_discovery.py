@@ -46,6 +46,11 @@ class AuthoritativeSourcePageDiscoverer:
             "scheme information document",
             "sid",
             "scheme document",
+            "offer document",
+        ),
+        "fund_prospectus": (
+            "prospectus",
+            "offer document",
         ),
         "key_information_memorandum": (
             "key information memorandum",
@@ -54,6 +59,12 @@ class AuthoritativeSourcePageDiscoverer:
         "fund_fact_sheet": (
             "factsheet",
             "fact sheet",
+            "monthly factsheet",
+        ),
+        "fund_strategy_document": (
+            "investment strategy",
+            "investment approach",
+            "strategy document",
         ),
         "portfolio_disclosure": (
             "portfolio disclosure",
