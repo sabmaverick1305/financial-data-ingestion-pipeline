@@ -40,11 +40,12 @@ class ResearchExecutor:
                 payload={
                     "status": observation.status.value,
                     "evidence_refs": list(observation.evidence_refs),
+                    "tradeoff_reason": observation.tradeoff_reason,
                     "error": observation.error,
                 },
             )
 
-            if observation.status is ActionStatus.FAILED:
-                break
+            # Do not fail-fast. Independent evidence actions should continue so
+            # the evaluator can make a portfolio-level tradeoff after the pass.
 
         return state
