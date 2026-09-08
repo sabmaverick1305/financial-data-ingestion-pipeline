@@ -8,6 +8,7 @@ from financial_pipeline.intelligence.capability_registry import CapabilityResult
 from financial_pipeline.intelligence.research_plan import ActionStatus, ResearchAction
 from financial_pipeline.intelligence.documentary_validation import DocumentaryEvidenceValidator
 from financial_pipeline.intelligence.scheme_family import SchemeFamilyPolicy
+from financial_pipeline.documentary.evidence_policy import semantic_requirements_for_evidence_types
 
 class ProductionCapabilityPack:
     def __init__(self, *, repository=None, rag_pipeline=None, risk_free_rate: float = 0.065) -> None:
@@ -417,22 +418,23 @@ class ProductionCapabilityPack:
         coverage = {}
         backlog = []
         covered_document_ids: list[str] = []
-        if document_search_names and hasattr(self.rag_pipeline, "documentary_coverage"):
-            coverage = self.rag_pipeline.documentary_coverage(
+        semantic_requirements = semantic_requirements_for_evidence_types(
+            list(action.evidence_types)
+        )
+        if document_search_names and hasattr(self.rag_pipeline, "semantic_documentary_coverage"):
+            coverage = self.rag_pipeline.semantic_documentary_coverage(
                 fund_names=document_search_names,
-                document_types=list(action.evidence_types),
+                requirement_keys=list(semantic_requirements),
             )
-            # Build the backlog from the already-resolved coverage. Do not repeat
-            # the same metadata search merely to report missing evidence.
             for fund_name, item in coverage.items():
-                for document_type in item.get("missing_document_types", []):
+                for requirement in item.get("missing_requirements", []):
                     backlog.append({
                         "fund_name": fund_name,
-                        "document_type": document_type,
-                        "reason": "required documentary evidence not indexed",
+                        "requirement": requirement,
+                        "reason": "required semantic documentary evidence not satisfied",
                     })
-                for type_item in item.get("by_type", {}).values():
-                    covered_document_ids.extend(type_item.get("document_ids", []))
+                for requirement_item in item.get("by_requirement", {}).values():
+                    covered_document_ids.extend(requirement_item.get("document_ids", []))
             covered_document_ids = list(dict.fromkeys(covered_document_ids))
 
         if covered_document_ids and hasattr(self.rag_pipeline, "ask_documentary_ids"):
@@ -484,6 +486,7 @@ class ProductionCapabilityPack:
                 "evidence_valid": valid,
                 "candidate_names": candidate_names,
                 "documentary_coverage": coverage,
+                "semantic_requirements": list(semantic_requirements),
                 "documentary_coverage_ratio": (
                     sum(
                         float(item.get("coverage_ratio", 0.0))
