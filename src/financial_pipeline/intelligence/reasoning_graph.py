@@ -23,6 +23,7 @@ from financial_pipeline.intelligence.decision_pipeline import CandidateDecisionP
 from financial_pipeline.intelligence.planner_protocol import ResearchPlanner
 from financial_pipeline.intelligence.reasoning_loop import ReasoningLoop
 from financial_pipeline.intelligence.reasoning_state import ReasoningState
+from financial_pipeline.intelligence.reasoning_trace import ReasoningTraceEventType
 from financial_pipeline.intelligence.replan import EvidenceReplanner
 
 
