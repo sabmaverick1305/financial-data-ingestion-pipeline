@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, "src")
 
 from financial_pipeline.config import settings
+from financial_pipeline.intelligence.closed_beta_policy import ClosedBetaUniversePolicy
 from financial_pipeline.documentary.authoritative_ingestion import (
     AuthoritativeFundDocument,
     AuthoritativeFundDocumentIngestor,
@@ -36,6 +37,11 @@ from financial_pipeline.storage.document_repo import DocumentRepository
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("manifest", type=Path)
+    parser.add_argument(
+        "--closed-beta-only",
+        action="store_true",
+        help="Ingest only scheme families admitted by the closed-beta universe policy.",
+    )
     args = parser.parse_args()
 
     if not settings.postgres_url:
@@ -46,6 +52,17 @@ def main() -> None:
     payload = json.loads(args.manifest.read_text())
     if not isinstance(payload, list):
         raise ValueError("manifest must be a JSON array")
+
+    skipped = []
+    if args.closed_beta_only:
+        policy = ClosedBetaUniversePolicy.default()
+        filtered = []
+        for item in payload:
+            if policy.allows(str(item.get("scheme_family_key") or "")):
+                filtered.append(item)
+            else:
+                skipped.append(str(item.get("scheme_family_key") or ""))
+        payload = filtered
 
     repository = DocumentRepository(settings.postgres_url)
     repository.create_tables()
@@ -58,6 +75,8 @@ def main() -> None:
 
     print(json.dumps({
         "ingested": len(results),
+        "closed_beta_only": args.closed_beta_only,
+        "skipped_scheme_families": sorted(set(skipped)),
         "results": results,
         "next_step": (
             "Run the existing text/table/chunk/embed workers until these document_ids "
