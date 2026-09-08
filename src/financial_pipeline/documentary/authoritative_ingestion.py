@@ -47,19 +47,26 @@ class AuthoritativeFundDocumentIngestor:
 
     def ingest(self, document: AuthoritativeFundDocument) -> dict:
         self._validate(document)
-
         response = httpx.get(
             document.source_url,
             timeout=settings.request_timeout,
             follow_redirects=True,
+            headers={"User-Agent": "FIES-Document-Ingestion/1.0"},
         )
         response.raise_for_status()
         body = response.content
         if not body:
             raise ValueError("authoritative document download returned an empty body")
 
-        file_hash = hashlib.sha256(body).hexdigest()
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
         extension = PurePosixPath(document.file_name).suffix.lstrip(".").lower() or "pdf"
+        # Do not allow an AMC error/login HTML page to become verified evidence.
+        if extension == "pdf" and not body.startswith(b"%PDF"):
+            raise ValueError(
+                f"authoritative PDF URL did not return PDF bytes (content-type={content_type!r})"
+            )
+
+        file_hash = hashlib.sha256(body).hexdigest()
         s3_key = (
             "bronze/fund_documents/"
             f"{document.scheme_family_key.replace(' ', '_')}/"
@@ -72,11 +79,14 @@ class AuthoritativeFundDocumentIngestor:
             Bucket=settings.s3_bucket,
             Key=s3_key,
             Body=body,
-            ContentType=response.headers.get("content-type", "application/octet-stream"),
+            ContentType=content_type or "application/octet-stream",
             Metadata={
                 "scheme_family_key": document.scheme_family_key,
+                "scheme_code": document.scheme_code or "",
                 "document_type": document.document_type,
                 "provider": document.provider,
+                "source_url": document.source_url,
+                "authority": "authoritative",
             },
         )
 
@@ -104,7 +114,10 @@ class AuthoritativeFundDocumentIngestor:
             "document_id": document_id,
             "action": action,
             "scheme_family_key": document.scheme_family_key,
+            "scheme_code": document.scheme_code,
             "document_type": document.document_type,
+            "source_url": document.source_url,
+            "authority": "authoritative",
             "s3_raw_key": s3_key,
         }
 
@@ -114,8 +127,8 @@ class AuthoritativeFundDocumentIngestor:
         parsed = urlparse(document.source_url)
         if parsed.scheme != "https" or not parsed.netloc:
             raise ValueError("authoritative source URL must use HTTPS")
-        allowed = document.authoritative_domain.lower().strip()
-        hostname = (parsed.hostname or "").lower()
+        allowed = document.authoritative_domain.lower().strip().rstrip(".")
+        hostname = (parsed.hostname or "").lower().rstrip(".")
         if not allowed or not (
             hostname == allowed or hostname.endswith("." + allowed)
         ):
@@ -126,3 +139,5 @@ class AuthoritativeFundDocumentIngestor:
             raise ValueError("scheme_family_key is required")
         if not document.provider.strip():
             raise ValueError("provider is required")
+        if not document.source.strip():
+            raise ValueError("source is required")
