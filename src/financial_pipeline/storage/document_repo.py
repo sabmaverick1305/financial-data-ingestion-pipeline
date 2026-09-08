@@ -872,6 +872,17 @@ class DocumentRepository:
         """Evaluate semantic evidence coverage over authoritative document identities."""
         from financial_pipeline.documentary.evidence_policy import REQUIREMENT_BY_KEY
 
+        accepted_types: list[str] = []
+        for key in requirement_keys:
+            requirement = REQUIREMENT_BY_KEY[key]
+            accepted_types.extend(requirement.accepted_document_types)
+        # Backfill identity for any legacy authoritative documents that were
+        # ingested before document_scheme_identity existed.
+        self.resolve_document_identity(
+            fund_names=fund_names,
+            document_types=list(dict.fromkeys(accepted_types)),
+        )
+
         coverage: dict[str, dict] = {
             name: {"by_requirement": {}, "missing_requirements": []}
             for name in fund_names
