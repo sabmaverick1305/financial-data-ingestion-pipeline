@@ -26,6 +26,8 @@ class ReasoningState:
     ranked_funds: list[dict] = field(default_factory=list)
     evidence_tradeoffs: list[str] = field(default_factory=list)
     soft_evidence_gaps: list[str] = field(default_factory=list)
+    investment_mandate: str | None = None
+    eligible_categories: list[str] = field(default_factory=list)
     abstention_reason: str | None = None
     trace: ReasoningTrace | None = None
 
