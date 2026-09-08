@@ -70,8 +70,55 @@ class ProductionCapabilityPack:
         )
 
     def returns(self, action: ResearchAction) -> CapabilityResult:
-        """Deterministic return capability over persisted scheme performance."""
-        return self.performance(action)
+        """Deterministically compute total and annualized returns from NAV history."""
+        scheme_codes = action.parameters.get("scheme_codes")
+        scheme_code = action.parameters.get("scheme_code")
+        if scheme_code and not scheme_codes:
+            scheme_codes = [scheme_code]
+        if not scheme_codes:
+            raise ValueError("scheme_code or scheme_codes is required for return computation")
+
+        rows = []
+        refs = []
+        for code in scheme_codes:
+            history = self._repo().nav_history(str(code))
+            if len(history) < 2:
+                continue
+            start_date, start_nav = history[0]
+            end_date, end_nav = history[-1]
+            if start_nav <= 0 or end_nav <= 0:
+                continue
+            days = max(1, (end_date - start_date).days)
+            total_return = ((end_nav / start_nav) - 1.0) * 100
+            annualized_return = (((end_nav / start_nav) ** (365.0 / days)) - 1.0) * 100
+            values = {
+                "total_return_3y": total_return,
+                "annualized_return": annualized_return,
+            }
+            rows.append({
+                "scheme_code": str(code),
+                "start_date": start_date,
+                "end_date": end_date,
+                "metrics": {metric: values.get(metric) for metric in action.metrics},
+            })
+            refs.append(f"verified:postgres:mf_nav_history:{code}")
+
+        if not rows:
+            raise ValueError("no schemes had sufficient NAV history for return computation")
+        if len(rows) == 1 and scheme_code:
+            single = rows[0]
+            return CapabilityResult(
+                result={
+                    "scope": "scheme",
+                    "scheme_code": single["scheme_code"],
+                    "metrics": single["metrics"],
+                },
+                evidence_refs=tuple(dict.fromkeys(refs)),
+            )
+        return CapabilityResult(
+            result={"scope": "scheme_batch", "rows": rows},
+            evidence_refs=tuple(dict.fromkeys(refs)),
+        )
 
     def risk(self, action: ResearchAction) -> CapabilityResult:
         scheme_codes = action.parameters.get("scheme_codes")
