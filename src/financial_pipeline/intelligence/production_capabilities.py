@@ -17,6 +17,13 @@ class ProductionCapabilityPack:
             raise RuntimeError("production reasoning repository is not configured")
         return self.repository
 
+    def discover_categories(self, action: ResearchAction) -> CapabilityResult:
+        categories = self._repo().discover_categories()
+        return CapabilityResult(
+            result={"scope": "scheme_category", "categories": categories},
+            evidence_refs=("verified:postgres:mf_scheme_master",),
+        )
+
     def discover_funds(self, action: ResearchAction) -> CapabilityResult:
         category = action.parameters.get("category")
         limit = int(action.parameters.get("limit", 20))
@@ -87,6 +94,22 @@ class ProductionCapabilityPack:
         rows = self._repo().latest_category_facts(metric=metric, category=category)
         refs = tuple(f"verified:amfi:{row.get('source_document_id')}" for row in rows if row.get("source_document_id"))
         return CapabilityResult(result={"scope": "fund_category", "metric": metric, "rows": rows}, evidence_refs=refs)
+
+    def contradictions(self, action: ResearchAction) -> CapabilityResult:
+        from financial_pipeline.intelligence.contradictions import ContradictionEngine
+        facts = dict(action.parameters.get("facts") or {})
+        contradictions = ContradictionEngine().evaluate(facts)
+        return CapabilityResult(
+            result={
+                "scope": "deterministic_validation",
+                "checks": list(action.checks),
+                "contradictions": [
+                    {"code": item.code, "severity": item.severity, "reason": item.reason}
+                    for item in contradictions
+                ],
+            },
+            evidence_refs=("verified:deterministic:contradiction_rules",),
+        )
 
     def documentary(self, action: ResearchAction) -> CapabilityResult:
         if self.rag_pipeline is None:
