@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from financial_pipeline.intelligence.metric_ontology import MetricOntology
 from financial_pipeline.intelligence.research_plan import ResearchAction
 
 
@@ -17,6 +18,7 @@ class CapabilityContract:
 
     supported_metrics: tuple[str, ...] | None = None
     metric_aliases: dict[str, str] = field(default_factory=dict)
+    ontology: MetricOntology = field(default_factory=MetricOntology)
 
     def normalize(self, action: ResearchAction) -> tuple[ResearchAction, tuple[str, ...]]:
         if self.supported_metrics is None or not action.metrics:
@@ -27,7 +29,8 @@ class CapabilityContract:
         unsupported: list[str] = []
 
         for metric in action.metrics:
-            canonical = self.metric_aliases.get(metric, metric)
+            ontology_metric = self.ontology.canonicalize(metric)
+            canonical = self.metric_aliases.get(metric, self.metric_aliases.get(ontology_metric, ontology_metric))
             if canonical in supported:
                 if canonical not in normalized:
                     normalized.append(canonical)
