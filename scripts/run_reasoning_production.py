@@ -40,6 +40,7 @@ def main() -> None:
     production_repo = ReasoningProductionRepository(engine)
 
     document_repo = DocumentRepository(settings.postgres_url)
+    document_repo.create_tables()
     retriever = Retriever(document_repo)
     rag_pipeline = RAGPipeline(retriever)
 
