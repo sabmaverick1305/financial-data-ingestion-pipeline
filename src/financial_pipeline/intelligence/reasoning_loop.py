@@ -61,6 +61,44 @@ class ReasoningLoop:
                     "tradeoffs": list(evaluation.tradeoffs),
                 },
             )
+            blocking_actions = {
+                EvidenceEvaluator.action_for_dimension(dimension)
+                for dimension in evaluation.failed
+            }
+            non_replannable = []
+            for action_type in blocking_actions:
+                latest = next(
+                    (
+                        observation
+                        for observation in reversed(state.observations)
+                        if observation.action_type is action_type
+                        and observation.status.value == "failed"
+                    ),
+                    None,
+                )
+                if latest is not None and latest.replannable is False:
+                    non_replannable.append(latest)
+
+            if non_replannable:
+                details = "; ".join(
+                    f"{observation.action_type.value}:{observation.failure_domain}:{observation.error}"
+                    for observation in non_replannable
+                )
+                state.abstention_reason = (
+                    "required evidence failed with a non-replannable capability error: "
+                    + details
+                )
+                state.trace.record(
+                    ReasoningTraceEventType.LOOP_STOPPED,
+                    round=state.investigation_round,
+                    plan_id=plan.plan_id,
+                    payload={
+                        "reason": state.abstention_reason,
+                        "failure_domain": "non_replannable",
+                    },
+                )
+                return state
+
             if evaluation.is_sufficient:
                 state.trace.record(
                     ReasoningTraceEventType.LOOP_STOPPED,
