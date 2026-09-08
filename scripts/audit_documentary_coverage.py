@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit whether fund-specific documentary evidence is indexed for beta."""
+"""Audit fund-specific documentary coverage and emit ingestion backlog."""
 from __future__ import annotations
 
 import argparse
@@ -23,6 +23,7 @@ DEFAULT_TYPES = (
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("fund_names", nargs="+")
+    parser.add_argument("--types", nargs="*", default=list(DEFAULT_TYPES))
     args = parser.parse_args()
 
     if not settings.postgres_url:
@@ -31,15 +32,22 @@ def main() -> None:
     repo = DocumentRepository(settings.postgres_url)
     coverage = repo.documentary_coverage(
         fund_names=args.fund_names,
-        required_document_types=DEFAULT_TYPES,
+        required_document_types=args.types,
     )
-    covered = sum(1 for item in coverage.values() if item["covered"])
-    total = len(coverage)
+    backlog = repo.documentary_ingestion_backlog(
+        fund_names=args.fund_names,
+        required_document_types=args.types,
+    )
+
+    ratios = [float(item["coverage_ratio"]) for item in coverage.values()]
     print(json.dumps({
-        "covered": covered,
-        "total": total,
-        "coverage_ratio": covered / total if total else 0.0,
+        "fund_count": len(coverage),
+        "required_document_types": args.types,
+        "coverage_ratio": sum(ratios) / len(ratios) if ratios else 0.0,
+        "fully_covered_funds": sum(1 for item in coverage.values() if item["covered"]),
+        "missing_combinations": len(backlog),
         "funds": coverage,
+        "ingestion_backlog": backlog,
     }, indent=2))
 
 if __name__ == "__main__":
