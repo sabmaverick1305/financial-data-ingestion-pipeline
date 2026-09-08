@@ -2,10 +2,12 @@
 from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from financial_pipeline.intelligence.category_ontology import CategoryOntology
 
 class ReasoningProductionRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
+        self._categories = CategoryOntology()
 
     def discover_categories(self) -> list[str]:
         with self._engine.connect() as conn:
@@ -15,16 +17,19 @@ class ReasoningProductionRepository:
                 WHERE is_active = TRUE
                   AND category IS NOT NULL
                   AND BTRIM(category) <> ''
-                ORDER BY category
             """)).all()
-        return [str(row[0]) for row in rows]
+        canonical = [
+            self._categories.canonicalize(str(row[0]))
+            for row in rows
+        ]
+        return sorted({value for value in canonical if value})
 
     def discover_funds(self, *, category: str | None = None, limit: int = 20) -> list[dict]:
-        where = "WHERE m.is_active = TRUE"
-        params: dict[str, object] = {"limit": limit}
+        where = "WHERE m.is_active = TRUE AND m.category IS NOT NULL"
+        params: dict[str, object] = {"limit": max(limit * 20, 500)}
         if category:
-            where += " AND LOWER(COALESCE(m.category, '')) = LOWER(:category)"
-            params["category"] = category
+            where += " AND LOWER(COALESCE(m.category, '')) LIKE LOWER(:category_pattern)"
+            params["category_pattern"] = f"%{category}%"
         sql = f"""
             SELECT m.scheme_code, m.scheme_name, m.amc_name, m.category, m.scheme_type,
                    MIN(n.nav_date) AS inception_date,
@@ -41,7 +46,19 @@ class ReasoningProductionRepository:
             LIMIT :limit
         """
         with self._engine.connect() as conn:
-            return [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
+            rows = [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
+        filtered: list[dict] = []
+        for row in rows:
+            raw_category = str(row.get("category") or "")
+            canonical = self._categories.canonicalize(raw_category)
+            if canonical is None:
+                continue
+            row["raw_category"] = raw_category
+            row["category"] = canonical
+            filtered.append(row)
+            if len(filtered) >= limit:
+                break
+        return filtered
 
     def nav_history(self, scheme_code: str) -> list[tuple]:
         with self._engine.connect() as conn:
