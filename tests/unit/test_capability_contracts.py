@@ -166,3 +166,62 @@ def test_metric_ontology_normalizes_flow_aum_and_peer_language() -> None:
         observation = registry.execute(ResearchAction(action_type, metrics=requested))
         assert observation.status is ActionStatus.SUCCEEDED
         assert seen == [supported]
+
+
+def test_evidence_ontology_normalizes_document_types_separately_from_metrics() -> None:
+    registry = CapabilityRegistry()
+    seen: list[ResearchAction] = []
+
+    def handler(action: ResearchAction):
+        seen.append(action)
+        return CapabilityResult(result={"ok": True}, evidence_refs=("verified:evidence",))
+
+    registry.register(
+        ActionType.RETRIEVE_EVIDENCE,
+        handler,
+        contract=CapabilityContract(
+            supported_metrics=("expense_ratio", "fund_manager_tenure"),
+            supported_evidence_types=("fund_prospectus", "fund_fact_sheet", "regulatory_filing"),
+        ),
+    )
+    observation = registry.execute(
+        ResearchAction(
+            ActionType.RETRIEVE_EVIDENCE,
+            metrics=("expense ratio", "manager tenure"),
+            evidence_types=("prospectus", "fact sheet", "SEBI filings"),
+        )
+    )
+
+    assert observation.status is ActionStatus.SUCCEEDED
+    assert seen[0].metrics == ("expense_ratio", "fund_manager_tenure")
+    assert seen[0].evidence_types == ("fund_prospectus", "fund_fact_sheet", "regulatory_filing")
+
+
+def test_evidence_ontology_rejects_unknown_document_type_without_corrupting_metrics() -> None:
+    registry = CapabilityRegistry()
+    seen: list[ResearchAction] = []
+
+    def handler(action: ResearchAction):
+        seen.append(action)
+        return CapabilityResult(result={"ok": True}, evidence_refs=("verified:evidence",))
+
+    registry.register(
+        ActionType.RETRIEVE_EVIDENCE,
+        handler,
+        contract=CapabilityContract(
+            supported_metrics=("expense_ratio",),
+            supported_evidence_types=("fund_fact_sheet",),
+        ),
+    )
+    observation = registry.execute(
+        ResearchAction(
+            ActionType.RETRIEVE_EVIDENCE,
+            metrics=("expense ratio",),
+            evidence_types=("fact sheet", "social media rumor"),
+        )
+    )
+
+    assert observation.status is ActionStatus.PARTIAL
+    assert seen[0].metrics == ("expense_ratio",)
+    assert seen[0].evidence_types == ("fund_fact_sheet",)
+    assert "social media rumor" in observation.tradeoff_reason
