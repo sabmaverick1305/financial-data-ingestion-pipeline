@@ -213,6 +213,7 @@ class DocumentRepository:
         period_quarter: str | None = None,
         volume: str | None = None,
         issue: str | None = None,
+        publication_date: str | None = None,
     ) -> tuple[str, str]:
         """Insert or update a document_metadata row keyed on file_name.
 
@@ -229,13 +230,13 @@ class DocumentRepository:
                         original_url, s3_raw_key, file_name, file_type,
                         file_size_bytes, file_hash,
                         period_year, period_month, period_quarter, volume, issue,
-                        processing_status, attempt_count
+                        publication_date, processing_status, attempt_count
                     ) VALUES (
                         :document_id, :source, :provider, :document_type, :category, :title,
                         :original_url, :s3_raw_key, :file_name, :file_type,
                         :file_size_bytes, :file_hash,
                         :period_year, :period_month, :period_quarter, :volume, :issue,
-                        'uploaded', 0
+                        CAST(:publication_date AS date), 'uploaded', 0
                     )
                     ON CONFLICT (file_name) DO UPDATE SET
                         source            = EXCLUDED.source,
@@ -273,6 +274,7 @@ class DocumentRepository:
                     "period_quarter": period_quarter,
                     "volume": volume,
                     "issue": issue,
+                    "publication_date": publication_date,
                 },
             ).fetchone()
 
