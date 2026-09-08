@@ -724,6 +724,44 @@ class DocumentRepository:
             rows = conn.execute(text(sql), params).mappings().all()
         return [dict(r) for r in rows]
 
+    def find_document_ids(
+        self,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...] = (),
+        limit: int = 50,
+    ) -> list[str]:
+        """Find indexed fund-specific documents before semantic retrieval."""
+        if not fund_names:
+            return []
+        clauses = []
+        params: dict[str, object] = {"limit": limit}
+        for index, name in enumerate(fund_names):
+            key = f"name_{index}"
+            clauses.append(
+                f"(LOWER(COALESCE(dm.title, '')) LIKE LOWER(:{key}) "
+                f"OR LOWER(COALESCE(dm.file_name, '')) LIKE LOWER(:{key}))"
+            )
+            params[key] = f"%{name}%"
+
+        type_filter = ""
+        if document_types:
+            params["document_types"] = list(document_types)
+            type_filter = "AND LOWER(dm.document_type) = ANY(:document_types)"
+
+        sql = f"""
+            SELECT DISTINCT CAST(dm.document_id AS text) AS document_id
+            FROM document_metadata dm
+            WHERE ({' OR '.join(clauses)})
+              AND dm.processing_status IN ('embedded', 'indexed')
+              {type_filter}
+            ORDER BY document_id
+            LIMIT :limit
+        """
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(sql), params).all()
+        return [str(row[0]) for row in rows]
+
     def chunk_count(self) -> int:
         """Total number of embedded chunks across all documents."""
         with self._engine.connect() as conn:
