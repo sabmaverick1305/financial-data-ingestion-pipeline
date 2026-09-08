@@ -35,7 +35,7 @@ class DocumentaryEvidenceValidator:
             str(source.get(key, ""))
             for source in sources
             for key in ("file_name", "title", "category", "preview", "document_type", "text")
-        ).lower()
+        ).lower().replace("_", " ").replace("-", " ")
 
         if requested:
             matched_any = False
