@@ -743,34 +743,126 @@ class DocumentRepository:
             rows = conn.execute(text(sql), params).mappings().all()
         return [dict(r) for r in rows]
 
+    @staticmethod
+    def _expand_document_types(
+        document_types: list[str] | tuple[str, ...],
+    ) -> list[str]:
+        aliases = {
+            "prospectus": ("fund_prospectus", "prospectus"),
+            "fact_sheet": ("fund_fact_sheet", "fact_sheet", "factsheet"),
+            "factsheet": ("fund_fact_sheet", "fact_sheet", "factsheet"),
+            "strategy": ("fund_strategy_document", "strategy"),
+            "disclosures": ("portfolio_disclosure", "regulatory_filing", "disclosures"),
+            "portfolio_disclosure": ("portfolio_disclosure",),
+            "regulatory_filing": ("regulatory_filing",),
+            "annual_report": ("annual_report",),
+        }
+        expanded: list[str] = []
+        for value in document_types:
+            normalized = str(value).lower().replace(" ", "_")
+            expanded.extend(aliases.get(normalized, (normalized,)))
+        return list(dict.fromkeys(expanded))
+
+    def find_document_matches(
+        self,
+        *,
+        fund_names: list[str],
+        document_types: list[str] | tuple[str, ...] = (),
+        limit: int = 500,
+    ) -> list[dict]:
+        """Resolve fund documentary metadata in one indexed database round trip.
+
+        Returns the matched fund name and canonical metadata type so coverage,
+        backlog construction and RAG filtering all share the same resolver.
+        """
+        if not fund_names:
+            return []
+
+        params: dict[str, object] = {"limit": limit}
+        values: list[str] = []
+        for index, name in enumerate(fund_names):
+            params[f"fund_{index}"] = name
+            values.append(f"(:fund_{index})")
+
+        type_filter = ""
+        if document_types:
+            params["document_types"] = self._expand_document_types(document_types)
+            type_filter = (
+                "AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)"
+            )
+
+        sql = f"""
+            WITH requested(fund_name) AS (
+                VALUES {', '.join(values)}
+            )
+            SELECT DISTINCT
+                requested.fund_name,
+                CAST(dm.document_id AS text) AS document_id,
+                LOWER(REPLACE(dm.document_type, ' ', '_')) AS document_type
+            FROM requested
+            JOIN document_metadata dm
+              ON (
+                  LOWER(COALESCE(dm.title, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
+                  OR LOWER(COALESCE(dm.file_name, '')) LIKE '%%' || LOWER(requested.fund_name) || '%%'
+                  OR to_tsvector(
+                        'english',
+                        COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')
+                     ) @@ plainto_tsquery('english', requested.fund_name)
+              )
+            WHERE dm.processing_status IN ('embedded', 'indexed')
+              {type_filter}
+            ORDER BY requested.fund_name, document_type, document_id
+            LIMIT :limit
+        """
+        with self._engine.connect() as conn:
+            rows = conn.execute(text(sql), params).mappings().all()
+        return [dict(row) for row in rows]
+
     def documentary_coverage(
         self,
         *,
         fund_names: list[str],
         required_document_types: list[str] | tuple[str, ...],
     ) -> dict[str, dict]:
-        """Report indexed coverage per fund and per required documentary type."""
-        coverage: dict[str, dict] = {}
+        """Report per-fund/per-type coverage using one metadata lookup."""
         required = [str(value) for value in required_document_types]
+        matches = self.find_document_matches(
+            fund_names=fund_names,
+            document_types=required_document_types,
+            limit=max(500, len(fund_names) * max(1, len(required)) * 20),
+        )
+
+        aliases_by_required = {
+            required_type: set(self._expand_document_types([required_type]))
+            for required_type in required
+        }
+        matched_by_fund: dict[str, dict[str, list[str]]] = {
+            fund_name: {required_type: [] for required_type in required}
+            for fund_name in fund_names
+        }
+        for row in matches:
+            fund_name = str(row["fund_name"])
+            actual_type = str(row["document_type"])
+            document_id = str(row["document_id"])
+            for required_type, aliases in aliases_by_required.items():
+                if actual_type in aliases:
+                    matched_by_fund[fund_name][required_type].append(document_id)
+
+        coverage: dict[str, dict] = {}
         for fund_name in fund_names:
             by_type: dict[str, dict] = {}
             missing: list[str] = []
             all_ids: set[str] = set()
-            for document_type in required:
-                matched = self.find_document_ids(
-                    fund_names=[fund_name],
-                    document_types=[document_type],
-                    limit=100,
-                )
-                by_type[document_type] = {
-                    "covered": bool(matched),
-                    "document_ids": matched,
-                    "matched_document_count": len(matched),
+            for required_type in required:
+                ids = list(dict.fromkeys(matched_by_fund[fund_name][required_type]))
+                by_type[required_type] = {
+                    "covered": bool(ids),
+                    "document_ids": ids,
+                    "matched_document_count": len(ids),
                 }
-                all_ids.update(matched)
-                if not matched:
-                    missing.append(document_type)
-
+                all_ids.update(ids)
+                if not ids:
+                    missing.append(required_type)
             coverage[fund_name] = {
                 "covered": not missing,
                 "coverage_ratio": (
@@ -784,17 +876,10 @@ class DocumentRepository:
             }
         return coverage
 
-    def documentary_ingestion_backlog(
-        self,
-        *,
-        fund_names: list[str],
-        required_document_types: list[str] | tuple[str, ...],
+    @staticmethod
+    def documentary_ingestion_backlog_from_coverage(
+        coverage: dict[str, dict],
     ) -> list[dict]:
-        """Return deterministic missing fund/document combinations for ingestion."""
-        coverage = self.documentary_coverage(
-            fund_names=fund_names,
-            required_document_types=required_document_types,
-        )
         backlog: list[dict] = []
         for fund_name, item in coverage.items():
             for document_type in item["missing_document_types"]:
@@ -805,6 +890,18 @@ class DocumentRepository:
                 })
         return backlog
 
+    def documentary_ingestion_backlog(
+        self,
+        *,
+        fund_names: list[str],
+        required_document_types: list[str] | tuple[str, ...],
+    ) -> list[dict]:
+        coverage = self.documentary_coverage(
+            fund_names=fund_names,
+            required_document_types=required_document_types,
+        )
+        return self.documentary_ingestion_backlog_from_coverage(coverage)
+
     def find_document_ids(
         self,
         *,
@@ -812,60 +909,12 @@ class DocumentRepository:
         document_types: list[str] | tuple[str, ...] = (),
         limit: int = 50,
     ) -> list[str]:
-        """Find indexed fund-specific documents before semantic retrieval."""
-        if not fund_names:
-            return []
-        clauses = []
-        params: dict[str, object] = {"limit": limit}
-        for index, name in enumerate(fund_names):
-            key = f"name_{index}"
-            clauses.append(
-                f"(LOWER(COALESCE(dm.title, '')) LIKE LOWER(:{key}) "
-                f"OR LOWER(COALESCE(dm.file_name, '')) LIKE LOWER(:{key}) "
-                f"OR to_tsvector('english', COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')) "
-                f"@@ plainto_tsquery('english', :{key}_query))"
-            )
-            params[key] = f"%{name}%"
-            params[f"{key}_query"] = name
-
-        type_filter = ""
-        if document_types:
-            type_aliases = {
-                "prospectus": ("fund_prospectus", "prospectus"),
-                "fact_sheet": ("fund_fact_sheet", "fact_sheet", "factsheet"),
-                "factsheet": ("fund_fact_sheet", "fact_sheet", "factsheet"),
-                "strategy": ("fund_strategy_document", "strategy"),
-                "disclosures": ("portfolio_disclosure", "regulatory_filing", "disclosures"),
-                "portfolio_disclosure": ("portfolio_disclosure",),
-                "regulatory_filing": ("regulatory_filing",),
-                "annual_report": ("annual_report",),
-            }
-            expanded = []
-            for value in document_types:
-                normalized = str(value).lower().replace(" ", "_")
-                expanded.extend(type_aliases.get(normalized, (normalized,)))
-            params["document_types"] = list(dict.fromkeys(expanded))
-            type_filter = (
-                "AND LOWER(REPLACE(dm.document_type, ' ', '_')) = ANY(:document_types)"
-            )
-
-        fts_clauses = [
-            f"to_tsvector('english', COALESCE(dm.title, '') || ' ' || COALESCE(dm.file_name, '')) "
-            f"@@ plainto_tsquery('english', :name_{index}_query)"
-            for index, _ in enumerate(fund_names)
-        ]
-        sql = f"""
-            SELECT DISTINCT CAST(dm.document_id AS text) AS document_id
-            FROM document_metadata dm
-            WHERE ({' OR '.join(fts_clauses)})
-              AND dm.processing_status IN ('embedded', 'indexed')
-              {type_filter}
-            ORDER BY document_id
-            LIMIT :limit
-        """
-        with self._engine.connect() as conn:
-            rows = conn.execute(text(sql), params).all()
-        return [str(row[0]) for row in rows]
+        matches = self.find_document_matches(
+            fund_names=fund_names,
+            document_types=document_types,
+            limit=limit,
+        )
+        return list(dict.fromkeys(str(row["document_id"]) for row in matches))[:limit]
 
     def chunk_count(self) -> int:
         """Total number of embedded chunks across all documents."""
