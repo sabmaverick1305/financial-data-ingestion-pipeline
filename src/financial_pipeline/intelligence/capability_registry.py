@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from financial_pipeline.intelligence.capability_contracts import CapabilityContract
+from financial_pipeline.intelligence.capability_metadata import CapabilityMetadata
 from financial_pipeline.intelligence.research_plan import (
     ActionObservation,
     ActionStatus,
@@ -33,6 +34,7 @@ class Capability:
     handler: CapabilityHandler
     trusted: bool = True
     contract: CapabilityContract | None = None
+    metadata: CapabilityMetadata | None = None
 
 
 class CapabilityRegistry:
@@ -46,10 +48,11 @@ class CapabilityRegistry:
         *,
         trusted: bool = True,
         contract: CapabilityContract | None = None,
+        metadata: CapabilityMetadata | None = None,
     ) -> None:
         if action_type in self._capabilities:
             raise ValueError(f"capability already registered: {action_type}")
-        self._capabilities[action_type] = Capability(action_type, handler, trusted, contract)
+        self._capabilities[action_type] = Capability(action_type, handler, trusted, contract, metadata)
 
     def has(self, action_type: ActionType) -> bool:
         return action_type in self._capabilities
@@ -59,6 +62,9 @@ class CapabilityRegistry:
             return self._capabilities[action_type]
         except KeyError as exc:
             raise KeyError(f"no capability registered for: {action_type}") from exc
+
+    def metadata(self, action_type: ActionType) -> CapabilityMetadata | None:
+        return self.get(action_type).metadata
 
     def supported_metrics(self, action_type: ActionType) -> tuple[str, ...] | None:
         """Return canonical metrics advertised by a capability contract."""
