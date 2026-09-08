@@ -28,6 +28,7 @@ class ReasoningState:
     soft_evidence_gaps: list[str] = field(default_factory=list)
     investment_mandate: str | None = None
     eligible_categories: list[str] = field(default_factory=list)
+    candidate_decisions: dict[str, dict] = field(default_factory=dict)
     abstention_reason: str | None = None
     trace: ReasoningTrace | None = None
 
