@@ -28,7 +28,7 @@ class FundRanker:
         "peer_percentile": 0.10,
     }
 
-    def rank(self, state: ReasoningState, *, limit: int = 10) -> tuple[RankedFund, ...]:
+    def rank(self, state: ReasoningState, *, limit: int = 10, allowed_codes: set[str] | None = None) -> tuple[RankedFund, ...]:
         discovered = {}
         perf = {}
         risk = {}
@@ -73,6 +73,8 @@ class FundRanker:
                             peer[code] = row.get("percentile_rank")
 
         codes = [code for code in discovered if code in perf and code in risk]
+        if allowed_codes is not None:
+            codes = [code for code in codes if code in allowed_codes]
         if not codes:
             return ()
 
